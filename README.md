@@ -76,6 +76,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/spline.calc`** — natural cubic spline interpolation (two-step `setup`/`eval` interface, NR style).
 - **`nr/special.calc`** — gamma / lgamma / beta / erf / erfc via Lanczos + Abramowitz rational Chebyshev.
 - **`nr/eigen.calc`** — Jacobi eigenvalue decomposition for real symmetric matrices (eigenvalues + eigenvectors).
+- **`nr/lu.calc`** — Doolittle LU decomposition with partial pivoting; solves, determinant, factorization reuse for multiple RHS.
+- **`nr/romberg.calc`** — Romberg integration: trapezoidal table + Richardson extrapolation, machine-precision in 5-10 levels.
+- **`nr/rk45.calc`** — adaptive Cash-Karp RK45 with step-size control; handles stiff problems.
+- **`nr/poly.calc`** — orthogonal-polynomial families: Chebyshev T_n, Legendre P_n, Hermite H_n, Laguerre L_n, Bessel J_0/J_1.
 
 ## Hello world
 

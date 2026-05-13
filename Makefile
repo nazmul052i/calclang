@@ -70,6 +70,10 @@ nr_libs: all
 	$(BUILD)/calcnat --lib lib/nr/spline.calc  -o $(CALCLIB)/nr_spline.s
 	$(BUILD)/calcnat --lib lib/nr/special.calc -o $(CALCLIB)/nr_special.s
 	$(BUILD)/calcnat --lib lib/nr/eigen.calc   -o $(CALCLIB)/nr_eigen.s
+	$(BUILD)/calcnat --lib lib/nr/lu.calc      -o $(CALCLIB)/nr_lu.s
+	$(BUILD)/calcnat --lib lib/nr/romberg.calc -o $(CALCLIB)/nr_romberg.s
+	$(BUILD)/calcnat --lib lib/nr/rk45.calc    -o $(CALCLIB)/nr_rk45.s
+	$(BUILD)/calcnat --lib lib/nr/poly.calc    -o $(CALCLIB)/nr_poly.s
 
 sine_plot: libs
 	$(BUILD)/calcnat examples/sine_plot.calc $(CALCLIB)/plot.s -o $(BUILD)/sine_plot
@@ -117,8 +121,14 @@ nr_demo: nr_libs
 	    $(CALCLIB)/nr_special.s $(CALCLIB)/nr_eigen.s -o $(BUILD)/nr_demo
 	$(BUILD)/nr_demo
 
+nr_demo2: nr_libs
+	$(BUILD)/calcnat examples/nr_demo2.calc \
+	    $(CALCLIB)/nr_lu.s $(CALCLIB)/nr_romberg.s \
+	    $(CALCLIB)/nr_rk45.s $(CALCLIB)/nr_poly.s -o $(BUILD)/nr_demo2
+	$(BUILD)/nr_demo2
+
 demos: sine_plot regression linsys numerical monte_carlo csv_demo \
-       multi_plot json_demo ode_demo fft_demo nr_demo
+       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2
 
 test: all
 	sh tests/run_tests.sh

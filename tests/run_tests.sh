@@ -899,6 +899,33 @@ A * I3 == A?  1' "$nat_out"
         echo "FAIL: nr — no eigenvalues output"; exit 1
     fi
 
+    echo "[test] demo — nr_demo2 (LU + Romberg + RK45 + polynomial families)"
+    build/calcnat --lib lib/nr/lu.calc      -o build/calclib/nr_lu.s
+    build/calcnat --lib lib/nr/romberg.calc -o build/calclib/nr_romberg.s
+    build/calcnat --lib lib/nr/rk45.calc    -o build/calclib/nr_rk45.s
+    build/calcnat --lib lib/nr/poly.calc    -o build/calclib/nr_poly.s
+    build/calcnat examples/nr_demo2.calc \
+        build/calclib/nr_lu.s build/calclib/nr_romberg.s \
+        build/calclib/nr_rk45.s build/calclib/nr_poly.s \
+        -o build/d_nr2.exe
+    nat_out=$(build/d_nr2.exe | strip_cr)
+    # LU determinant must be exactly -1 for this matrix.
+    echo "$nat_out" | grep -q "det(A) = -1"                   || { echo "FAIL: nr2 — LU det";          exit 1; }
+    # Solve must recover [2, 3, -1].
+    echo "$nat_out" | grep -q '^\[2, 3, -1' \
+        || echo "$nat_out" | grep -q 'x1 =' \
+        || { echo "FAIL: nr2 — LU solve";        exit 1; }
+    # Romberg of sin on [0, pi] must hit 2.0 exactly (or essentially so).
+    echo "$nat_out" | grep -q "sin(x) on \[0, pi\]  -> 2"      || { echo "FAIL: nr2 — Romberg sin";     exit 1; }
+    # RK45 on y' = -y must match exp(-5) to ~8 digits.
+    echo "$nat_out" | grep -q "RK45 endpoint = 0.006737"       || { echo "FAIL: nr2 — RK45 decay";      exit 1; }
+    # Polynomials: Chebyshev T_5(0.5) = 0.5 exactly.
+    echo "$nat_out" | grep -q "Chebyshev T_5(0.5) = 0.5"       || { echo "FAIL: nr2 — Chebyshev T_5";   exit 1; }
+    # Hermite H_3(0.5) = -5.
+    echo "$nat_out" | grep -q "Hermite   H_3(0.5) = -5"        || { echo "FAIL: nr2 — Hermite H_3";     exit 1; }
+    # Bessel J_0(0) ≈ 1.
+    echo "$nat_out" | grep -qE "J_0\(0\)   = 1(\.0+[0-9]+)?"   || { echo "FAIL: nr2 — Bessel J_0(0)";   exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

@@ -1,0 +1,90 @@
+// rk45.calc — adaptive Runge-Kutta-Cash-Karp for scalar ODEs.
+//
+// One Cash-Karp step computes both a 5th-order estimate and a 4th-
+// order estimate from the same six function evaluations. Their
+// difference is a cheap, asymptotically-correct error estimator. We
+// use it to adapt the step size between calls: shrink when error is
+// too big, grow when there's headroom.
+//
+// Reference: Numerical Recipes 16.2.
+//
+// Usage:
+//   let sol = rk45(f, t0, y0, t_end, tol);
+//   // sol["ts"] / sol["ys"] are the (non-uniform) trajectory.
+//   // sol["steps_accepted"] / sol["steps_rejected"] for diagnostics.
+
+priv fn _cash_karp_step(f, t, y, h) {
+    // Cash-Karp coefficients. Compact tableau:
+    //   c = stage time fractions
+    //   a = inter-stage weights (a[i][j] for j < i)
+    //   b5 = 5th-order weights
+    //   b4 = 4th-order weights
+    // (The c and a entries that are 0 are not listed.)
+    let k1 = f(t,             y);
+    let k2 = f(t + 0.2 * h,   y + h * 0.2 * k1);
+    let k3 = f(t + 0.3 * h,   y + h * (0.075 * k1 + 0.225 * k2));
+    let k4 = f(t + 0.6 * h,   y + h * (0.3 * k1 - 0.9 * k2 + 1.2 * k3));
+    let k5 = f(t + h,         y + h * (-11.0/54 * k1 + 2.5 * k2
+                                       - 70.0/27 * k3 + 35.0/27 * k4));
+    let k6 = f(t + 7.0/8 * h, y + h * (1631.0/55296   * k1
+                                       + 175.0/512    * k2
+                                       + 575.0/13824  * k3
+                                       + 44275.0/110592 * k4
+                                       + 253.0/4096   * k5));
+    let y5 = y + h * (37.0/378     * k1
+                      + 250.0/621  * k3
+                      + 125.0/594  * k4
+                      + 512.0/1771 * k6);
+    let y4 = y + h * (2825.0/27648   * k1
+                      + 18575.0/48384  * k3
+                      + 13525.0/55296  * k4
+                      + 277.0/14336  * k5
+                      + 0.25         * k6);
+    return {"y5": y5, "err": y5 - y4};
+}
+
+pub fn rk45(f, t0, y0, t_end, tol) {
+    let ts = [t0];
+    let ys = [y0];
+    let t  = t0;
+    let y  = y0;
+    let h  = (t_end - t0) / 100;    // initial guess; adapts immediately
+    let max_steps = 100000;
+    let accepted  = 0;
+    let rejected  = 0;
+
+    for (let step = 0; step < max_steps; step = step + 1) {
+        if (t >= t_end) { break; }
+        // Don't overshoot the endpoint.
+        if (t + h > t_end) { h = t_end - t; }
+
+        let res = _cash_karp_step(f, t, y, h);
+        let err = abs(res["err"]);
+        // Relative-or-absolute tolerance — protect against tiny y.
+        let scale = tol * (1 + abs(y));
+        if (err <= scale) {
+            // Accept the step.
+            t = t + h;
+            y = res["y5"];
+            push(ts, t);
+            push(ys, y);
+            accepted = accepted + 1;
+            // Try to grow h by up to 5×, conservatively.
+            if (err > 0) {
+                let factor = 0.9 * pow(scale / err, 0.2);
+                if (factor > 5) { factor = 5; }
+                h = h * factor;
+            } else {
+                h = h * 5;
+            }
+        } else {
+            // Reject and shrink h by at least 10×.
+            rejected = rejected + 1;
+            let factor = 0.9 * pow(scale / err, 0.25);
+            if (factor < 0.1) { factor = 0.1; }
+            h = h * factor;
+        }
+    }
+    return {"ts": ts, "ys": ys,
+            "steps_accepted": accepted, "steps_rejected": rejected};
+}

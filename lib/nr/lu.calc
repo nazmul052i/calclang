@@ -1,0 +1,114 @@
+// lu.calc — LU decomposition of a square matrix, with partial
+// pivoting. Once decomposed, the factors can be reused to solve any
+// number of right-hand sides cheaply, or to compute the determinant.
+//
+// Reference: Numerical Recipes 2.3 (Doolittle algorithm).
+//
+//   lu = lu_decompose(A);
+//   //   lu["L"]  unit lower-triangular,
+//   //   lu["U"]  upper-triangular,
+//   //   lu["P"]  permutation as an index array (P[i] = original row
+//   //            now at position i), and
+//   //   lu["sign"] is +1 or -1 for the parity of row swaps (used by
+//   //            lu_det).
+//
+//   let x = lu_solve(lu, b);
+//   let d = lu_det(lu);
+
+priv fn _zeros(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+pub fn lu_decompose(A) {
+    let n = len(A);
+    if (n == 0 || len(A[0]) != n) {
+        throw "lu_decompose: A must be square";
+    }
+    // Work in a single matrix that holds U above and including the
+    // diagonal, and L's strictly-lower part. L's diagonal is 1 by
+    // convention. We extract them at the end for a cleaner API.
+    let M = _zeros(n, n);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { M[i][j] = A[i][j]; }
+    }
+    let P    = [];
+    for (let i = 0; i < n; i = i + 1) { push(P, i); }
+    let sign = 1;
+
+    for (let k = 0; k < n; k = k + 1) {
+        // Pivot: pick row with largest |M[r][k]| for r >= k.
+        let pr = k;
+        let pv = abs(M[k][k]);
+        for (let r = k + 1; r < n; r = r + 1) {
+            let v = abs(M[r][k]);
+            if (v > pv) { pv = v; pr = r; }
+        }
+        if (pv == 0) { throw "lu_decompose: singular matrix"; }
+        if (pr != k) {
+            let tmp = M[k];  M[k]  = M[pr]; M[pr]  = tmp;
+            let tp  = P[k];  P[k]  = P[pr]; P[pr]  = tp;
+            sign = -sign;
+        }
+        // Eliminate below.
+        for (let r = k + 1; r < n; r = r + 1) {
+            let factor = M[r][k] / M[k][k];
+            M[r][k] = factor;             // store L's entry in place
+            for (let c = k + 1; c < n; c = c + 1) {
+                M[r][c] = M[r][c] - factor * M[k][c];
+            }
+        }
+    }
+    // Split L (with unit diagonal) and U.
+    let L = _zeros(n, n);
+    let U = _zeros(n, n);
+    for (let i = 0; i < n; i = i + 1) {
+        L[i][i] = 1;
+        for (let j = 0; j < i; j = j + 1) { L[i][j] = M[i][j]; }
+        for (let j = i; j < n; j = j + 1) { U[i][j] = M[i][j]; }
+    }
+    return {"L": L, "U": U, "P": P, "sign": sign};
+}
+
+// Solve A x = b using a precomputed LU factorization.
+pub fn lu_solve(lu, b) {
+    let L = lu["L"];
+    let U = lu["U"];
+    let P = lu["P"];
+    let n = len(L);
+    if (len(b) != n) { throw "lu_solve: b length doesn't match LU"; }
+    // Apply the permutation to b.
+    let pb = [];
+    for (let i = 0; i < n; i = i + 1) { push(pb, b[P[i]]); }
+    // Forward-substitute L y = P b. L has unit diagonal.
+    let y = [];
+    for (let i = 0; i < n; i = i + 1) { push(y, 0); }
+    for (let i = 0; i < n; i = i + 1) {
+        let s = pb[i];
+        for (let j = 0; j < i; j = j + 1) { s = s - L[i][j] * y[j]; }
+        y[i] = s;
+    }
+    // Back-substitute U x = y.
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for (let i = n - 1; i >= 0; i = i - 1) {
+        let s = y[i];
+        for (let j = i + 1; j < n; j = j + 1) { s = s - U[i][j] * x[j]; }
+        x[i] = s / U[i][i];
+    }
+    return x;
+}
+
+// det(A) = sign * product of U's diagonal.
+pub fn lu_det(lu) {
+    let U = lu["U"];
+    let d = lu["sign"];
+    let n = len(U);
+    for (let i = 0; i < n; i = i + 1) { d = d * U[i][i]; }
+    return d;
+}

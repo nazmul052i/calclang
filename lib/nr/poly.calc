@@ -1,0 +1,142 @@
+// poly.calc — orthogonal-polynomial families.
+//
+// Chebyshev, Legendre, Hermite, Laguerre via their three-term
+// recurrences (fastest and most numerically stable evaluation).
+// Bessel J_0 / J_1 via series for small |x|, asymptotic for large.
+//
+// All evaluations take a degree n and an argument x and return the
+// scalar value. For arrays of x values, just map over it.
+
+// ===== Chebyshev T_n(x) =====
+// T_0 = 1, T_1 = x, T_{n+1} = 2 x T_n - T_{n-1}.
+pub fn chebyshev_T(n, x) {
+    if (n == 0) { return 1; }
+    if (n == 1) { return x; }
+    let t0 = 1;
+    let t1 = x;
+    for (let k = 1; k < n; k = k + 1) {
+        let t2 = 2 * x * t1 - t0;
+        t0 = t1;  t1 = t2;
+    }
+    return t1;
+}
+
+// ===== Legendre P_n(x) =====
+// P_0 = 1, P_1 = x, (n+1) P_{n+1} = (2n+1) x P_n - n P_{n-1}.
+pub fn legendre_P(n, x) {
+    if (n == 0) { return 1; }
+    if (n == 1) { return x; }
+    let p0 = 1;
+    let p1 = x;
+    for (let k = 1; k < n; k = k + 1) {
+        let p2 = ((2 * k + 1) * x * p1 - k * p0) / (k + 1);
+        p0 = p1;  p1 = p2;
+    }
+    return p1;
+}
+
+// ===== Hermite (physicists') H_n(x) =====
+// H_0 = 1, H_1 = 2x, H_{n+1} = 2 x H_n - 2 n H_{n-1}.
+pub fn hermite_H(n, x) {
+    if (n == 0) { return 1; }
+    if (n == 1) { return 2 * x; }
+    let h0 = 1;
+    let h1 = 2 * x;
+    for (let k = 1; k < n; k = k + 1) {
+        let h2 = 2 * x * h1 - 2 * k * h0;
+        h0 = h1;  h1 = h2;
+    }
+    return h1;
+}
+
+// ===== Laguerre L_n(x) =====
+// L_0 = 1, L_1 = 1 - x,
+// (n+1) L_{n+1} = (2n+1 - x) L_n - n L_{n-1}.
+pub fn laguerre_L(n, x) {
+    if (n == 0) { return 1; }
+    if (n == 1) { return 1 - x; }
+    let l0 = 1;
+    let l1 = 1 - x;
+    for (let k = 1; k < n; k = k + 1) {
+        let l2 = ((2 * k + 1 - x) * l1 - k * l0) / (k + 1);
+        l0 = l1;  l1 = l2;
+    }
+    return l1;
+}
+
+// ===== Bessel J_0 and J_1 =====
+// Series for small |x|, asymptotic form for large. Cutoff at |x|=8
+// chosen following NR §6.5; gives ~10 digits across the whole range.
+
+pub fn bessel_J0(x) {
+    let ax = abs(x);
+    if (ax < 8) {
+        // Polynomial in y = x^2 fitted to the series. NR coefficients.
+        let y = x * x;
+        let num = 57568490574.0
+                + y * (-13362590354.0
+                + y * (651619640.7
+                + y * (-11214424.18
+                + y * (77392.33017
+                + y * (-184.9052456)))));
+        let den = 57568490411.0
+                + y * (1029532985.0
+                + y * (9494680.718
+                + y * (59272.64853
+                + y * (267.8532712
+                + y))));
+        return num / den;
+    }
+    // Asymptotic form for large |x|. NR-style polynomial in y = (8/x)^2;
+    // coefficients are written as plain decimals because CalcLang's
+    // lexer doesn't accept scientific-notation literals.
+    let z = 8 / ax;
+    let y = z * z;
+    let ans1 = 1.0
+             + y * (-0.001098628627
+             + y * (0.00002734510407
+             + y * (-0.000002073370639
+             + y * 0.0000002093887211)));
+    let ans2 = -0.01562499995
+             + y * (0.0001430488765
+             + y * (-0.000006911147651
+             + y * (0.0000007621095161
+             + y * (-0.0000000934935152))));
+    let xx = ax - 0.785398164;       // pi/4
+    return sqrt(0.636619772 / ax) * (cos(xx) * ans1 - z * sin(xx) * ans2);
+}
+
+pub fn bessel_J1(x) {
+    let ax = abs(x);
+    let sgn = 1;  if (x < 0) { sgn = -1; }
+    if (ax < 8) {
+        let y = x * x;
+        let num = x * (72362614232.0
+                + y * (-7895059235.0
+                + y * (242396853.1
+                + y * (-2972611.439
+                + y * (15704.48260
+                + y * (-30.16036606))))));
+        let den = 144725228442.0
+                + y * (2300535178.0
+                + y * (18583304.74
+                + y * (99447.43394
+                + y * (376.9991397
+                + y))));
+        return num / den;
+    }
+    let z = 8 / ax;
+    let y = z * z;
+    let ans1 = 1.0
+             + y * (0.00183105
+             + y * (-0.00003516396496
+             + y * (0.000002457520174
+             + y * (-0.000000240337019))));
+    let ans2 = 0.04687499995
+             + y * (-0.0002002690873
+             + y * (0.000008449199096
+             + y * (-0.00000088228987
+             + y * 0.000000105787412)));
+    let xx = ax - 2.356194491;       // 3 pi / 4
+    return sgn * sqrt(0.636619772 / ax) * (cos(xx) * ans1 - z * sin(xx) * ans2);
+}

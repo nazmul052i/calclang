@@ -1283,11 +1283,78 @@ let V = eig["vectors"];   // V[r][i] is the r-th component of the i-th eigenvect
 
 Each iteration finds the largest off-diagonal element and rotates it to zero with a Givens-like 2×2 plane rotation. The product of all rotations is the full eigenvector matrix; the diagonal of the rotated matrix converges to the eigenvalues. Residuals `|A v - λ v|` come out at machine epsilon (~1e-13) for well-conditioned problems.
 
+#### `lib/nr/lu.calc` — LU decomposition
+
+Doolittle LU with partial pivoting (NR §2.3). The big payoff over Gauss-Jordan is reuse: one factorization, then any number of right-hand sides solved cheaply, and the determinant comes out as a side effect.
+
+```calc
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+extern fn lu_det(lu: map): num;
+
+let A = [[2, 1, -1], [-3, -1, 2], [-2, 1, 2]];
+let lu = lu_decompose(A);
+print lu_det(lu);              // -1
+print lu_solve(lu, [8, -11, -3]);     // [2, 3, -1]
+print lu_solve(lu, [0,  1,   4]);     // (reuses the factorization)
+```
+
+`lu_decompose` returns `{"L", "U", "P", "sign"}` — L is unit lower-triangular, U upper-triangular, P the row permutation as an index array, and sign is ±1 (parity of row swaps).
+
+#### `lib/nr/romberg.calc` — Romberg integration
+
+Recursively-refined trapezoidal estimates plus Richardson extrapolation along each row of the table — cancels successive orders of the Taylor remainder. For smooth integrands this typically reaches machine precision in 5-10 levels (NR §4.3).
+
+```calc
+extern fn romberg(f: fn, a: num, b: num, tol: num, max_levels: num): num;
+
+let sin_fn = fn(x) { return sin(x); };
+print romberg(sin_fn, 0, pi(), 0.0000000001, 12);    // 2 (to machine epsilon)
+```
+
+#### `lib/nr/rk45.calc` — adaptive Runge-Kutta-Cash-Karp
+
+Six function evaluations per step give both a 5th-order and a 4th-order estimate; their difference is the local error estimate. We use it to grow the step when the integrand is tame and shrink it when it's stiff. NR §16.2.
+
+```calc
+extern fn rk45(f: fn, t0: num, y0: num, t_end: num, tol: num): map;
+
+let decay = fn(t, y) { return -y; };
+let sol = rk45(decay, 0, 1, 5, 0.0000000001);
+let n = len(sol["ys"]);
+print sol["ys"][n - 1];        // 0.006737946972  ~= e^-5
+print sol["steps_accepted"];   // 65
+print sol["steps_rejected"];   // 0
+```
+
+Returns `{"ts", "ys", "steps_accepted", "steps_rejected"}`. The timestamps are non-uniform — that's the whole point. For a stiff problem like `y' = -100(y - 1)`, RK45 hammers through the boundary layer with many tiny steps and then takes large strides afterward; constant-step RK4 would have to use the smallest step throughout.
+
+#### `lib/nr/poly.calc` — orthogonal-polynomial families
+
+Three-term recurrences for Chebyshev T_n, Legendre P_n, Hermite H_n (physicists'), Laguerre L_n; rational approximations for Bessel J_0 and J_1 (NR §5.5 / §6.5).
+
+```calc
+extern fn chebyshev_T(n: num, x: num): num;
+extern fn legendre_P(n: num, x: num): num;
+extern fn hermite_H(n: num, x: num): num;
+extern fn laguerre_L(n: num, x: num): num;
+extern fn bessel_J0(x: num): num;
+extern fn bessel_J1(x: num): num;
+
+print chebyshev_T(5, 0.5);     // 0.5  (T_n(cos θ) = cos nθ; cos(5π/3) = 0.5)
+print legendre_P(5, 0.5);      // 0.0898...
+print hermite_H(3, 0.5);       // -5   (8x³ - 12x at 0.5)
+print bessel_J0(2.4048);       // 1.3e-05  (≈ 0; that's a Bessel zero)
+```
+
+All recurrences are evaluated bottom-up — numerically stable and O(n) per evaluation.
+
 #### Building the NR libraries
 
 ```bash
 make nr_libs          # compile lib/nr/*.calc -> build/calclib/nr_*.s
-make nr_demo          # build + run examples/nr_demo.calc
+make nr_demo          # tier 1: Brent + spline + special + Jacobi
+make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
 ```
 
 ### Building demos

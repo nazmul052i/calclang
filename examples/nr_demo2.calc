@@ -1,0 +1,91 @@
+// Tier-2 NR demo: LU decomposition, Romberg integration, adaptive
+// RK45, and the orthogonal-polynomial families.
+//
+// Build:
+//   make nr_libs2
+//   build/calcnat examples/nr_demo2.calc \
+//       build/calclib/nr_lu.s build/calclib/nr_romberg.s \
+//       build/calclib/nr_rk45.s build/calclib/nr_poly.s \
+//       -o build/nr_demo2.exe
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+extern fn lu_det(lu: map): num;
+extern fn romberg(f: fn, a: num, b: num, tol: num, max_levels: num): num;
+extern fn rk45(f: fn, t0: num, y0: num, t_end: num, tol: num): map;
+extern fn chebyshev_T(n: num, x: num): num;
+extern fn legendre_P(n: num, x: num): num;
+extern fn hermite_H(n: num, x: num): num;
+extern fn laguerre_L(n: num, x: num): num;
+extern fn bessel_J0(x: num): num;
+extern fn bessel_J1(x: num): num;
+
+// ===== LU decomposition =====
+print "===== LU decomposition (3 x 3) =====";
+let A = [[ 2,  1, -1],
+         [-3, -1,  2],
+         [-2,  1,  2]];
+let lu = lu_decompose(A);
+print "det(A) = " + lu_det(lu) + "   (expected: -1)";
+
+// Solve A x = b for two different right-hand sides — reusing the
+// factorization is the whole point of LU.
+let b1 = [8, -11, -3];
+let b2 = [0,  1,  4];
+print "A x1 = b1 where b1 =";  print b1;
+print "x1 =";                  print lu_solve(lu, b1);   // [2, 3, -1]
+print "A x2 = b2 where b2 =";  print b2;
+print "x2 =";                  print lu_solve(lu, b2);
+
+// ===== Romberg integration =====
+print "";
+print "===== Romberg integration =====";
+let sin_fn = fn(x) { return sin(x); };
+print "integrate sin(x) on [0, pi]  -> "
+    + romberg(sin_fn, 0, pi(), 0.0000000001, 12);
+print "  exact: 2";
+
+let bell = fn(x) { return exp(-x * x); };
+// integral over all reals is sqrt(pi); on [-3, 3] captures essentially all of it.
+print "integrate exp(-x^2) on [-3, 3] -> "
+    + romberg(bell, -3, 3, 0.0000000001, 14);
+print "  exact: sqrt(pi) = " + sqrt(pi());
+
+// ===== Adaptive RK45 =====
+print "";
+print "===== Adaptive RK45 (Cash-Karp) =====";
+let decay = fn(t, y) { return -y; };
+let sol = rk45(decay, 0, 1, 5, 0.0000000001);
+let n = len(sol["ys"]);
+print "y' = -y, y(0) = 1, integrate to t=5";
+print "  RK45 endpoint = " + sol["ys"][n - 1];
+print "  exact         = " + exp(-5);
+print "  steps accepted=" + sol["steps_accepted"]
+    + " rejected=" + sol["steps_rejected"];
+
+// A stiffer problem: y' = -100 y + 100. Equilibrium y=1. Without
+// adaptive stepping a small fixed step is wasted; RK45 squeezes the
+// stiff initial transient and then takes big strides.
+let stiff = fn(t, y) { return -100 * (y - 1); };
+let sol2 = rk45(stiff, 0, 0, 1, 0.000001);
+let n2 = len(sol2["ys"]);
+print "y' = -100(y - 1), y(0)=0, integrate to t=1";
+print "  RK45 endpoint = " + sol2["ys"][n2 - 1]
+    + "   (exact: 1 - exp(-100) ~= 1)";
+print "  steps accepted=" + sol2["steps_accepted"]
+    + " rejected=" + sol2["steps_rejected"];
+
+// ===== Orthogonal polynomials =====
+print "";
+print "===== Orthogonal polynomials at x = 0.5 =====";
+print "  Chebyshev T_5(0.5) = " + chebyshev_T(5, 0.5);    // 0.5
+print "  Legendre  P_5(0.5) = " + legendre_P(5, 0.5);
+print "  Hermite   H_3(0.5) = " + hermite_H(3, 0.5);       // physicists': 8x^3 - 12x at x=0.5 -> -5
+print "  Laguerre  L_3(0.5) = " + laguerre_L(3, 0.5);
+
+print "";
+print "Bessel functions:";
+print "  J_0(0)   = " + bessel_J0(0)   + "   (exact: 1)";
+print "  J_0(2.4048) = " + bessel_J0(2.4048) + " (first zero of J_0, expected ~0)";
+print "  J_1(0)   = " + bessel_J1(0)   + "   (exact: 0)";
+print "  J_1(3.8317) = " + bessel_J1(3.8317) + " (first zero of J_1, expected ~0)";

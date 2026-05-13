@@ -1,0 +1,56 @@
+// romberg.calc — Romberg integration. Builds a triangular table of
+// trapezoidal estimates with successively finer step size, then
+// applies Richardson extrapolation along each row to cancel
+// successive orders of the Taylor remainder. The result usually
+// converges to machine precision in 5-10 levels for smooth
+// integrands.
+//
+// Reference: Numerical Recipes 4.3.
+//
+//   integrate sin(x) from 0 to pi    -> 2.0 to machine epsilon
+//   integrate 1/x   from 1 to e      -> 1.0
+//
+// Stops when |T[k][k] - T[k-1][k-1]| < tol, or when max_levels (the
+// matrix is max_levels × max_levels) is exhausted.
+
+pub fn romberg(f, a, b, tol, max_levels) {
+    if (max_levels < 1) { throw "romberg: need max_levels >= 1"; }
+    // R[k][m] for k = 0..max_levels-1, m = 0..k.
+    // We build row by row.
+    let R = [];
+    // Level 0: a single trapezoid.
+    let h = b - a;
+    let r0 = [(f(a) + f(b)) * h / 2];
+    push(R, r0);
+
+    for (let k = 1; k < max_levels; k = k + 1) {
+        // Refine: halve the step, add midpoints of previous intervals.
+        let prev = R[k - 1][0];
+        let n = 1;
+        for (let p = 0; p < k - 1; p = p + 1) { n = n * 2; }
+        // After k-1 doublings, the previous level had 2^(k-1) intervals.
+        // The new level will have 2^k intervals.
+        let h_old = (b - a) / n;
+        let sum_mid = 0;
+        for (let i = 0; i < n; i = i + 1) {
+            sum_mid = sum_mid + f(a + (i + 0.5) * h_old);
+        }
+        let trap_new = (prev + h_old * sum_mid) / 2;
+
+        let row = [trap_new];
+        // Richardson extrapolation along the row.
+        let pow4 = 4;
+        for (let m = 1; m <= k; m = m + 1) {
+            let val = (pow4 * row[m - 1] - R[k - 1][m - 1]) / (pow4 - 1);
+            push(row, val);
+            pow4 = pow4 * 4;
+        }
+        push(R, row);
+
+        // Convergence check on the diagonal.
+        if (abs(row[k] - R[k - 1][k - 1]) < tol) {
+            return row[k];
+        }
+    }
+    return R[max_levels - 1][max_levels - 1];
+}
