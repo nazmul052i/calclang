@@ -926,6 +926,31 @@ A * I3 == A?  1' "$nat_out"
     # Bessel J_0(0) ≈ 1.
     echo "$nat_out" | grep -qE "J_0\(0\)   = 1(\.0+[0-9]+)?"   || { echo "FAIL: nr2 — Bessel J_0(0)";   exit 1; }
 
+    echo "[test] demo — nr_demo3 (Brent/golden/Nelder-Mead + heapsort/quickselect)"
+    build/calcnat --lib lib/nr/minimize.calc -o build/calclib/nr_minimize.s
+    build/calcnat --lib lib/nr/sort.calc     -o build/calclib/nr_sort.s
+    build/calcnat examples/nr_demo3.calc \
+        build/calclib/nr_minimize.s build/calclib/nr_sort.s \
+        -o build/d_nr3.exe
+    nat_out=$(build/d_nr3.exe | strip_cr)
+    # Quadratic min at x=2, f=1 — must land on 2 to ~8 digits.
+    echo "$nat_out" | grep -qE "golden_section -> x = 2(\.0+[0-9]*)?\b" \
+        || { echo "FAIL: nr3 — golden section"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "brent_min      -> x = 2(\.0+[0-9]*)?   f = 1" \
+        || { echo "FAIL: nr3 — Brent minimize"; echo "$nat_out"; exit 1; }
+    # Rosenbrock f* should be < 1e-6 — accept any "f* = 0.0000..." or "e-".
+    echo "$nat_out" | grep -E "^  f\* = " | head -1 | grep -qE "(0(\.0{5,}[0-9]+)?|e-)" \
+        || { echo "FAIL: nr3 — Rosenbrock f*"; echo "$nat_out"; exit 1; }
+    # Heapsort must produce a fully sorted list.
+    echo "$nat_out" | grep -q "in-place sorted = \[0, 1, 2, 3, 4, 5, 6, 7, 8, 9\]" \
+        || { echo "FAIL: nr3 — heapsort"; echo "$nat_out"; exit 1; }
+    # Quickselect: 3rd smallest (k=2) of 0..9 is 2.
+    echo "$nat_out" | grep -qE "3rd smallest \(k=2\) = 2(\.0+[0-9]*)?\b" \
+        || { echo "FAIL: nr3 — quickselect"; echo "$nat_out"; exit 1; }
+    # Median of 0..9 is 4.5.
+    echo "$nat_out" | grep -q "median of raw      = 4.5" \
+        || { echo "FAIL: nr3 — median"; echo "$nat_out"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

@@ -80,6 +80,8 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/romberg.calc`** — Romberg integration: trapezoidal table + Richardson extrapolation, machine-precision in 5-10 levels.
 - **`nr/rk45.calc`** — adaptive Cash-Karp RK45 with step-size control; handles stiff problems.
 - **`nr/poly.calc`** — orthogonal-polynomial families: Chebyshev T_n, Legendre P_n, Hermite H_n, Laguerre L_n, Bessel J_0/J_1.
+- **`nr/minimize.calc`** — 1-D minimization (golden section, Brent's parabolic method) and Nelder–Mead downhill simplex for N-D.
+- **`nr/sort.calc`** — heapsort (in-place, with optional index-companion permutation) and quickselect / median (O(n) average).
 
 ## Hello world
 

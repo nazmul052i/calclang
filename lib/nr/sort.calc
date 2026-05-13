@@ -1,0 +1,146 @@
+// sort.calc — heapsort and quickselect.
+//
+// heapsort     : O(n log n) worst-case, in-place. Slightly slower than a
+//                tuned quicksort on random input, but no pathological cases.
+// heapsort_idx : sorts the values AND returns a parallel permutation array
+//                giving each entry's original index. Useful when you need
+//                to reorder a companion column the same way.
+// quickselect  : O(n) average for the k-th smallest. Doesn't sort the rest.
+//
+// References: Numerical Recipes 8.3 (heapsort) and 8.5 (selection).
+
+priv fn _swap(a, i, j) {
+    let t = a[i]; a[i] = a[j]; a[j] = t;
+}
+
+// Sift-down on a (zero-indexed) heap of effective size n, starting at root.
+priv fn _sift_down(a, root, n) {
+    let i = root;
+    let go = 1;
+    while (go == 1) {
+        let l = 2 * i + 1;
+        let r = 2 * i + 2;
+        let largest = i;
+        if (l < n && a[l] > a[largest]) { largest = l; }
+        if (r < n && a[r] > a[largest]) { largest = r; }
+        if (largest == i) { go = 0; } else {
+            _swap(a, i, largest);
+            i = largest;
+        }
+    }
+}
+
+// In-place heapsort; returns the input array (now sorted) for chaining.
+pub fn heapsort(arr) {
+    let n = len(arr);
+    if (n < 2) { return arr; }
+    // Build max-heap.
+    let start = (n / 2) - 1;
+    // CalcLang uses floating division, so floor by integer cast.
+    start = floor(start);
+    for (let i = start; i >= 0; i = i - 1) {
+        _sift_down(arr, i, n);
+    }
+    // Extract maxima.
+    for (let end = n - 1; end > 0; end = end - 1) {
+        _swap(arr, 0, end);
+        _sift_down(arr, 0, end);
+    }
+    return arr;
+}
+
+// Sift-down on the (value, index) parallel heap.
+priv fn _sift_down2(v, idx, root, n) {
+    let i = root;
+    let go = 1;
+    while (go == 1) {
+        let l = 2 * i + 1;
+        let r = 2 * i + 2;
+        let largest = i;
+        if (l < n && v[l] > v[largest]) { largest = l; }
+        if (r < n && v[r] > v[largest]) { largest = r; }
+        if (largest == i) { go = 0; } else {
+            _swap(v,   i, largest);
+            _swap(idx, i, largest);
+            i = largest;
+        }
+    }
+}
+
+// Heapsort that also returns the original-index permutation.
+// Returns {"values": [...sorted...], "index": [...original indices...]}.
+pub fn heapsort_idx(arr) {
+    let n = len(arr);
+    let v = [];
+    let idx = [];
+    for (let i = 0; i < n; i = i + 1) {
+        push(v,   arr[i]);
+        push(idx, i);
+    }
+    if (n < 2) { return {"values": v, "index": idx}; }
+    let start = (n / 2) - 1;
+    start = floor(start);
+    for (let i = start; i >= 0; i = i - 1) {
+        _sift_down2(v, idx, i, n);
+    }
+    for (let end = n - 1; end > 0; end = end - 1) {
+        _swap(v, 0, end);
+        _swap(idx, 0, end);
+        _sift_down2(v, idx, 0, end);
+    }
+    return {"values": v, "index": idx};
+}
+
+// In-place Hoare-style partition around a pivot chosen as a[(lo+hi)/2].
+priv fn _partition(a, lo, hi) {
+    let mid = floor((lo + hi) / 2);
+    let pivot = a[mid];
+    let i = lo - 1;
+    let j = hi + 1;
+    let go = 1;
+    while (go == 1) {
+        i = i + 1;
+        while (a[i] < pivot) { i = i + 1; }
+        j = j - 1;
+        while (a[j] > pivot) { j = j - 1; }
+        if (i >= j) { return j; }
+        _swap(a, i, j);
+    }
+    return j;
+}
+
+// Return the k-th smallest element of arr (0-indexed; k=0 is the minimum,
+// k=len-1 the maximum). Mutates arr.
+pub fn quickselect(arr, k) {
+    let n = len(arr);
+    if (n == 0) { throw "quickselect: empty array"; }
+    if (k < 0 || k >= n) { throw "quickselect: k out of range"; }
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+        let p = _partition(arr, lo, hi);
+        if (k <= p) { hi = p; } else { lo = p + 1; }
+    }
+    return arr[k];
+}
+
+// Convenience: median. For even-length arrays returns the mean of the two
+// middle order statistics.
+pub fn median(arr) {
+    let n = len(arr);
+    if (n == 0) { throw "median: empty array"; }
+    // Quickselect mutates, so copy first.
+    let a = [];
+    for (let i = 0; i < n; i = i + 1) { push(a, arr[i]); }
+    if (n % 2 == 1) {
+        let mid = floor((n - 1) / 2);
+        return quickselect(a, mid);
+    }
+    let m1 = floor(n / 2) - 1;
+    let lo = quickselect(a, m1);
+    // After quickselect, a[m1+1:] all >= lo, so re-run select for m1+1.
+    let b = [];
+    for (let i = 0; i < n; i = i + 1) { push(b, arr[i]); }
+    let hi = quickselect(b, m1 + 1);
+    return (lo + hi) / 2;
+}

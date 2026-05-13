@@ -1,0 +1,95 @@
+// Tier-3 NR demo: 1-D / N-D function minimization and sorting / selection.
+//
+// Build:
+//   make nr_libs3
+//   build/calcnat examples/nr_demo3.calc \
+//       build/calclib/nr_minimize.s build/calclib/nr_sort.s \
+//       -o build/nr_demo3.exe
+
+extern fn golden_section(f: fn, a: num, b: num, c: num, tol: num): num;
+extern fn brent_min(f: fn, a: num, b: num, c: num, tol: num): map;
+extern fn simplex_min(f: fn, x0: arr, step: num, tol: num): map;
+extern fn heapsort(arr: arr): arr;
+extern fn heapsort_idx(arr: arr): map;
+extern fn quickselect(arr: arr, k: num): num;
+extern fn median(arr: arr): num;
+
+// ===== 1-D minimization =====
+print "===== Golden section + Brent (1-D) =====";
+
+// f(x) = (x - 2)^2 + 1 has its minimum at x=2, f=1.
+let quad = fn(x) { return (x - 2) * (x - 2) + 1; };
+print "f(x) = (x-2)^2 + 1, bracket (0, 1.5, 5)";
+print "  golden_section -> x = " + golden_section(quad, 0, 1.5, 5, 1e-8);
+let bm = brent_min(quad, 0, 1.5, 5, 1e-10);
+print "  brent_min      -> x = " + bm["x"] + "   f = " + bm["f"];
+
+// A trickier landscape: f(x) = x sin(x) on a chosen bracket near the
+// first local minimum (around x ~ 4.91).
+let osc = fn(x) { return x * sin(x); };
+let bm2 = brent_min(osc, 3, 5, 7, 1e-10);
+print "f(x) = x sin(x), bracket (3, 5, 7)";
+print "  brent_min      -> x = " + bm2["x"] + "   f = " + bm2["f"];
+
+// ===== N-D minimization (Nelder-Mead) =====
+print "";
+print "===== Nelder-Mead downhill simplex (N-D) =====";
+
+// Rosenbrock function: f(x,y) = (1-x)^2 + 100 (y - x^2)^2.
+// Global minimum is at (1, 1) with f = 0; classic NR test bed because
+// the valley is narrow, curved, and flat at the bottom.
+let rosen = fn(v) {
+    let dx = 1 - v[0];
+    let dy = v[1] - v[0] * v[0];
+    return dx * dx + 100 * dy * dy;
+};
+let res = simplex_min(rosen, [-1.2, 1], 0.5, 1e-10);
+print "Rosenbrock, starting at (-1.2, 1):";
+print "  x* =";  print res["x"];          // expect ~[1, 1]
+print "  f* = " + res["f"];                // expect ~0
+print "  iters = " + res["iters"];
+
+// A 4-D quadratic. Min at zero.
+let quad4 = fn(v) {
+    let s = 0;
+    for (let i = 0; i < 4; i = i + 1) {
+        s = s + (v[i] - i) * (v[i] - i);
+    }
+    return s;
+};
+let res2 = simplex_min(quad4, [0, 0, 0, 0], 1, 1e-10);
+print "4-D quadratic, expected x* = (0, 1, 2, 3):";
+print "  x* =";  print res2["x"];
+print "  f* = " + res2["f"];
+
+// ===== Sorting / selection =====
+print "";
+print "===== Heapsort and quickselect =====";
+
+let raw = [7, 2, 9, 1, 5, 8, 3, 6, 4, 0];
+print "raw  =";  print raw;
+
+// heapsort_idx leaves the original alone (it copies internally).
+let h = heapsort_idx(raw);
+print "sorted values =";  print h["values"];
+print "original idx  =";  print h["index"];
+
+// heapsort sorts in place. Make a copy first.
+let r2 = [];
+for (let i = 0; i < len(raw); i = i + 1) { push(r2, raw[i]); }
+heapsort(r2);
+print "in-place sorted =";  print r2;
+
+// quickselect — k-th smallest without sorting.
+let r3 = [];
+for (let i = 0; i < len(raw); i = i + 1) { push(r3, raw[i]); }
+print "3rd smallest (k=2) = " + quickselect(r3, 2);   // expect 2
+
+let r4 = [];
+for (let i = 0; i < len(raw); i = i + 1) { push(r4, raw[i]); }
+print "max (k=n-1)        = " + quickselect(r4, len(r4) - 1);   // expect 9
+
+// median.
+print "median of raw      = " + median(raw);   // expect 4.5 for even length
+let odd = [5, 2, 8, 1, 9];
+print "median of odd      = " + median(odd);   // expect 5

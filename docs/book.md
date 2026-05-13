@@ -1349,12 +1349,52 @@ print bessel_J0(2.4048);       // 1.3e-05  (≈ 0; that's a Bessel zero)
 
 All recurrences are evaluated bottom-up — numerically stable and O(n) per evaluation.
 
+#### `lib/nr/minimize.calc` — 1-D and N-D minimization
+
+Three routines, in order of increasing power:
+
+- **`golden_section(f, a, b, c, tol)`** — bullet-proof bracketed 1-D minimizer. Needs `f(b) < f(a)` and `f(b) < f(c)`. Linear convergence, no derivatives.
+- **`brent_min(f, a, b, c, tol)`** — Brent's parabolic-interpolation method. Falls back to golden-section when the parabolic step misbehaves. The standard workhorse (NR §10.3). Returns `{"x", "f"}`.
+- **`simplex_min(f, x0, step, tol)`** — Nelder–Mead downhill simplex for multi-dim minimization (NR §10.5). `f` takes a length-n array. Returns `{"x", "f", "iters"}`. Doesn't need a derivative — useful when the gradient is hard or noisy.
+
+```calc
+extern fn brent_min(f: fn, a: num, b: num, c: num, tol: num): map;
+extern fn simplex_min(f: fn, x0: arr, step: num, tol: num): map;
+
+let f = fn(x) { return (x - 2) * (x - 2) + 1; };
+let r = brent_min(f, 0, 1.5, 5, 1e-10);
+print r["x"];                                  // 2.0
+print r["f"];                                  // 1.0
+
+// Rosenbrock — the classic NR test of a 2-D minimizer.
+let rosen = fn(v) {
+    let dx = 1 - v[0];
+    let dy = v[1] - v[0] * v[0];
+    return dx * dx + 100 * dy * dy;
+};
+print simplex_min(rosen, [-1.2, 1], 0.5, 1e-10)["x"];   // [~1, ~1]
+```
+
+#### `lib/nr/sort.calc` — heapsort and quickselect
+
+```calc
+extern fn heapsort(arr: arr): arr;             // in-place, O(n log n) worst-case
+extern fn heapsort_idx(arr: arr): map;         // returns {"values", "index"}
+extern fn quickselect(arr: arr, k: num): num;  // O(n) average, k-th smallest
+extern fn median(arr: arr): num;
+```
+
+`heapsort_idx` returns the sort order's original-index permutation, useful when a parallel column needs to follow. `quickselect` mutates its input and runs in expected O(n) — pick `k = n/2` for a median, `k = n-1` for the maximum, etc. `median` does the right thing for both even and odd lengths.
+
+NR §8.3 (heapsort) and §8.5 (selection).
+
 #### Building the NR libraries
 
 ```bash
 make nr_libs          # compile lib/nr/*.calc -> build/calclib/nr_*.s
 make nr_demo          # tier 1: Brent + spline + special + Jacobi
 make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
+make nr_demo3         # tier 3: minimization + sort/select
 ```
 
 ### Building demos
@@ -1374,6 +1414,8 @@ make json_demo                           # JSON parse/encode round-trip
 make ode_demo                            # exp-decay + harmonic oscillator via RK4
 make fft_demo                            # FFT spectrum of a synthetic signal
 make nr_demo                             # Brent + spline + special fns + Jacobi
+make nr_demo2                            # LU + Romberg + RK45 + polynomial families
+make nr_demo3                            # 1-D / N-D minimization + sort/select
 make demos                               # all of the above
 ```
 

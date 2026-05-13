@@ -1,0 +1,256 @@
+// minimize.calc — 1-D and multi-D function minimization.
+//
+// golden_section : robust 1-D bracketed minimizer (slow but bullet-proof).
+// brent_min      : 1-D minimizer combining golden section with parabolic
+//                  interpolation (the workhorse — NR 10.3).
+// simplex_min    : multi-D Nelder–Mead downhill simplex (NR 10.5).
+//
+// All routines minimize a callable f; to maximize, pass fn(x) { return -g(x); }.
+
+priv fn _sign(x) {
+    if (x < 0) { return -1; }
+    return 1;
+}
+
+// ===== Golden section search =====
+// Inputs: scalar function f, bracket (a, b, c) with f(b) < f(a) and f(b) < f(c),
+// and a tolerance on |x|.  Returns the abscissa of the minimum.
+pub fn golden_section(f, a_in, b_in, c_in, tol) {
+    // R = (sqrt(5) - 1) / 2 = 0.6180339887...
+    let R = 0.6180339887498949;
+    let C = 1 - R;
+    let x0 = a_in;
+    let x3 = c_in;
+    let x1 = 0;
+    let x2 = 0;
+    // Place the two inner points inside the wider of the two sub-intervals.
+    if (abs(c_in - b_in) > abs(b_in - a_in)) {
+        x1 = b_in;
+        x2 = b_in + C * (c_in - b_in);
+    } else {
+        x2 = b_in;
+        x1 = b_in - C * (b_in - a_in);
+    }
+    let f1 = f(x1);
+    let f2 = f(x2);
+    let max_iter = 200;
+    for (let it = 0; it < max_iter; it = it + 1) {
+        if (abs(x3 - x0) < tol * (abs(x1) + abs(x2))) {
+            if (f1 < f2) { return x1; }
+            return x2;
+        }
+        if (f2 < f1) {
+            x0 = x1;  x1 = x2;  x2 = R * x1 + C * x3;
+            f1 = f2;  f2 = f(x2);
+        } else {
+            x3 = x2;  x2 = x1;  x1 = R * x2 + C * x0;
+            f2 = f1;  f1 = f(x1);
+        }
+    }
+    if (f1 < f2) { return x1; }
+    return x2;
+}
+
+// ===== Brent's parabolic-interpolation minimizer =====
+// Combines golden-section reliability with parabolic-fit acceleration.
+// Inputs: f, bracket (a, b, c) with f(b) below f(a) and f(c), tolerance tol.
+// Returns a map {"x": xmin, "f": fmin}.
+pub fn brent_min(f, ax, bx, cx, tol) {
+    let CGOLD = 0.3819660112501051;   // (3 - sqrt 5) / 2
+    let ZEPS  = 1e-10;
+    let max_iter = 100;
+
+    let a = ax; let b = cx;
+    if (ax > cx) { a = cx; b = ax; }
+    let x = bx;  let w = bx;  let v = bx;
+    let fx = f(x);  let fw = fx;  let fv = fx;
+    let d = 0;  let e = 0;       // step / step-before-last
+
+    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+        let xm = 0.5 * (a + b);
+        let tol1 = tol * abs(x) + ZEPS;
+        let tol2 = 2 * tol1;
+        if (abs(x - xm) <= tol2 - 0.5 * (b - a)) {
+            return {"x": x, "f": fx};
+        }
+        let did_parabolic = 0;
+        if (abs(e) > tol1) {
+            // Trial parabolic fit using (x, w, v).
+            let r = (x - w) * (fx - fv);
+            let q = (x - v) * (fx - fw);
+            let p = (x - v) * q - (x - w) * r;
+            let qq = 2 * (q - r);
+            if (qq > 0) { p = -p; }
+            qq = abs(qq);
+            let etemp = e;
+            e = d;
+            // Acceptability test: step inside (a,b), and not more than half
+            // the last-but-one step.
+            if (abs(p) < abs(0.5 * qq * etemp)
+                && p > qq * (a - x)
+                && p < qq * (b - x)) {
+                d = p / qq;
+                let u = x + d;
+                if (u - a < tol2 || b - u < tol2) {
+                    d = tol1 * _sign(xm - x);
+                }
+                did_parabolic = 1;
+            }
+        }
+        if (did_parabolic == 0) {
+            // Fall back to golden-section step.
+            if (x >= xm) { e = a - x; } else { e = b - x; }
+            d = CGOLD * e;
+        }
+        let u = 0;
+        if (abs(d) >= tol1) {
+            u = x + d;
+        } else {
+            u = x + tol1 * _sign(d);
+        }
+        let fu = f(u);
+        if (fu <= fx) {
+            if (u >= x) { a = x; } else { b = x; }
+            v = w;  w = x;  x = u;
+            fv = fw;  fw = fx;  fx = fu;
+        } else {
+            if (u < x) { a = u; } else { b = u; }
+            if (fu <= fw || w == x) {
+                v = w;  fv = fw;
+                w = u;  fw = fu;
+            } else {
+                // Only update v if it improves over the current v, or v is stale.
+                if (fu <= fv || v == x || v == w) {
+                    v = u;  fv = fu;
+                }
+            }
+        }
+    }
+    return {"x": x, "f": fx};
+}
+
+// ===== Nelder–Mead downhill simplex =====
+// Inputs: f mapping a length-n array to a scalar, initial vertex x0 (length n),
+// initial step size, tolerance on f range across the simplex.
+// Returns a map {"x": [...], "f": fbest, "iters": k}.
+
+priv fn _vcopy(v) {
+    let out = [];
+    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    return out;
+}
+
+priv fn _centroid(simplex, ihi) {
+    let n = len(simplex[0]);
+    let c = [];
+    for (let i = 0; i < n; i = i + 1) { push(c, 0); }
+    let m = len(simplex);
+    for (let k = 0; k < m; k = k + 1) {
+        if (k == ihi) { continue; }
+        for (let i = 0; i < n; i = i + 1) {
+            c[i] = c[i] + simplex[k][i];
+        }
+    }
+    for (let i = 0; i < n; i = i + 1) { c[i] = c[i] / (m - 1); }
+    return c;
+}
+
+priv fn _reflect(centroid, xhi, alpha) {
+    let n = len(centroid);
+    let r = [];
+    for (let i = 0; i < n; i = i + 1) {
+        push(r, centroid[i] + alpha * (centroid[i] - xhi[i]));
+    }
+    return r;
+}
+
+pub fn simplex_min(f, x0, step, tol) {
+    let n = len(x0);
+    // Build initial simplex: x0 plus n shifted vertices.
+    let simplex = [];
+    let fvals = [];
+    push(simplex, _vcopy(x0));
+    push(fvals, f(x0));
+    for (let i = 0; i < n; i = i + 1) {
+        let v = _vcopy(x0);
+        v[i] = v[i] + step;
+        push(simplex, v);
+        push(fvals, f(v));
+    }
+    let max_iter = 500;
+    let alpha = 1;     // reflection
+    let gamma = 2;     // expansion
+    let rho   = 0.5;   // contraction
+    let sigma = 0.5;   // shrink
+
+    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+        // Locate lo / hi / second-hi indices.
+        let ilo = 0;
+        let ihi = 0;
+        let isec = 0;
+        for (let k = 1; k < len(fvals); k = k + 1) {
+            if (fvals[k] < fvals[ilo]) { ilo = k; }
+            if (fvals[k] > fvals[ihi]) { ihi = k; }
+        }
+        isec = ilo;
+        for (let k = 0; k < len(fvals); k = k + 1) {
+            if (k == ihi) { continue; }
+            if (fvals[k] > fvals[isec]) { isec = k; }
+        }
+        // Convergence: range of f across simplex below tol.
+        let rng = abs(fvals[ihi] - fvals[ilo]);
+        if (rng < tol) {
+            return {"x": simplex[ilo], "f": fvals[ilo], "iters": iter};
+        }
+        let cen = _centroid(simplex, ihi);
+        let xr  = _reflect(cen, simplex[ihi], alpha);
+        let fr  = f(xr);
+        if (fr < fvals[ilo]) {
+            // Try expansion.
+            let xe = _reflect(cen, simplex[ihi], alpha * gamma);
+            let fe = f(xe);
+            if (fe < fr) {
+                simplex[ihi] = xe;  fvals[ihi] = fe;
+            } else {
+                simplex[ihi] = xr;  fvals[ihi] = fr;
+            }
+        } else {
+            if (fr < fvals[isec]) {
+                simplex[ihi] = xr;  fvals[ihi] = fr;
+            } else {
+                // Contract.
+                let xc = [];
+                let base = simplex[ihi];
+                if (fr < fvals[ihi]) { base = xr; }
+                for (let i = 0; i < n; i = i + 1) {
+                    push(xc, cen[i] + rho * (base[i] - cen[i]));
+                }
+                let fc = f(xc);
+                let used_contract = 0;
+                if (fc < fvals[ihi] && fc < fr) {
+                    simplex[ihi] = xc;  fvals[ihi] = fc;
+                    used_contract = 1;
+                }
+                if (used_contract == 0) {
+                    // Shrink toward the best vertex.
+                    let xlo = simplex[ilo];
+                    for (let k = 0; k < len(simplex); k = k + 1) {
+                        if (k == ilo) { continue; }
+                        let v = simplex[k];
+                        for (let i = 0; i < n; i = i + 1) {
+                            v[i] = xlo[i] + sigma * (v[i] - xlo[i]);
+                        }
+                        simplex[k] = v;
+                        fvals[k] = f(v);
+                    }
+                }
+            }
+        }
+    }
+    // Return current best.
+    let ilo = 0;
+    for (let k = 1; k < len(fvals); k = k + 1) {
+        if (fvals[k] < fvals[ilo]) { ilo = k; }
+    }
+    return {"x": simplex[ilo], "f": fvals[ilo], "iters": max_iter};
+}

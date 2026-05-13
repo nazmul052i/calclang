@@ -87,21 +87,19 @@ pub fn bessel_J0(x) {
                 + y))));
         return num / den;
     }
-    // Asymptotic form for large |x|. NR-style polynomial in y = (8/x)^2;
-    // coefficients are written as plain decimals because CalcLang's
-    // lexer doesn't accept scientific-notation literals.
+    // Asymptotic form for large |x|. NR-style polynomial in y = (8/x)^2.
     let z = 8 / ax;
     let y = z * z;
     let ans1 = 1.0
-             + y * (-0.001098628627
-             + y * (0.00002734510407
-             + y * (-0.000002073370639
-             + y * 0.0000002093887211)));
-    let ans2 = -0.01562499995
-             + y * (0.0001430488765
-             + y * (-0.000006911147651
-             + y * (0.0000007621095161
-             + y * (-0.0000000934935152))));
+             + y * (-0.1098628627e-2
+             + y * ( 0.2734510407e-4
+             + y * (-0.2073370639e-5
+             + y *   0.2093887211e-6)));
+    let ans2 = -0.1562499995e-1
+             + y * ( 0.1430488765e-3
+             + y * (-0.6911147651e-5
+             + y * ( 0.7621095161e-6
+             + y * (-0.934935152e-7))));
     let xx = ax - 0.785398164;       // pi/4
     return sqrt(0.636619772 / ax) * (cos(xx) * ans1 - z * sin(xx) * ans2);
 }
@@ -128,15 +126,15 @@ pub fn bessel_J1(x) {
     let z = 8 / ax;
     let y = z * z;
     let ans1 = 1.0
-             + y * (0.00183105
-             + y * (-0.00003516396496
-             + y * (0.000002457520174
-             + y * (-0.000000240337019))));
+             + y * ( 0.183105e-2
+             + y * (-0.3516396496e-4
+             + y * ( 0.2457520174e-5
+             + y * (-0.240337019e-6))));
     let ans2 = 0.04687499995
-             + y * (-0.0002002690873
-             + y * (0.000008449199096
-             + y * (-0.00000088228987
-             + y * 0.000000105787412)));
+             + y * (-0.2002690873e-3
+             + y * ( 0.8449199096e-5
+             + y * (-0.88228987e-6
+             + y *   0.105787412e-6)));
     let xx = ax - 2.356194491;       // 3 pi / 4
     return sgn * sqrt(0.636619772 / ax) * (cos(xx) * ans1 - z * sin(xx) * ans2);
 }
