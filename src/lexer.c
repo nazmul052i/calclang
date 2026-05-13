@@ -174,6 +174,37 @@ Token lexer_next(Lexer *lx) {
             b[i++] = cur(lx);
             adv(lx);
         }
+        /* Optional exponent: `e` or `E`, optional sign, then digits.
+           Only consume the `e` if it's followed by a digit (or a
+           sign + digit) — otherwise leave it for the identifier
+           tokenizer (so the calclib `e()` builtin still tokenizes
+           correctly when it appears after a number-like sequence). */
+        if (cur(lx) == 'e' || cur(lx) == 'E') {
+            char n1 = peek(lx);
+            int  is_exp = isdigit((unsigned char)n1);
+            if (!is_exp && (n1 == '+' || n1 == '-')) {
+                /* Need one more char of lookahead — peek only sees
+                   pos+1. Use the underlying buffer directly. */
+                char n2 = lx->src[lx->pos + 1] == '\0'
+                            ? '\0' : lx->src[lx->pos + 2];
+                if (isdigit((unsigned char)n2)) is_exp = 1;
+            }
+            if (is_exp) {
+                if (i >= CL_MAX_TEXT - 1) cl_die_at(line, col, "number too long");
+                b[i++] = cur(lx);    /* 'e' or 'E' */
+                adv(lx);
+                if (cur(lx) == '+' || cur(lx) == '-') {
+                    if (i >= CL_MAX_TEXT - 1) cl_die_at(line, col, "number too long");
+                    b[i++] = cur(lx);
+                    adv(lx);
+                }
+                while (isdigit((unsigned char)cur(lx))) {
+                    if (i >= CL_MAX_TEXT - 1) cl_die_at(line, col, "number too long");
+                    b[i++] = cur(lx);
+                    adv(lx);
+                }
+            }
+        }
         b[i] = '\0';
         return tok(TOK_NUMBER, b, line, col);
     }
