@@ -1,0 +1,106 @@
+// Numeric subset exercised end-to-end through the native x86-64
+// backend. Output here must match what the VM backend produces for
+// the same source (the test harness asserts both).
+
+// ===== Literals + arithmetic =====
+print 2 + 3 * 4;                            // 14
+print (2 + 3) * 4;                          // 20
+print 10 - 4 - 2;                           // 4 (left-assoc)
+print 100 / 4 / 5;                          // 5
+print 17 % 5;                               // 2
+print -7 + 10;                              // 3
+print -(2 + 3);                             // -5
+
+// ===== Comparisons + logical =====
+print 5 < 6;                                // 1
+print 6 < 5;                                // 0
+print 5 == 5;                               // 1
+print 5 != 5;                               // 0
+print 5 <= 5;                               // 1
+print 5 >= 6;                               // 0
+print 1 && 1;                               // 1
+print 1 && 0;                               // 0
+print 0 || 1;                               // 1
+print 0 || 0;                               // 0
+print !0;                                   // 1
+print !5;                                   // 0
+
+// ===== Variables + reassignment =====
+let x = 10;
+let y = 5;
+print x + y;                                // 15
+x = x + 100;
+print x;                                    // 110
+
+// ===== if / else =====
+if (x > y) { print 1; } else { print 0; }   // 1
+if (x < y) { print 1; } else { print 0; }   // 0
+
+// ===== Nested scopes + shadowing =====
+let s = 1;
+{
+    let s = 999;
+    print s;                                // 999
+}
+print s;                                    // 1
+
+// ===== while + compound assign =====
+let i = 0;
+let acc = 0;
+while (i < 5) {
+    acc += i;
+    i++;
+}
+print acc;                                  // 10
+
+// ===== for + break + continue =====
+let sum = 0;
+for (let k = 1; k <= 10; k++) {
+    if (k == 4) { continue; }
+    if (k == 8) { break; }
+    sum += k;
+}
+print sum;                                  // 1+2+3+5+6+7 = 24
+
+// ===== Functions: params, return, recursion =====
+fn add(a, b) { return a + b; }
+print add(7, 8);                            // 15
+
+fn fact(n) {
+    if (n <= 1) { return 1; }
+    return n * fact(n - 1);
+}
+print fact(0);                              // 1
+print fact(5);                              // 120
+print fact(10);                             // 3628800
+
+fn fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+print fib(0);                               // 0
+print fib(1);                               // 1
+print fib(10);                              // 55
+print fib(15);                              // 610
+
+// Mutual recursion.
+fn is_even(n) {
+    if (n == 0) { return 1; }
+    return is_odd(n - 1);
+}
+fn is_odd(n) {
+    if (n == 0) { return 0; }
+    return is_even(n - 1);
+}
+print is_even(8);                           // 1
+print is_odd(7);                            // 1
+print is_even(13);                          // 0
+
+// ===== Math intrinsics =====
+print sqrt(16);                             // 4
+print abs(-7);                              // 7
+print floor(3.9);                           // 3
+print ceil(3.1);                            // 4
+print min(3, 8);                            // 3
+print max(3, 8);                            // 8
+print pow(2, 10);                           // 1024

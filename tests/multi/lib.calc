@@ -1,0 +1,19 @@
+// Library file: defines functions used from main.calc.
+// `pub fn` is exported as a global symbol; bare `fn` stays file-local.
+
+pub fn add(a: num, b: num): num {
+    return a + b;
+}
+
+pub fn greet(name: str): str {
+    return "hello, " + name;
+}
+
+// Private helper — won't be visible to other compilation units.
+fn _internal(x) {
+    return x * 100;
+}
+
+pub fn make_greeting(prefix: str, name: str): str {
+    return prefix + ": " + name;
+}

@@ -1,0 +1,49 @@
+// Arrays in action.
+
+// --- Literal and access ---
+let primes = [2, 3, 5, 7, 11, 13];
+print primes;                       // [2, 3, 5, 7, 11, 13]
+print "count = " + to_str(len(primes));
+print "primes[3] = " + to_str(primes[3]);
+
+// --- Mutation ---
+primes[0] = -2;
+print primes;
+
+// --- Building a result list ---
+fn squares_up_to(n) {
+    let out = [];
+    for (let i = 1; i <= n; i++) {
+        push(out, i * i);
+    }
+    return out;
+}
+print squares_up_to(8);             // [1, 4, 9, 16, 25, 36, 49, 64]
+
+// --- A sum over an array via recursion ---
+fn sum_arr(a, i) {
+    if (i >= len(a)) { return 0; }
+    return a[i] + sum_arr(a, i + 1);
+}
+print sum_arr(primes, 0);
+
+// --- Heterogeneous list of tagged records ---
+let people = [];
+push(people, ["Alice", 30]);
+push(people, ["Bob",   42]);
+push(people, ["Carol", 19]);
+print people;
+for (let i = 0; i < len(people); i++) {
+    let p = people[i];
+    print p[0] + " is " + to_str(p[1]);
+}
+
+// --- in-place transform ---
+fn double_in_place(a) {
+    for (let i = 0; i < len(a); i++) {
+        a[i] = a[i] * 2;
+    }
+}
+let xs = [1, 2, 3, 4];
+double_in_place(xs);                // reference semantics — modifies xs
+print xs;                           // [2, 4, 6, 8]

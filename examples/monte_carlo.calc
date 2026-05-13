@@ -1,0 +1,55 @@
+// Monte Carlo estimate of π by counting points inside a quarter-
+// circle, plus a normal-distribution sample summary. Demonstrates
+// random.calc and stats.calc working together.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/monte_carlo.calc \
+//       build/calclib/random.s build/calclib/stats.s -o build/monte_carlo.exe
+
+extern fn Rng(seed: num): map;
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+extern fn min_of(xs: arr): num;
+extern fn max_of(xs: arr): num;
+extern fn histogram(xs: arr, n_bins: num): map;
+
+// ===== Estimate π via Monte Carlo =====
+let rng = Rng(2024);
+let inside = 0;
+let n = 100000;
+for (let i = 0; i < n; i = i + 1) {
+    let x = rng.uniform01();
+    let y = rng.uniform01();
+    if (x * x + y * y <= 1) { inside = inside + 1; }
+}
+let pi_est = 4 * inside / n;
+print "π estimate via " + n + " samples: " + pi_est;
+print "true π                            : " + pi();
+print "error                              : " + abs(pi_est - pi());
+
+// ===== Sample from a normal distribution =====
+print "";
+let samples = rng.normal_array(10000, 0, 1);
+print "10000 standard-normal samples:";
+print "  mean   = " + mean(samples)   + "   (expected ~0)";
+print "  stddev = " + stddev(samples) + "   (expected ~1)";
+print "  min    = " + min_of(samples);
+print "  max    = " + max_of(samples);
+
+// Bin them into a histogram and print roughly-symmetric counts.
+let h = histogram(samples, 10);
+print "  histogram (10 bins):";
+let counts = h["counts"];
+for (let i = 0; i < len(counts); i = i + 1) {
+    let bar = "    bin " + i + ": " + counts[i];
+    print bar;
+}
+
+// ===== Random choice + shuffle =====
+print "";
+print "random choice/shuffle:";
+let names = ["alice", "bob", "carol", "dave"];
+print "  choice -> " + rng.choice(names);
+print "  shuffle -> ";
+print rng.shuffle(["a", "b", "c", "d", "e"]);

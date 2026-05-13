@@ -1,0 +1,65 @@
+// Maps (dictionaries): { key: value } literal, m[key] read/write,
+// keys/values/has_key/del, len(map), type_of, reference semantics.
+
+let m = {"name": "Alice", "age": 30};
+print m["name"];                     // Alice
+print m["age"];                      // 30
+print len(m);                        // 2
+
+// Mutate
+m["city"] = "NYC";
+print len(m);                        // 3
+print m["city"];                     // NYC
+
+m["age"] = 31;                       // update existing
+print m["age"];                      // 31
+
+// Empty map
+let empty = {};
+print empty;                         // {}
+print len(empty);                    // 0
+
+// keys / values
+let m2 = {"a": 1, "b": 2, "c": 3};
+print keys(m2);                      // ["a", "b", "c"]
+print values(m2);                    // [1, 2, 3]
+
+// has_key / del
+print has_key(m2, "b");              // 1
+print has_key(m2, "z");              // 0
+print del(m2, "b");                  // 1 (was present)
+print has_key(m2, "b");              // 0
+print del(m2, "b");                  // 0 (already gone)
+print len(m2);                       // 2
+
+// Numeric keys
+let m3 = {1: "one", 2: "two", 3: "three"};
+print m3[2];                         // two
+
+// Reference semantics
+let r = m;
+r["shared"] = "yes";
+print m["shared"];                   // yes (same map)
+
+// type_of
+print type_of({});                   // map
+print type_of(m);                    // map
+
+// Nested
+let nested = {"user": {"name": "Bob", "age": 25}, "active": 1};
+print nested["user"]["name"];        // Bob
+print nested["active"];              // 1
+
+// Duplicate keys in literal — later wins
+let dup = {"a": 1, "b": 2, "a": 3};
+print dup["a"];                      // 3
+print len(dup);                      // 2
+
+// Iterate via keys() helper
+let scores = {"alice": 90, "bob": 75, "carol": 85};
+let ks = keys(scores);
+let total = 0;
+for (let i = 0; i < len(ks); i++) {
+    total += scores[ks[i]];
+}
+print total;                         // 250

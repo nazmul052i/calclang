@@ -1,0 +1,119 @@
+// Tests for the final round of completed limitations:
+//   1. Mutable closures (assigning to a captured local from an inner fn)
+//   2. Transitive closure capture (inner fn sees outer-outer's local)
+//   3. Struct-like field access via `obj.field` sugar for `obj["field"]`
+
+// ===== Mutable closures =====
+// Classic counter pattern: the inner fn mutates `n` in the enclosing scope.
+fn make_counter() {
+    let n = 0;
+    fn inc() {
+        n = n + 1;
+        return n;
+    }
+    return inc;
+}
+let c = make_counter();
+print c();                              // 1
+print c();                              // 2
+print c();                              // 3
+
+// Each call to the factory creates an independent capture slot.
+let c2 = make_counter();
+print c2();                             // 1
+print c();                              // 4
+
+// Compound assignment through a captured local.
+fn make_adder_acc(start) {
+    let total = start;
+    fn add(x) {
+        total += x;
+        return total;
+    }
+    return add;
+}
+let acc = make_adder_acc(10);
+print acc(5);                           // 15
+print acc(7);                           // 22
+print acc(0);                           // 22
+
+// Two inner fns sharing the same captured slot (read + write).
+fn make_pair() {
+    let v = 100;
+    fn get() { return v; }
+    fn set(x) { v = x; }
+    return [get, set];
+}
+let p = make_pair();
+let getv = p[0];
+let setv = p[1];
+print getv();                           // 100
+setv(250);
+print getv();                           // 250
+
+// ===== Transitive capture =====
+// Innermost fn references the outermost fn's local — passes through
+// the middle fn even though it doesn't use the name itself.
+fn outer3(x) {
+    fn middle() {
+        fn inner() {
+            return x;                   // captured two levels up
+        }
+        return inner;
+    }
+    return middle;
+}
+let m = outer3(42);
+let i = m();
+print i();                              // 42
+
+// Transitive capture + mutation.
+fn outer_mut() {
+    let count = 0;
+    fn middle_mut() {
+        fn bump() {
+            count = count + 10;
+            return count;
+        }
+        return bump;
+    }
+    return middle_mut;
+}
+let mm = outer_mut();
+let bumper = mm();
+print bumper();                         // 10
+print bumper();                         // 20
+print bumper();                         // 30
+
+// ===== Field access (struct-like sugar) =====
+// Read with `.`
+let person = {"name": "Alice", "age": 30};
+print person.name;                      // Alice
+print person.age;                       // 30
+
+// Write with `.`
+person.age = 31;
+print person.age;                       // 31
+
+// Nested: chained reads.
+let users = {"alice": {"age": 30, "city": "NYC"}};
+print users.alice.age;                  // 30
+print users.alice.city;                 // NYC
+
+// Nested: chained writes.
+users.alice.age = 31;
+print users.alice.age;                  // 31
+
+// Mixing `.` and `[]` in the same chain.
+let team = {"members": [{"name": "Bob"}, {"name": "Carol"}]};
+print team.members[0].name;             // Bob
+print team.members[1].name;             // Carol
+team.members[0].name = "Bobby";
+print team.members[0].name;             // Bobby
+
+// Field access composes with compound assignment.
+let stats = {"hits": 5};
+stats.hits += 10;
+print stats.hits;                       // 15
+stats.hits++;
+print stats.hits;                       // 16

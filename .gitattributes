@@ -1,0 +1,22 @@
+# Normalize line endings on commit so the working tree on each platform
+# matches the platform's convention, but the repo stays LF.
+* text=auto eol=lf
+
+# Shell scripts and Makefiles MUST use LF regardless of platform.
+*.sh         text eol=lf
+Makefile     text eol=lf
+
+# Treat binary asset extensions as binary (no normalization).
+*.png        binary
+*.jpg        binary
+*.ico        binary
+
+# Calc source / docs / configs are text; LF.
+*.calc       text eol=lf
+*.casm       text eol=lf
+*.c          text eol=lf
+*.h          text eol=lf
+*.md         text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.svg        text eol=lf

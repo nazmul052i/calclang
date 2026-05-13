@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # Native pipeline lives most naturally on Linux + gcc. We also build
+  # on Windows + MinGW because that's the platform the native backend
+  # was bootstrapped on and we don't want to regress it.
+  test-linux:
+    name: build + test (ubuntu-latest, gcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+      - name: Compiler version
+        run: gcc --version
+      - name: Build toolchain
+        run: make
+      - name: Run full test suite
+        run: make test
+      - name: Build all engineering demos
+        run: make demos
+
+  test-windows:
+    name: build + test (windows-latest, MinGW gcc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MSYS2 + MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Compiler version
+        shell: msys2 {0}
+        run: gcc --version
+      - name: Build toolchain
+        shell: msys2 {0}
+        run: make
+      - name: Run full test suite
+        shell: msys2 {0}
+        run: make test

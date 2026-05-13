@@ -1,0 +1,74 @@
+// Exercises the five limitations completed this round:
+// mixed-type +, chained-write, let type annotations, priv keyword,
+// and first-class calclib builtins (via auto-generated trampolines).
+
+// ===== Mixed-type + =====
+// num + str and str + num both coerce the number with %.10g.
+print "x = " + 5;                          // x = 5
+print 7 + " items";                        // 7 items
+print "pi = " + 3.14159;                   // pi = 3.14159
+print "total: " + (10 + 20);               // total: 30
+print "neg = " + -7;                       // neg = -7
+
+// Concat chain mixing types.
+print "a=" + 1 + ", b=" + 2;               // a=1, b=2
+
+// ===== Chained-write =====
+let m = [[1, 2, 3], [4, 5, 6]];
+m[0][1] = 99;
+print m;                                    // [[1, 99, 3], [4, 5, 6]]
+
+let deep = [[[1]]];
+deep[0][0][0] = 42;
+print deep;                                 // [[[42]]]
+
+// Mixing maps and arrays.
+let users = {};
+users["alice"] = {"age": 30};
+users["alice"]["age"] = 31;
+print users["alice"];                       // {"age": 31}
+
+// Array of records — write through chain.
+let people = [{"name": "Bob", "age": 25}];
+people[0]["age"] = 26;
+print people;                               // [{"name": "Bob", "age": 26}]
+
+// ===== let type annotations =====
+let nx: num = 42;
+print nx;                                   // 42
+let ns: str = "hello";
+print ns;                                   // hello
+let na: arr = [1, 2, 3];
+print na;                                   // [1, 2, 3]
+let nm: map = {"k": "v"};
+print nm;                                   // {"k": "v"}
+let nb: bool = 1;                           // bool is num alias
+print nb;                                   // 1
+
+// for-init annotation too.
+let acc = 0;
+for (let i: num = 1; i <= 5; i++) {
+    acc += i;
+}
+print acc;                                  // 15
+
+// ===== priv keyword =====
+priv fn helper(x) { return x * 2; }
+print helper(7);                            // 14
+
+// ===== Calclib first-class via trampolines =====
+let f = abs;
+print f(-5);                                // 5
+print type_of(f);                           // fn
+
+// Pass builtins to higher-order user functions.
+fn map(arr, fnv) {
+    let out = [];
+    for (let i = 0; i < len(arr); i++) {
+        push(out, fnv(arr[i]));
+    }
+    return out;
+}
+print map([-3, -1, 0, 1, 3], abs);          // [3, 1, 0, 1, 3]
+print map([1, 4, 9, 16, 25], sqrt);         // [1, 2, 3, 4, 5]
+print map([3.7, 1.2, 2.5], floor);          // [3, 1, 2]

@@ -1,0 +1,11 @@
+.var_count 0
+start:
+PUSH 123
+PRINT
+JMP done
+PUSH 999
+PRINT
+done:
+PUSH 456
+PRINT
+HALT

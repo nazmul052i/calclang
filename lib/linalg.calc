@@ -1,0 +1,330 @@
+// linalg.calc — basic linear algebra for CalcLang.
+//
+// Matrices are arrays-of-arrays: m[r][c] is the (r, c) element.
+// All ops allocate fresh result matrices; they don't mutate inputs
+// (except mat_set, which is explicitly in-place).
+//
+// Build as a library: `calcnat --lib lib/linalg.calc -o build/linalg.s`
+// then link into your program via the multi-file native pipeline.
+
+// ===== Construction =====
+
+pub fn mat_zeros(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) {
+            push(row, 0);
+        }
+        push(m, row);
+    }
+    return m;
+}
+
+pub fn mat_ones(rows, cols) {
+    let m = mat_zeros(rows, cols);
+    for (let i = 0; i < rows; i = i + 1) {
+        for (let j = 0; j < cols; j = j + 1) {
+            m[i][j] = 1;
+        }
+    }
+    return m;
+}
+
+pub fn mat_eye(n) {
+    let m = mat_zeros(n, n);
+    for (let i = 0; i < n; i = i + 1) {
+        m[i][i] = 1;
+    }
+    return m;
+}
+
+// Wrap an array of arrays. Validates that every row has the same length.
+pub fn mat_from_rows(rows) {
+    if (len(rows) == 0) { throw "mat_from_rows: empty"; }
+    let cols = len(rows[0]);
+    for (let i = 1; i < len(rows); i = i + 1) {
+        if (len(rows[i]) != cols) { throw "mat_from_rows: ragged rows"; }
+    }
+    return rows;
+}
+
+// ===== Shape / accessors =====
+
+pub fn mat_shape(m) {
+    if (len(m) == 0) { return [0, 0]; }
+    return [len(m), len(m[0])];
+}
+
+pub fn mat_rows(m) { return len(m); }
+pub fn mat_cols(m) { return len(m[0]); }
+
+pub fn mat_get(m, r, c) { return m[r][c]; }
+pub fn mat_set(m, r, c, v) { m[r][c] = v; }
+
+// ===== Element-wise ops =====
+
+pub fn mat_add(a, b) {
+    let sa = mat_shape(a);
+    let sb = mat_shape(b);
+    if (sa[0] != sb[0] || sa[1] != sb[1]) {
+        throw "mat_add: shape mismatch";
+    }
+    let r = mat_zeros(sa[0], sa[1]);
+    for (let i = 0; i < sa[0]; i = i + 1) {
+        for (let j = 0; j < sa[1]; j = j + 1) {
+            r[i][j] = a[i][j] + b[i][j];
+        }
+    }
+    return r;
+}
+
+pub fn mat_sub(a, b) {
+    let sa = mat_shape(a);
+    let sb = mat_shape(b);
+    if (sa[0] != sb[0] || sa[1] != sb[1]) {
+        throw "mat_sub: shape mismatch";
+    }
+    let r = mat_zeros(sa[0], sa[1]);
+    for (let i = 0; i < sa[0]; i = i + 1) {
+        for (let j = 0; j < sa[1]; j = j + 1) {
+            r[i][j] = a[i][j] - b[i][j];
+        }
+    }
+    return r;
+}
+
+pub fn mat_scale(m, s) {
+    let sm = mat_shape(m);
+    let r = mat_zeros(sm[0], sm[1]);
+    for (let i = 0; i < sm[0]; i = i + 1) {
+        for (let j = 0; j < sm[1]; j = j + 1) {
+            r[i][j] = m[i][j] * s;
+        }
+    }
+    return r;
+}
+
+// ===== Matrix multiplication =====
+
+pub fn mat_mul(a, b) {
+    let sa = mat_shape(a);
+    let sb = mat_shape(b);
+    if (sa[1] != sb[0]) {
+        throw "mat_mul: incompatible shapes";
+    }
+    let r = mat_zeros(sa[0], sb[1]);
+    for (let i = 0; i < sa[0]; i = i + 1) {
+        for (let j = 0; j < sb[1]; j = j + 1) {
+            let s = 0;
+            for (let k = 0; k < sa[1]; k = k + 1) {
+                s = s + a[i][k] * b[k][j];
+            }
+            r[i][j] = s;
+        }
+    }
+    return r;
+}
+
+// Multiply matrix by a column vector (passed as a flat array).
+// A is m×n, v is n elements, returns m elements.
+pub fn mat_vec_mul(a, v) {
+    let sa = mat_shape(a);
+    if (sa[1] != len(v)) {
+        throw "mat_vec_mul: incompatible shapes";
+    }
+    let r = [];
+    for (let i = 0; i < sa[0]; i = i + 1) {
+        let s = 0;
+        for (let k = 0; k < sa[1]; k = k + 1) {
+            s = s + a[i][k] * v[k];
+        }
+        push(r, s);
+    }
+    return r;
+}
+
+pub fn mat_transpose(m) {
+    let sm = mat_shape(m);
+    let r = mat_zeros(sm[1], sm[0]);
+    for (let i = 0; i < sm[0]; i = i + 1) {
+        for (let j = 0; j < sm[1]; j = j + 1) {
+            r[j][i] = m[i][j];
+        }
+    }
+    return r;
+}
+
+// ===== Solving Ax = b via Gaussian elimination with partial pivoting =====
+
+pub fn mat_solve(a, b) {
+    let n = len(a);
+    if (n == 0 || len(a[0]) != n) {
+        throw "mat_solve: A must be square";
+    }
+    if (len(b) != n) {
+        throw "mat_solve: b length doesn't match A";
+    }
+    // Build augmented matrix [A | b], working copy.
+    let m = mat_zeros(n, n + 1);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            m[i][j] = a[i][j];
+        }
+        m[i][n] = b[i];
+    }
+    // Forward elimination with partial pivoting.
+    for (let k = 0; k < n; k = k + 1) {
+        // Pivot: pick row with largest |m[r][k]| for r >= k.
+        let pr = k;
+        let pv = abs(m[k][k]);
+        for (let r = k + 1; r < n; r = r + 1) {
+            let v = abs(m[r][k]);
+            if (v > pv) { pv = v; pr = r; }
+        }
+        if (pv == 0) { throw "mat_solve: singular matrix"; }
+        if (pr != k) {
+            let tmp = m[k]; m[k] = m[pr]; m[pr] = tmp;
+        }
+        // Eliminate below.
+        for (let r = k + 1; r < n; r = r + 1) {
+            let factor = m[r][k] / m[k][k];
+            for (let c = k; c <= n; c = c + 1) {
+                m[r][c] = m[r][c] - factor * m[k][c];
+            }
+        }
+    }
+    // Back substitution.
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for (let i = n - 1; i >= 0; i = i - 1) {
+        let s = m[i][n];
+        for (let j = i + 1; j < n; j = j + 1) {
+            s = s - m[i][j] * x[j];
+        }
+        x[i] = s / m[i][i];
+    }
+    return x;
+}
+
+// Inverse via Gauss-Jordan on the augmented [A | I] matrix. O(n³).
+// Throws on a singular matrix.
+pub fn mat_inv(a) {
+    let n = len(a);
+    if (n == 0 || len(a[0]) != n) {
+        throw "mat_inv: A must be square";
+    }
+    let m = mat_zeros(n, 2 * n);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { m[i][j] = a[i][j]; }
+        m[i][n + i] = 1;
+    }
+    for (let k = 0; k < n; k = k + 1) {
+        // Partial pivot.
+        let pr = k;
+        let pv = abs(m[k][k]);
+        for (let r = k + 1; r < n; r = r + 1) {
+            let v = abs(m[r][k]);
+            if (v > pv) { pv = v; pr = r; }
+        }
+        if (pv == 0) { throw "mat_inv: singular matrix"; }
+        if (pr != k) {
+            let tmp = m[k]; m[k] = m[pr]; m[pr] = tmp;
+        }
+        // Scale pivot row.
+        let pivot = m[k][k];
+        for (let c = 0; c < 2 * n; c = c + 1) {
+            m[k][c] = m[k][c] / pivot;
+        }
+        // Eliminate above and below.
+        for (let r = 0; r < n; r = r + 1) {
+            if (r == k) { continue; }
+            let f = m[r][k];
+            for (let c = 0; c < 2 * n; c = c + 1) {
+                m[r][c] = m[r][c] - f * m[k][c];
+            }
+        }
+    }
+    // Extract the right half.
+    let inv = mat_zeros(n, n);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            inv[i][j] = m[i][n + j];
+        }
+    }
+    return inv;
+}
+
+// ===== Norms =====
+
+// L1 norm: sum of absolute values.
+pub fn vec_norm1(v) {
+    let s = 0;
+    for (let i = 0; i < len(v); i = i + 1) { s = s + abs(v[i]); }
+    return s;
+}
+
+// L2 (Euclidean) norm.
+pub fn vec_norm2(v) {
+    let s = 0;
+    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    return sqrt(s);
+}
+
+// Infinity norm: max absolute value.
+pub fn vec_norm_inf(v) {
+    let m = 0;
+    for (let i = 0; i < len(v); i = i + 1) {
+        let av = abs(v[i]);
+        if (av > m) { m = av; }
+    }
+    return m;
+}
+
+// Frobenius norm of a matrix: sqrt(sum of squared entries).
+pub fn mat_norm_frobenius(a) {
+    let s = 0;
+    for (let i = 0; i < len(a); i = i + 1) {
+        for (let j = 0; j < len(a[i]); j = j + 1) {
+            s = s + a[i][j] * a[i][j];
+        }
+    }
+    return sqrt(s);
+}
+
+// Determinant via the same elimination (counts row swaps for sign).
+pub fn mat_det(a) {
+    let n = len(a);
+    if (n == 0 || len(a[0]) != n) {
+        throw "mat_det: A must be square";
+    }
+    let m = mat_zeros(n, n);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { m[i][j] = a[i][j]; }
+    }
+    let sign = 1;
+    for (let k = 0; k < n; k = k + 1) {
+        let pr = k;
+        let pv = abs(m[k][k]);
+        for (let r = k + 1; r < n; r = r + 1) {
+            let v = abs(m[r][k]);
+            if (v > pv) { pv = v; pr = r; }
+        }
+        if (pv == 0) { return 0; }
+        if (pr != k) {
+            let tmp = m[k]; m[k] = m[pr]; m[pr] = tmp;
+            sign = -sign;
+        }
+        for (let r = k + 1; r < n; r = r + 1) {
+            let factor = m[r][k] / m[k][k];
+            for (let c = k; c < n; c = c + 1) {
+                m[r][c] = m[r][c] - factor * m[k][c];
+            }
+        }
+    }
+    let d = sign;
+    for (let i = 0; i < n; i = i + 1) {
+        d = d * m[i][i];
+    }
+    return d;
+}

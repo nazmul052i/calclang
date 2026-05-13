@@ -1,0 +1,31 @@
+// String concatenation and ordering.
+
+// Build a greeting at runtime.
+let name = "world";
+print "hello, " + name + "!";
+
+// Build up a string in a loop.
+let bar = "";
+for (let i = 0; i < 20; i++) {
+    bar = bar + "=";
+}
+print bar;                          // ====================
+
+// Reusable join helper.
+fn join3(a, b, c) {
+    return a + ", " + b + ", " + c;
+}
+print join3("red", "green", "blue");
+
+// Sorting two strings by ordering (very small).
+fn min_str(a, b) {
+    if (a < b) { return a; }
+    return b;
+}
+print min_str("banana", "apple");   // apple
+print min_str("cherry", "date");    // cherry
+
+// Build a path.
+let dir  = "build";
+let file = "demo.casm";
+print dir + "/" + file;             // build/demo.casm

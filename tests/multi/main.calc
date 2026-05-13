@@ -1,0 +1,12 @@
+// Main file: forward-declares the library's public functions and uses
+// them. Forward declarations are implicitly public — the linker
+// resolves them against the other object's SYMS section.
+
+extern fn add(a: num, b: num): num;
+extern fn greet(name: str): str;
+extern fn make_greeting(prefix: str, name: str): str;
+
+print add(2, 3);                       // 5
+print add(40, 2);                      // 42
+print greet("world");                  // hello, world
+print make_greeting("info", "Alice");  // info: Alice

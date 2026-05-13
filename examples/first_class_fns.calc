@@ -1,0 +1,82 @@
+// First-class function values let us write the classic higher-order
+// helpers in CalcLang itself, without needing them as VM builtins.
+
+// --- Generic higher-order helpers ---
+
+pub fn map(arr, f) {
+    let out = [];
+    for (let i = 0; i < len(arr); i++) {
+        push(out, f(arr[i]));
+    }
+    return out;
+}
+
+pub fn filter(arr, pred) {
+    let out = [];
+    for (let i = 0; i < len(arr); i++) {
+        if (pred(arr[i])) {
+            push(out, arr[i]);
+        }
+    }
+    return out;
+}
+
+pub fn reduce(arr, f, init) {
+    let acc = init;
+    for (let i = 0; i < len(arr); i++) {
+        acc = f(acc, arr[i]);
+    }
+    return acc;
+}
+
+pub fn for_each(arr, f) {
+    for (let i = 0; i < len(arr); i++) {
+        f(arr[i]);
+    }
+}
+
+// --- Small predicates and transforms to feed them ---
+
+fn square(x)   { return x * x; }
+fn negate(x)   { return -x; }
+fn is_even(x)  { return x % 2 == 0; }
+fn is_odd(x)   { return x % 2 == 1; }
+fn add(a, b)   { return a + b; }
+fn mul(a, b)   { return a * b; }
+fn print_it(x) { print x; }
+
+// --- Usage ---
+
+let xs = array_range(1, 11);                  // [1..10]
+
+print "squares:  ";
+print map(xs, square);                        // [1, 4, 9, ..., 100]
+
+print "evens:    ";
+print filter(xs, is_even);                    // [2, 4, 6, 8, 10]
+
+print "sum:      ";
+print reduce(xs, add, 0);                     // 55
+
+print "product:  ";
+print reduce(xs, mul, 1);                     // 3628800
+
+print "neg odds: ";
+print map(filter(xs, is_odd), negate);        // [-1, -3, -5, -7, -9]
+
+print "each item with for_each:";
+for_each([10, 20, 30], print_it);
+
+// A function that returns a function: a tiny "multiplier factory" via
+// a lookup table. (Real closures aren't supported yet.)
+fn mul2(x) { return x * 2; }
+fn mul3(x) { return x * 3; }
+fn mul5(x) { return x * 5; }
+fn multiplier(n) {
+    if (n == 2) { return mul2; }
+    if (n == 3) { return mul3; }
+    return mul5;
+}
+let times_three = multiplier(3);
+print times_three(14);                        // 42
+print map([1, 2, 3], multiplier(5));          // [5, 10, 15]

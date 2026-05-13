@@ -1,0 +1,172 @@
+// numeric.calc — root finding, numerical integration, interpolation,
+// polynomial evaluation. Functions take other functions as arguments
+// (CalcLang's first-class fns make this clean).
+
+// ===== Root finding =====
+
+// Bisection: requires f(a) * f(b) < 0. Brackets the root, halves
+// each iteration. Linear convergence but unconditionally robust.
+pub fn bisect(f, a, b, tol) {
+    let fa = f(a);
+    let fb = f(b);
+    if (fa * fb > 0) {
+        throw "bisect: f(a) and f(b) must have opposite signs";
+    }
+    if (fa == 0) { return a; }
+    if (fb == 0) { return b; }
+    let lo = a;
+    let hi = b;
+    let flo = fa;
+    while (hi - lo > tol) {
+        let mid = (lo + hi) / 2;
+        let fmid = f(mid);
+        if (fmid == 0) { return mid; }
+        if (flo * fmid < 0) {
+            hi = mid;
+        } else {
+            lo = mid;
+            flo = fmid;
+        }
+    }
+    return (lo + hi) / 2;
+}
+
+// Newton's method: needs the derivative. Quadratic convergence near
+// a root; can diverge if df is small or x0 is far from a root. Caller
+// supplies max_iter as an escape hatch.
+pub fn newton(f, df, x0, tol, max_iter) {
+    let x = x0;
+    for (let i = 0; i < max_iter; i = i + 1) {
+        let fx = f(x);
+        if (abs(fx) < tol) { return x; }
+        let dfx = df(x);
+        if (dfx == 0) {
+            throw "newton: derivative is zero (try a different x0)";
+        }
+        x = x - fx / dfx;
+    }
+    throw "newton: didn't converge within max_iter iterations";
+}
+
+// Secant method: like Newton but estimates the derivative from two
+// recent iterates. Doesn't need a closed-form df.
+pub fn secant(f, x0, x1, tol, max_iter) {
+    let a = x0;
+    let b = x1;
+    let fa = f(a);
+    let fb = f(b);
+    for (let i = 0; i < max_iter; i = i + 1) {
+        if (abs(fb) < tol) { return b; }
+        if (fb - fa == 0) {
+            throw "secant: divergent (f values coincide)";
+        }
+        let c = b - fb * (b - a) / (fb - fa);
+        a = b;  fa = fb;
+        b = c;  fb = f(c);
+    }
+    throw "secant: didn't converge within max_iter iterations";
+}
+
+// ===== Numerical integration =====
+
+// Composite trapezoidal rule. O(h²) error.
+pub fn trapezoidal(f, a, b, n) {
+    if (n < 1) { throw "trapezoidal: need n >= 1"; }
+    let h = (b - a) / n;
+    let s = (f(a) + f(b)) / 2;
+    for (let i = 1; i < n; i = i + 1) {
+        s = s + f(a + i * h);
+    }
+    return s * h;
+}
+
+// Composite Simpson's 1/3 rule. O(h⁴) error; n must be even.
+pub fn simpson(f, a, b, n) {
+    if (n < 2 || n % 2 != 0) {
+        throw "simpson: n must be even and >= 2";
+    }
+    let h = (b - a) / n;
+    let s = f(a) + f(b);
+    for (let i = 1; i < n; i = i + 1) {
+        let w = 2;
+        if (i % 2 == 1) { w = 4; }
+        s = s + w * f(a + i * h);
+    }
+    return s * h / 3;
+}
+
+// Adaptive Simpson recursively refines a subinterval until the error
+// estimate (the difference between one-step Simpson and two-step
+// Simpson) is below tol. Way more efficient than uniform n for
+// functions with localized variation.
+priv fn _adapt_helper(f, a, b, tol, whole, fa, fb, fm, depth) {
+    let m  = (a + b) / 2;
+    let lm = (a + m) / 2;
+    let rm = (m + b) / 2;
+    let flm = f(lm);
+    let frm = f(rm);
+    let left  = (m - a) / 6 * (fa + 4 * flm + fm);
+    let right = (b - m) / 6 * (fm + 4 * frm + fb);
+    if (depth <= 0 || abs(left + right - whole) <= 15 * tol) {
+        return left + right + (left + right - whole) / 15;
+    }
+    return _adapt_helper(f, a, m, tol / 2, left,  fa, fm, flm, depth - 1)
+         + _adapt_helper(f, m, b, tol / 2, right, fm, fb, frm, depth - 1);
+}
+
+pub fn adaptive_simpson(f, a, b, tol) {
+    let fa = f(a);
+    let fb = f(b);
+    let m  = (a + b) / 2;
+    let fm = f(m);
+    let whole = (b - a) / 6 * (fa + 4 * fm + fb);
+    return _adapt_helper(f, a, b, tol, whole, fa, fb, fm, 24);
+}
+
+// ===== Polynomial evaluation =====
+
+// Coefficients are low-to-high: [c0, c1, c2, ...] means
+//   c0 + c1*x + c2*x² + c3*x³ + ...
+// Horner's method: O(n), one mul + one add per coefficient.
+pub fn poly_eval(coeffs, x) {
+    let n = len(coeffs);
+    if (n == 0) { return 0; }
+    let s = coeffs[n - 1];
+    for (let i = n - 2; i >= 0; i = i - 1) {
+        s = s * x + coeffs[i];
+    }
+    return s;
+}
+
+// Derivative of a polynomial.  d/dx (c0 + c1 x + c2 x² + ...)
+// = c1 + 2 c2 x + 3 c3 x² + ...
+pub fn poly_derivative(coeffs) {
+    let out = [];
+    for (let i = 1; i < len(coeffs); i = i + 1) {
+        push(out, i * coeffs[i]);
+    }
+    return out;
+}
+
+// ===== Interpolation =====
+
+// Linear interpolation between known (xs[i], ys[i]) data points.
+// xs MUST be sorted ascending. Clamps to the endpoints outside the
+// data range.
+pub fn linterp(xs, ys, x) {
+    let n = len(xs);
+    if (n == 0) { throw "linterp: empty data"; }
+    if (n != len(ys)) { throw "linterp: xs/ys length mismatch"; }
+    if (n == 1) { return ys[0]; }
+    if (x <= xs[0])     { return ys[0]; }
+    if (x >= xs[n - 1]) { return ys[n - 1]; }
+    // Binary search for the bracket.
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1) {
+        let mid = floor((lo + hi) / 2);
+        if (xs[mid] <= x) { lo = mid; } else { hi = mid; }
+    }
+    let t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+    return ys[lo] + t * (ys[hi] - ys[lo]);
+}

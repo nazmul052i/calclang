@@ -1,0 +1,59 @@
+// CSV round-trip: write a small dataset, read it back, run stats
+// over a column.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/csv_demo.calc \
+//       build/calclib/csv.s build/calclib/stats.s build/calclib/plot.s \
+//       -o build/csv_demo.exe
+
+extern fn csv_write_with_headers(path: str, headers: arr, rows: arr);
+extern fn csv_read_with_headers(path: str): arr;
+extern fn csv_row_to_nums(row: arr): arr;
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+extern fn linreg(xs: arr, ys: arr): map;
+extern fn plot_data_with_fit(filename: str, xs: arr, ys: arr, ys_fit: arr, title: str);
+
+// ===== Write some structured data =====
+let path = "build/measurements.csv";
+let rows = [];
+for (let i = 0; i < 20; i = i + 1) {
+    let x = i * 0.5;
+    // y = 3.2 * x + 1.5 + a deterministic "noise" via sin.
+    let y = 3.2 * x + 1.5 + 0.6 * sin(x * 7);
+    push(rows, {"x": x, "y": y});
+}
+csv_write_with_headers(path, ["x", "y"], rows);
+print "wrote " + path + " (" + len(rows) + " rows)";
+
+// ===== Read it back and check the structure =====
+let loaded = csv_read_with_headers(path);
+print "loaded " + len(loaded) + " rows";
+print "first row: x=" + loaded[0]["x"] + ", y=" + loaded[0]["y"];
+
+// Convert string columns to numbers and run stats.
+let xs = [];
+let ys = [];
+for (let i = 0; i < len(loaded); i = i + 1) {
+    push(xs, to_num(loaded[i]["x"]));
+    push(ys, to_num(loaded[i]["y"]));
+}
+print "";
+print "x: mean=" + mean(xs) + "  stddev=" + stddev(xs);
+print "y: mean=" + mean(ys) + "  stddev=" + stddev(ys);
+
+let fit = linreg(xs, ys);
+print "";
+print "linear fit: y = " + fit["slope"] + " x + " + fit["intercept"];
+print "R^2 = " + fit["r2"];
+print "(true model was y = 3.2 x + 1.5)";
+
+// Plot data + fit to SVG.
+let ys_fit = [];
+for (let i = 0; i < len(xs); i = i + 1) {
+    push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
+}
+plot_data_with_fit("build/measurements.svg", xs, ys, ys_fit,
+    "Loaded from " + path);
+print "wrote build/measurements.svg";

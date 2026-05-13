@@ -1,0 +1,41 @@
+// String literals, storage in variables, escapes, ==/!=, truthiness.
+
+print "hello";                       // hello
+print "with \"quotes\"";             // with "quotes"
+print "tab\there";                   // tab\there  (with a literal tab)
+
+// Stored in a variable.
+let g = "hi";
+print g;                             // hi
+
+// Reassigned, including switching types.
+g = "bye";
+print g;                             // bye
+g = 42;
+print g;                             // 42
+
+// Equality.
+let a = "foo";
+let b = "foo";
+let c = "bar";
+if (a == b) { print 1; }             // 1
+if (a != c) { print 2; }             // 2
+if (a == c) { print 99; } else { print 3; }   // 3
+
+// Cross-type equality is always false.
+if ("5" == 5) { print 99; } else { print 4; } // 4
+
+// Truthiness: empty string is false, non-empty is true.
+if ("") { print 99; } else { print 5; }       // 5
+if ("yes") { print 6; }                       // 6
+print !"hello";                               // 0
+print !"";                                    // 1
+
+// Passing strings to functions and returning them.
+fn greet(name) {
+    return name;
+}
+print greet("world");                // world
+
+// Newline escape inside a string.
+print "line1\nline2";                // (prints two lines)

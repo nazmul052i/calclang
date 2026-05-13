@@ -1,0 +1,74 @@
+// FFT of a synthetic signal: sum of two sinusoids + noise. We
+// recover the dominant frequencies from the magnitude spectrum.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/fft_demo.calc \
+//       build/calclib/fft.s build/calclib/random.s build/calclib/plot.s -o build/fft_demo.exe
+
+extern fn fft(x: arr): arr;
+extern fn ifft(X: arr): arr;
+extern fn fft_magnitude(X: arr): arr;
+extern fn fft_freqs(n: num, fs: num): arr;
+extern fn Rng(seed: num): map;
+extern fn plot_line(filename: str, xs: arr, ys: arr, title: str);
+
+// Sampling: 256 samples at 100 Hz -> Nyquist = 50 Hz.
+let N  = 256;
+let fs = 100;
+let f1 = 7;       // dominant tone
+let f2 = 18;      // weaker tone
+
+let rng = Rng(7);
+let signal = [];
+let t = [];
+for (let i = 0; i < N; i = i + 1) {
+    let ti = i / fs;
+    let v = sin(2 * pi() * f1 * ti) + 0.5 * sin(2 * pi() * f2 * ti);
+    v = v + 0.1 * rng.normal(0, 1);
+    push(t, ti);
+    push(signal, v);
+}
+
+// FFT (input is real, fft promotes nums to re + 0i internally).
+let X = fft(signal);
+let mag = fft_magnitude(X);
+let freqs = fft_freqs(N, fs);
+
+// Find the top-3 peaks in the first half (above the Nyquist there's
+// just the mirror image).
+let half = N / 2;
+let peaks = [];
+for (let k = 1; k < half; k = k + 1) {
+    if (mag[k] > mag[k - 1] && mag[k] > mag[k + 1] && mag[k] > 2) {
+        push(peaks, [freqs[k], mag[k]]);
+    }
+}
+print "Detected peaks (frequency, magnitude):";
+for (let i = 0; i < len(peaks); i = i + 1) {
+    print "  " + peaks[i][0] + " Hz   mag = " + peaks[i][1];
+}
+print "(injected: 7 Hz strong, 18 Hz weaker)";
+
+// Plot magnitude spectrum (first half only).
+let pf = [];
+let pm = [];
+for (let k = 0; k < half; k = k + 1) {
+    push(pf, freqs[k]);
+    push(pm, mag[k]);
+}
+plot_line("build/fft_mag.svg", pf, pm, "FFT magnitude spectrum (signal: 7 Hz + 0.5 * 18 Hz + noise)");
+print "wrote build/fft_mag.svg";
+
+// And the original time-domain signal for context.
+plot_line("build/fft_signal.svg", t, signal, "Time-domain signal");
+print "wrote build/fft_signal.svg";
+
+// Round-trip check: ifft(fft(signal)) ≈ signal (real part).
+let back = ifft(X);
+let max_err = 0;
+for (let i = 0; i < N; i = i + 1) {
+    let err = abs(real(back[i]) - signal[i]);
+    if (err > max_err) { max_err = err; }
+}
+print "ifft(fft(signal)) max error: " + max_err;   // should be tiny (1e-13ish)

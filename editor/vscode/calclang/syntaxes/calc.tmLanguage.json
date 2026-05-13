@@ -1,0 +1,87 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "CalcLang",
+    "scopeName": "source.calc",
+    "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#fn-declaration" },
+        { "include": "#keywords" },
+        { "include": "#types" },
+        { "include": "#builtins" },
+        { "include": "#function-call" },
+        { "include": "#numbers" },
+        { "include": "#operators" }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.double-slash.calc",
+                    "match": "//.*$"
+                },
+                {
+                    "name": "comment.block.calc",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "strings": {
+            "name": "string.quoted.double.calc",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.calc",
+                    "match": "\\\\[ntr\\\\\"]"
+                }
+            ]
+        },
+        "fn-declaration": {
+            "match": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "captures": {
+                "1": { "name": "keyword.declaration.fn.calc" },
+                "2": { "name": "entity.name.function.calc" }
+            }
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.calc",
+                    "match": "\\b(if|else|while|for|break|continue|return)\\b"
+                },
+                {
+                    "name": "keyword.declaration.calc",
+                    "match": "\\b(let|fn|pub|extern)\\b"
+                },
+                {
+                    "name": "keyword.other.print.calc",
+                    "match": "\\b(print)\\b"
+                }
+            ]
+        },
+        "types": {
+            "name": "storage.type.calc",
+            "match": "\\b(num|str|arr|map|bool|any)\\b"
+        },
+        "builtins": {
+            "name": "support.function.builtin.calc",
+            "match": "\\b(sqrt|floor|ceil|abs|pow|min|max|int|round|sin|cos|tan|asin|acos|atan|atan2|exp|log|log10|random|pi|e|to_str|to_num|len|read_line|write|type_of|push|pop|array_reverse|array_sort|array_concat|array_slice|array_find|array_contains|array_range|str_at|str_slice|str_find|str_upper|str_lower|str_trim|str_repeat|str_starts_with|str_ends_with|str_split|str_join|keys|values|has_key|del)\\b(?=\\s*\\()"
+        },
+        "function-call": {
+            "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+            "captures": {
+                "1": { "name": "entity.name.function.call.calc" }
+            }
+        },
+        "numbers": {
+            "name": "constant.numeric.calc",
+            "match": "\\b\\d+(\\.\\d+)?\\b|\\.\\d+\\b"
+        },
+        "operators": {
+            "name": "keyword.operator.calc",
+            "match": "(\\+\\+|--|\\+=|-=|\\*=|/=|%=|==|!=|<=|>=|&&|\\|\\||[+\\-*/%=<>!])"
+        }
+    }
+}

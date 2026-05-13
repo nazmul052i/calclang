@@ -1,0 +1,42 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "CalcAsm",
+    "scopeName": "source.casm",
+    "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#labels" },
+        { "include": "#directives" },
+        { "include": "#opcodes" },
+        { "include": "#numbers" }
+    ],
+    "repository": {
+        "comments": {
+            "name": "comment.line.semicolon.casm",
+            "match": ";.*$"
+        },
+        "strings": {
+            "name": "string.quoted.double.casm",
+            "begin": "\"",
+            "end": "\""
+        },
+        "labels": {
+            "match": "^(\\.?[a-zA-Z_][a-zA-Z0-9_]*):",
+            "captures": {
+                "1": { "name": "entity.name.label.casm" }
+            }
+        },
+        "directives": {
+            "name": "keyword.directive.casm",
+            "match": "^\\.[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        },
+        "opcodes": {
+            "name": "keyword.opcode.casm",
+            "match": "\\b(PUSH|PUSH_STR|PUSH_FN|LOAD|STORE|LOAD_LOCAL|STORE_LOCAL|ENTER|ADD|SUB|MUL|DIV|MOD|NEG|EQ|NEQ|LT|LE|GT|GE|AND|OR|NOT|PRINT|JMP|JZ|JNZ|CALL|CALL_VAL|RET|HALT|BUILTIN|NEW_ARRAY|NEW_MAP|INDEX_GET|INDEX_SET|DROP|TYPECHECK)\\b"
+        },
+        "numbers": {
+            "name": "constant.numeric.casm",
+            "match": "-?\\b\\d+(\\.\\d+)?\\b"
+        }
+    }
+}

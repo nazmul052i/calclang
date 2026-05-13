@@ -1,0 +1,144 @@
+// stats.calc — basic statistics for flat arrays of numbers.
+// Build: calcnat --lib lib/stats.calc -o build/stats.s
+
+pub fn sum_of(xs) {
+    let s = 0;
+    for (let i = 0; i < len(xs); i = i + 1) {
+        s = s + xs[i];
+    }
+    return s;
+}
+
+pub fn mean(xs) {
+    if (len(xs) == 0) { throw "mean: empty array"; }
+    return sum_of(xs) / len(xs);
+}
+
+pub fn variance(xs) {
+    if (len(xs) < 2) { throw "variance: need at least 2 values"; }
+    let m = mean(xs);
+    let s = 0;
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let d = xs[i] - m;
+        s = s + d * d;
+    }
+    // Sample variance — divide by (n-1).
+    return s / (len(xs) - 1);
+}
+
+pub fn stddev(xs) {
+    return sqrt(variance(xs));
+}
+
+pub fn min_of(xs) {
+    if (len(xs) == 0) { throw "min_of: empty array"; }
+    let m = xs[0];
+    for (let i = 1; i < len(xs); i = i + 1) {
+        if (xs[i] < m) { m = xs[i]; }
+    }
+    return m;
+}
+
+pub fn max_of(xs) {
+    if (len(xs) == 0) { throw "max_of: empty array"; }
+    let m = xs[0];
+    for (let i = 1; i < len(xs); i = i + 1) {
+        if (xs[i] > m) { m = xs[i]; }
+    }
+    return m;
+}
+
+// Range — max - min.
+pub fn range_of(xs) {
+    return max_of(xs) - min_of(xs);
+}
+
+// Median by sorting a copy.
+pub fn median(xs) {
+    if (len(xs) == 0) { throw "median: empty array"; }
+    let copy = array_concat(xs, []);
+    array_sort(copy);
+    let n = len(copy);
+    if (n % 2 == 1) {
+        return copy[(n - 1) / 2];
+    }
+    return (copy[n / 2 - 1] + copy[n / 2]) / 2;
+}
+
+// Pearson correlation coefficient between xs and ys.
+pub fn correlate(xs, ys) {
+    if (len(xs) != len(ys)) { throw "correlate: length mismatch"; }
+    if (len(xs) < 2) { throw "correlate: need at least 2 pairs"; }
+    let n = len(xs);
+    let mx = mean(xs);
+    let my = mean(ys);
+    let num = 0;
+    let sx = 0;
+    let sy = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        let dx = xs[i] - mx;
+        let dy = ys[i] - my;
+        num = num + dx * dy;
+        sx  = sx  + dx * dx;
+        sy  = sy  + dy * dy;
+    }
+    let denom = sqrt(sx * sy);
+    if (denom == 0) { return 0; }
+    return num / denom;
+}
+
+// Simple least-squares linear regression: y = slope * x + intercept.
+// Returns a map with "slope", "intercept", and "r2" (coefficient of
+// determination, between 0 and 1; 1 = perfect fit).
+pub fn linreg(xs, ys) {
+    if (len(xs) != len(ys)) { throw "linreg: length mismatch"; }
+    if (len(xs) < 2) { throw "linreg: need at least 2 points"; }
+    let n = len(xs);
+    let mx = mean(xs);
+    let my = mean(ys);
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        num = num + (xs[i] - mx) * (ys[i] - my);
+        den = den + (xs[i] - mx) * (xs[i] - mx);
+    }
+    if (den == 0) { throw "linreg: x has zero variance"; }
+    let slope     = num / den;
+    let intercept = my - slope * mx;
+    // r² as 1 - SS_res / SS_tot.
+    let ss_res = 0;
+    let ss_tot = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        let pred = slope * xs[i] + intercept;
+        let resid = ys[i] - pred;
+        let dev   = ys[i] - my;
+        ss_res = ss_res + resid * resid;
+        ss_tot = ss_tot + dev   * dev;
+    }
+    let r2 = 0;
+    if (ss_tot != 0) { r2 = 1 - ss_res / ss_tot; }
+    return {"slope": slope, "intercept": intercept, "r2": r2};
+}
+
+// Histogram: count values falling into n_bins equal-width bins
+// covering [min, max]. Returns {"edges": [...], "counts": [...]}.
+pub fn histogram(xs, n_bins) {
+    if (len(xs) == 0) { throw "histogram: empty array"; }
+    let lo = min_of(xs);
+    let hi = max_of(xs);
+    if (hi == lo) { hi = lo + 1; }   // avoid zero-width
+    let width = (hi - lo) / n_bins;
+    let edges = [];
+    for (let i = 0; i <= n_bins; i = i + 1) {
+        push(edges, lo + i * width);
+    }
+    let counts = [];
+    for (let i = 0; i < n_bins; i = i + 1) { push(counts, 0); }
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let bin = floor((xs[i] - lo) / width);
+        if (bin < 0) { bin = 0; }
+        if (bin >= n_bins) { bin = n_bins - 1; }
+        counts[bin] = counts[bin] + 1;
+    }
+    return {"edges": edges, "counts": counts};
+}

@@ -1,0 +1,64 @@
+// Solve a small linear system with the matrix library.
+//
+// Build:
+//   build/calcnat --lib lib/linalg.calc -o build/calclib/linalg.s
+//   build/calcnat examples/linsys.calc build/calclib/linalg.s -o build/linsys.exe
+//   build/linsys.exe
+
+extern fn mat_from_rows(rows: arr): arr;
+extern fn mat_eye(n: num): arr;
+extern fn mat_mul(a: arr, b: arr): arr;
+extern fn mat_vec_mul(a: arr, v: arr): arr;
+extern fn mat_transpose(m: arr): arr;
+extern fn mat_solve(a: arr, b: arr): arr;
+extern fn mat_det(a: arr): num;
+
+// A 3×3 linear system.
+let A = mat_from_rows([
+    [ 2,  1, -1],
+    [-3, -1,  2],
+    [-2,  1,  2]
+]);
+let b = [8, -11, -3];
+
+print "A =";
+print A;
+print "b =";
+print b;
+print "";
+
+print "det(A) = " + mat_det(A);     // -1
+let x = mat_solve(A, b);            // expected: [2, 3, -1]
+print "solve(A, b) =";
+print x;
+
+// Verify: A x should equal b.
+let Ax = mat_vec_mul(A, x);
+print "A * x =";
+print Ax;
+print "b =";
+print b;
+
+// Compose with a transpose: (A^T)^T should equal A.
+print "";
+print "transpose(transpose(A)) == A?";
+let AT = mat_transpose(A);
+let ATT = mat_transpose(AT);
+let match = 1;
+for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 3; j = j + 1) {
+        if (A[i][j] != ATT[i][j]) { match = 0; }
+    }
+}
+print match;                        // 1
+
+// Identity check: A * I = A.
+let I3 = mat_eye(3);
+let AI = mat_mul(A, I3);
+let id_match = 1;
+for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 3; j = j + 1) {
+        if (A[i][j] != AI[i][j]) { id_match = 0; }
+    }
+}
+print "A * I3 == A?  " + id_match;  // 1

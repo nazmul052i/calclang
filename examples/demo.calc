@@ -1,0 +1,9 @@
+// CalcLang demo
+let x = 10;
+let y = 5;
+let z = x * y + 20;
+
+print z;
+print (z - 10) / 2;
+print 10 + 5 * 2;
+print (10 + 5) * 2;

@@ -1,0 +1,26 @@
+// pub vs private functions. Within a single file both kinds are
+// callable identically; the difference only matters at link time
+// when multi-file linking is in play.
+
+pub fn add(a, b) {
+    return a + b;
+}
+
+fn helper(x) {        // private (default)
+    return x * 2;
+}
+
+pub fn double_via_helper(x) {
+    // A public function can call a private one in the same file.
+    return helper(x);
+}
+
+fn private_caller(x) {
+    // A private function can call a public one too.
+    return add(x, 100);
+}
+
+print add(3, 4);                 // 7
+print helper(5);                 // 10
+print double_via_helper(21);     // 42
+print private_caller(7);         // 107

@@ -1,0 +1,84 @@
+// Anonymous closure expression.
+let add = fn(a, b) { return a + b; };
+print add(2, 3);                          // 5
+
+// Closure captures by value.
+fn make_adder(x) {
+    return fn(y) { return x + y; };
+}
+let add5  = make_adder(5);
+let add10 = make_adder(10);
+print add5(3);                            // 8
+print add10(3);                           // 13
+
+// Nested named fn — sugar for `let name = fn(...) { ... };`.
+fn outer(z) {
+    fn double(v) { return v * 2; }       // nested named, no captures needed
+    return double(z);
+}
+print outer(7);                           // 14
+
+// Nested fn that captures.
+fn make_pair_fn(prefix) {
+    fn render(name) {
+        return prefix + ": " + name;
+    }
+    return render;
+}
+let r = make_pair_fn("item");
+print r("alpha");                         // item: alpha
+print r("beta");                          // item: beta
+
+// Higher-order: passing an inline closure to a user-defined `map`.
+fn map(arr, f) {
+    let out = [];
+    for (let i = 0; i < len(arr); i++) {
+        push(out, f(arr[i]));
+    }
+    return out;
+}
+let factor = 3;
+print map([1, 2, 3, 4], fn(x) { return x * factor; });   // [3, 6, 9, 12]
+
+// Compound-on-indexed lvalues.
+let xs = [10, 20, 30];
+xs[0] += 5;                              // 15
+xs[1] -= 5;                              // 15
+xs[2] *= 2;                              // 60
+print xs;                                 // [15, 15, 60]
+
+let m = {"hits": 0};
+m["hits"] += 1;
+m["hits"] += 4;
+print m["hits"];                          // 5
+
+// Chained compound: arr[i][j] *= n.
+let grid = [[1, 2], [3, 4]];
+grid[0][1] *= 10;
+grid[1][0] += 100;
+print grid;                               // [[1, 20], [103, 4]]
+
+// Indexed ++ and --.
+let counter = [0];
+counter[0]++;
+counter[0]++;
+counter[0]++;
+counter[0]--;
+print counter[0];                         // 2
+
+// --- Type inference flows through let and through call return types. ---
+
+let n: num = 5;
+fn add_one(x: num): num { return x + 1; }
+
+// add_one returns num. The variable `r` inherits that.
+let r2 = add_one(n);
+print r2 + 100;                           // 106
+
+// to_str's return is `str`. The inferred type of `s` is str.
+let s = to_str(42);
+print s + "!";                            // 42!
+
+// Static-error path stays available: passing a string literal where the
+// callee expects num is still rejected at compile time. (Not invoked
+// here — covered by the type_enforcement test.)

@@ -1,0 +1,31 @@
+/*
+ * fizzbuzz, 1..15.
+ *
+ * Demonstrates block comments — useful for docstring-style headers and
+ * for temporarily commenting out chunks of code that span newlines.
+ */
+
+pub fn fizzbuzz(n: num) {
+    for (let i = 1; i <= n; i++) {
+        /* check most-specific condition first */
+        if (i % 15 == 0) {
+            print "FizzBuzz";
+        } else if (i % 3 == 0) {
+            print "Fizz";
+        } else if (i % 5 == 0) {
+            print "Buzz";
+        } else {
+            print to_str(i);
+        }
+    }
+}
+
+fizzbuzz(15);
+
+/*
+ * Try toggling this section in/out by adding or removing the close marker.
+ * Block comments are the easiest way to disable several lines at once.
+ *
+ * print "this is currently commented out";
+ * print "as is this";
+ */

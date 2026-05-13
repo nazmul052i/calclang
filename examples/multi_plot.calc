@@ -1,0 +1,55 @@
+// Multi-series plot + bar chart + log-Y plot.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/multi_plot.calc build/calclib/plot.s -o build/multi_plot.exe
+
+extern fn plot_lines(filename: str, xss: arr, yss: arr, labels: arr, title: str);
+extern fn plot_bar(filename: str, labels: arr, values: arr, title: str);
+extern fn plot_logy(filename: str, xs: arr, ys: arr, title: str);
+extern fn plot_line_labeled(filename: str, xs: arr, ys: arr, title: str,
+                            x_label: str, y_label: str);
+
+// ===== sin, cos, sin(x)·cos(x) on the same axes =====
+let xs = [];
+let s  = [];
+let c  = [];
+let p  = [];
+for (let i = 0; i < 200; i = i + 1) {
+    let x = (i / 199.0) * 4 * pi();
+    push(xs, x);
+    push(s, sin(x));
+    push(c, cos(x));
+    push(p, sin(x) * cos(x));
+}
+plot_lines("build/multi.svg",
+    [xs, xs, xs],
+    [s, c, p],
+    ["sin(x)", "cos(x)", "sin·cos"],
+    "Trig on [0, 4π]");
+print "wrote build/multi.svg";
+
+// ===== Bar chart =====
+plot_bar("build/bar.svg",
+    ["Apr", "May", "Jun", "Jul", "Aug", "Sep"],
+    [12, 18, 27, 33, 31, 22],
+    "Avg temperature by month");
+print "wrote build/bar.svg";
+
+// ===== Log-Y plot: exponential decay =====
+let ts = [];
+let ys = [];
+for (let i = 0; i < 100; i = i + 1) {
+    let t = i * 0.05;             // 0 to ~5
+    push(ts, t);
+    push(ys, exp(-t));            // strictly positive
+}
+plot_logy("build/decay.svg", ts, ys, "exp(-t) — note log Y axis");
+print "wrote build/decay.svg";
+
+// ===== Plot with axis labels =====
+plot_line_labeled("build/labeled.svg", ts, ys,
+    "Exponential decay",
+    "time (s)",
+    "amplitude");
+print "wrote build/labeled.svg";

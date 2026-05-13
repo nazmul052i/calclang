@@ -1,0 +1,117 @@
+// random.calc — a reproducible random-number generator.
+//
+// Wrapped in a class so the PRNG state lives in `this.state` and
+// methods can mutate it. (Top-level `fn`s in the native backend
+// don't see top-level `let`s, so a stateful module-level singleton
+// would be awkward; a class is the clean alternative.)
+//
+// Usage:
+//   let rng = Rng(42);
+//   print rng.uniform01();           // 0.236...
+//   print rng.normal(0, 1);          // a standard-normal sample
+//   print rng.choice(["a","b","c"]); // one of those
+//
+// The underlying generator is the linear-congruential Numerical
+// Recipes scheme (a = 1664525, c = 1013904223, m = 2^32). It's
+// adequate for engineering plots and small simulations. For
+// cryptographic work or very long sequences you'd want a better
+// algorithm.
+
+pub class Rng {
+    fn init(seed) {
+        this.state = seed;
+        this.has_extra_normal = 0;
+        this.extra_normal = 0;
+    }
+
+    // Raw 32-bit step: returns an integer in [0, 2^32).
+    fn next_u32() {
+        this.state = (this.state * 1664525 + 1013904223) % 4294967296;
+        return this.state;
+    }
+
+    // Uniform in [0, 1).
+    fn uniform01() {
+        return this.next_u32() / 4294967296;
+    }
+
+    // Uniform in [lo, hi).
+    fn uniform(lo, hi) {
+        return lo + this.uniform01() * (hi - lo);
+    }
+
+    // Integer in [lo, hi].
+    fn int_in(lo, hi) {
+        let span = hi - lo + 1;
+        return lo + floor(this.uniform01() * span);
+    }
+
+    // Standard normal via Box-Muller. Generates two samples per pair
+    // of uniforms; caches the spare for the next call.
+    fn normal(mu, sigma) {
+        if (this.has_extra_normal) {
+            this.has_extra_normal = 0;
+            return mu + sigma * this.extra_normal;
+        }
+        let u1 = this.uniform01();
+        let u2 = this.uniform01();
+        if (u1 < 0.0000000001) { u1 = 0.0000000001; }   // avoid log(0)
+        let r     = sqrt(-2 * log(u1));
+        let theta = 2 * pi() * u2;
+        let z0 = r * cos(theta);
+        let z1 = r * sin(theta);
+        this.extra_normal     = z1;
+        this.has_extra_normal = 1;
+        return mu + sigma * z0;
+    }
+
+    // Poisson via Knuth's algorithm. Fine for small lambda; for
+    // large lambda you'd want a smarter approach.
+    fn poisson(lambda) {
+        if (lambda <= 0) { throw "poisson: lambda must be positive"; }
+        let L = exp(-lambda);
+        let k = 0;
+        let p = 1;
+        while (p > L) {
+            k = k + 1;
+            p = p * this.uniform01();
+        }
+        return k - 1;
+    }
+
+    // Exponential with rate (1 / mean). For arrival processes etc.
+    fn exponential(mean) {
+        if (mean <= 0) { throw "exponential: mean must be positive"; }
+        let u = this.uniform01();
+        if (u < 0.0000000001) { u = 0.0000000001; }
+        return -mean * log(u);
+    }
+
+    // Pick one element of an array uniformly.
+    fn choice(arr) {
+        if (len(arr) == 0) { throw "choice: empty array"; }
+        let i = floor(this.uniform01() * len(arr));
+        return arr[i];
+    }
+
+    // Fisher-Yates shuffle in place. Returns the (now shuffled)
+    // array for chaining convenience.
+    fn shuffle(arr) {
+        for (let i = len(arr) - 1; i > 0; i = i - 1) {
+            let j = floor(this.uniform01() * (i + 1));
+            let tmp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = tmp;
+        }
+        return arr;
+    }
+
+    // n independent normal samples — common enough to be worth a helper.
+    fn normal_array(n, mu, sigma) {
+        let out = [];
+        for (let i = 0; i < n; i = i + 1) {
+            push(out, this.normal(mu, sigma));
+        }
+        return out;
+    }
+}

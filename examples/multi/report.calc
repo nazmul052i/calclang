@@ -1,0 +1,20 @@
+// report.calc — uses the public functions from stats.calc.
+// The `extern` declarations tell the compiler about functions that
+// live in another object file; the linker resolves them at link time.
+
+extern fn sum(arr: arr): num;
+extern fn mean(arr: arr): num;
+extern fn variance(arr: arr): num;
+extern fn stddev(arr: arr): num;
+extern fn minimum(arr: arr): num;
+extern fn maximum(arr: arr): num;
+
+let scores = [82, 71, 95, 64, 88, 79, 91, 73, 86, 80];
+
+print "n        = " + to_str(len(scores));
+print "sum      = " + to_str(sum(scores));
+print "min      = " + to_str(minimum(scores));
+print "max      = " + to_str(maximum(scores));
+print "mean     = " + to_str(mean(scores));
+print "variance = " + to_str(variance(scores));
+print "stddev   = " + to_str(stddev(scores));

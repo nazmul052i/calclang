@@ -1,0 +1,54 @@
+// Recursion that actually works because each call gets its own frame.
+
+fn fact(n) {
+    if (n <= 1) { return 1; }
+    return n * fact(n - 1);
+}
+
+print fact(0);     // 1
+print fact(1);     // 1
+print fact(5);     // 120
+print fact(10);    // 3628800
+
+fn fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+print fib(0);      // 0
+print fib(1);      // 1
+print fib(10);     // 55
+print fib(15);     // 610
+
+// Ackermann — deep, branching recursion.
+fn ack(m, n) {
+    if (m == 0)  { return n + 1; }
+    if (n == 0)  { return ack(m - 1, 1); }
+    return ack(m - 1, ack(m, n - 1));
+}
+
+print ack(2, 3);   // 9
+print ack(3, 3);   // 61
+
+// Mutual recursion through global labels.
+fn is_even(n) {
+    if (n == 0) { return 1; }
+    return is_odd(n - 1);
+}
+fn is_odd(n) {
+    if (n == 0) { return 0; }
+    return is_even(n - 1);
+}
+print is_even(10); // 1
+print is_odd(7);   // 1
+print is_even(11); // 0
+
+// Recursion with local lets — the inner call must not clobber outer locals.
+fn sum_down(n) {
+    let acc = 0;
+    if (n > 0) {
+        acc = n + sum_down(n - 1);
+    }
+    return acc;
+}
+print sum_down(10);  // 55

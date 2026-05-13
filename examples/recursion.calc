@@ -1,0 +1,45 @@
+// Recursion examples now that each call has its own activation record.
+
+// Classic factorial.
+fn fact(n) {
+    if (n <= 1) { return 1; }
+    return n * fact(n - 1);
+}
+print fact(8);            // 40320
+
+// Naive Fibonacci.
+fn fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+print fib(20);            // 6765
+
+// Greatest common divisor via Euclid's algorithm.
+fn gcd(a, b) {
+    if (b == 0) { return a; }
+    return gcd(b, a % b);
+}
+print gcd(48, 18);        // 6
+print gcd(1071, 462);     // 21
+
+// Sum 1..n recursively — exercises locals that survive across calls.
+fn sum_to(n) {
+    let acc = 0;
+    if (n > 0) {
+        acc = n + sum_to(n - 1);
+    }
+    return acc;
+}
+print sum_to(100);        // 5050
+
+// Mutual recursion: parity by repeatedly calling the other function.
+fn is_even(n) {
+    if (n == 0) { return 1; }
+    return is_odd(n - 1);
+}
+fn is_odd(n) {
+    if (n == 0) { return 0; }
+    return is_even(n - 1);
+}
+print is_even(20);        // 1
+print is_odd(13);         // 1

@@ -1,0 +1,44 @@
+// Happy path: well-typed calls run normally.
+
+fn add(a: num, b: num): num {
+    return a + b;
+}
+
+fn greet(name: str): str {
+    return "hello, " + name;
+}
+
+fn count(items: arr): num {
+    return len(items);
+}
+
+fn keyof(m: map, k): any {
+    return m[k];
+}
+
+fn apply(f: fn, x: num): num {
+    return f(x);
+}
+
+fn double(x: num): num {
+    return x * 2;
+}
+
+fn unconstrained(x): any {
+    return x;
+}
+
+print add(3, 4);                          // 7
+print greet("calc");                      // hello, calc
+print count([1, 2, 3, 4, 5]);             // 5
+print keyof({"a": 1, "b": 2}, "b");       // 2
+print apply(double, 7);                   // 14
+print unconstrained("anything works");    // anything works
+
+// Pass a wrapped-in-binop number — static analysis catches `+ - * /`
+// as numeric, so this passes without a runtime check.
+print add(1 + 2, 3 * 4);                  // 15
+
+// Type-annotated function ref through a variable is fine.
+let d = double;
+print apply(d, 21);                       // 42

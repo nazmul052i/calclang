@@ -1,0 +1,51 @@
+# Build output
+build/
+*.o
+*.obj
+
+# Executables (anything outside of intentionally-committed scripts)
+*.exe
+*.out
+
+# Generated assembly
+*.s
+
+# Generated CalcLang intermediates (kept under build/ already, but
+# guard against accidental top-level runs). Some hand-written .casm
+# files under examples/ ARE intentionally tracked — whitelisted below.
+*.casm
+*.co
+*.cexe
+!examples/**/*.casm
+!tests/**/*.casm
+
+# Generated visualization output (the demos produce these)
+*.svg
+*.json
+*.csv
+
+# But DO keep handwritten examples / docs / editor configs even if
+# they share extensions with generated files.
+!docs/**/*.svg
+!docs/**/*.json
+!docs/**/*.csv
+!editor/**/*.json
+!editor/**/*.svg
+
+# Editor / IDE local state
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Claude / agent state
+.claude/
+.history/
+
+# Local-only design notes / scratch
+docs/riva_language_design_spec.md
+
+# Misc
+*.log

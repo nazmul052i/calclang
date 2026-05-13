@@ -1,0 +1,70 @@
+// First-class function values: assignable, passable, returnable.
+
+fn add(a, b) { return a + b; }
+fn mul(a, b) { return a * b; }
+fn double(x) { return x * 2; }
+fn is_positive(x) { return x > 0; }
+
+// --- Assigning a function to a variable ---
+let f = add;
+print f(2, 3);                       // 5
+print f(10, 20);                     // 30
+
+// --- Passing a function to another function ---
+fn apply_twice(g, x) { return g(g(x)); }
+print apply_twice(double, 5);        // 20
+
+// --- Returning a function ---
+fn pick_op(name) {
+    if (name == "add") { return add; }
+    return mul;
+}
+let op_a = pick_op("add");
+let op_m = pick_op("mul");
+print op_a(3, 4);                    // 7
+print op_m(3, 4);                    // 12
+
+// --- Higher-order functions written in user code ---
+fn map(arr, fnv) {
+    let result = [];
+    for (let i = 0; i < len(arr); i++) {
+        push(result, fnv(arr[i]));
+    }
+    return result;
+}
+print map([1, 2, 3, 4, 5], double);  // [2, 4, 6, 8, 10]
+
+fn filter(arr, pred) {
+    let result = [];
+    for (let i = 0; i < len(arr); i++) {
+        if (pred(arr[i])) {
+            push(result, arr[i]);
+        }
+    }
+    return result;
+}
+print filter([-2, -1, 0, 1, 2], is_positive);   // [1, 2]
+
+fn reduce(arr, fnv, init) {
+    let acc = init;
+    for (let i = 0; i < len(arr); i++) {
+        acc = fnv(acc, arr[i]);
+    }
+    return acc;
+}
+print reduce([1, 2, 3, 4, 5], add, 0);   // 15
+print reduce([1, 2, 3, 4, 5], mul, 1);   // 120
+
+// --- type_of recognises function refs ---
+print type_of(add);                      // fn
+
+// --- Function equality is by identity (same entry PC) ---
+let f1 = add;
+let f2 = add;
+let f3 = mul;
+if (f1 == f2) { print 1; }               // 1
+if (f1 != f3) { print 2; }               // 2
+
+// (Note: top-level `let add = ...` would be rejected by the compiler
+// because it conflicts with the function `add`. Local lets inside a
+// function body can shadow function names freely.)

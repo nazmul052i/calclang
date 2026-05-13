@@ -1,0 +1,87 @@
+// calclib: full coverage of math, strings, arrays, I/O, and type intro.
+// random() and read_line() are exercised in examples (they need stdin
+// or are non-deterministic); here we test their *type* / range.
+
+// --- original ten ---
+print sqrt(16);                     // 4
+print sqrt(2);                      // 1.414213562
+print floor(3.7);                   // 3
+print ceil(3.2);                    // 4
+print abs(-5);                      // 5
+print pow(2, 10);                   // 1024
+print to_str(42);                   // 42
+print to_num("3.14");               // 3.14
+print len("hello");                 // 5
+print len([1, 2, 3]);               // 3
+
+// --- math additions ---
+print min(3, 7);                    // 3
+print min(-1, -2);                  // -2
+print max(3, 7);                    // 7
+print int(3.7);                     // 3
+print int(-3.7);                    // -3
+print round(3.4);                   // 3
+print round(3.6);                   // 4
+print round(-3.6);                  // -4
+print sin(0);                       // 0
+print cos(0);                       // 1
+print tan(0);                       // 0
+print asin(0);                      // 0
+print acos(1);                      // 0
+print atan(0);                      // 0
+print atan2(0, 1);                  // 0
+print exp(0);                       // 1
+print log(1);                       // 0
+print log10(1000);                  // 3
+let r = random();
+print r >= 0 && r < 1;              // 1
+print pi() > 3.14 && pi() < 3.15;   // 1
+print e()  > 2.71 && e()  < 2.72;   // 1
+
+// --- strings ---
+print str_at("hello", 1);                       // e
+print str_slice("hello world", 0, 5);           // hello
+print str_slice("hello world", 6, 11);          // world
+print str_find("hello world", "world");         // 6
+print str_find("hello", "xyz");                 // -1
+print str_upper("Hello");                       // HELLO
+print str_lower("Hello");                       // hello
+print str_trim("  hi  ");                       // hi
+print str_repeat("ab", 3);                      // ababab
+print str_starts_with("hello", "he");           // 1
+print str_starts_with("hello", "lo");           // 0
+print str_ends_with("hello", "lo");             // 1
+print str_split("a,b,c", ",");                  // ["a", "b", "c"]
+print str_join(["a", "b", "c"], "-");           // a-b-c
+
+// --- arrays ---
+let xs = [10, 20, 30];
+print pop(xs);                                  // 30
+print xs;                                       // [10, 20]
+let rev = [1, 2, 3];
+array_reverse(rev);
+print rev;                                      // [3, 2, 1]
+let s1 = [3, 1, 4, 1, 5, 9, 2, 6];
+array_sort(s1);
+print s1;                                       // [1, 1, 2, 3, 4, 5, 6, 9]
+let s2 = ["cherry", "apple", "banana"];
+array_sort(s2);
+print s2;                                       // ["apple", "banana", "cherry"]
+print array_concat([1, 2], [3, 4]);             // [1, 2, 3, 4]
+print array_slice([10, 20, 30, 40, 50], 1, 4);  // [20, 30, 40]
+print array_find([1, 2, 3, 4], 3);              // 2
+print array_find([1, 2, 3], 99);                // -1
+print array_contains([1, 2, 3], 2);             // 1
+print array_contains([1, 2, 3], 99);            // 0
+print array_range(1, 6);                        // [1, 2, 3, 4, 5]
+
+// --- write (no newline) + print to terminate ---
+write("a");
+write("b");
+write("c");
+print "";                                       // abc
+
+// --- type_of ---
+print type_of(5);                               // num
+print type_of("hi");                            // str
+print type_of([1, 2]);                          // arr

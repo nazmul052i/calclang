@@ -1,0 +1,37 @@
+// Compound assignment + increment / decrement, all desugar to plain `=`.
+
+let x = 10;
+x += 5;  print x;             // 15
+x -= 3;  print x;             // 12
+x *= 2;  print x;             // 24
+x /= 4;  print x;             // 6
+x %= 4;  print x;             // 2
+
+// ++ and -- as statements.
+let i = 0;
+i++;
+print i;                      // 1
+i++;
+print i;                      // 2
+i--;
+print i;                      // 1
+
+// for-loop using ++ in the step.
+let sum = 0;
+for (let k = 1; k <= 10; k++) {
+    sum += k;
+}
+print sum;                    // 55
+
+// for-loop using *= for a geometric step.
+let prod = 1;
+for (let n = 1; n <= 5; n++) {
+    prod *= n;
+}
+print prod;                   // 120
+
+// for-init can also use a compound form on an existing variable.
+let outer = 100;
+for (outer -= 1; outer > 95; outer--) {
+    print outer;              // 99 98 97 96
+}

@@ -1,0 +1,195 @@
+// json.calc — JSON parser and encoder.
+//
+// Supported: objects {"k": v}, arrays [v, v], strings, numbers,
+// `true` → 1, `false` → 0, `null` → 0.
+// (CalcLang doesn't have distinct boolean / null Values, so we
+// collapse those to 0 on parse; encoding only emits CalcLang types.)
+//
+// The parser is a straightforward recursive-descent over the input
+// string. Whitespace anywhere between tokens is fine. The encoder
+// writes a compact representation (no pretty-print).
+
+// ===== Parser =====
+
+// Parser state is a {"src": ..., "pos": ...} map threaded through
+// the recursive functions. Helpers update pos in place.
+
+priv fn _peek(st) { return str_at(st["src"], st["pos"]); }
+priv fn _eof(st)  { return st["pos"] >= len(st["src"]); }
+priv fn _advance(st) { st["pos"] = st["pos"] + 1; }
+
+priv fn _skip_ws(st) {
+    while (!_eof(st)) {
+        let c = _peek(st);
+        if (c == " " || c == "\t" || c == "\n" || c == "\r") {
+            _advance(st);
+        } else {
+            return 0;
+        }
+    }
+    return 0;
+}
+
+priv fn _expect(st, ch) {
+    if (_eof(st) || _peek(st) != ch) {
+        throw "json: expected '" + ch + "' at pos " + st["pos"];
+    }
+    _advance(st);
+}
+
+// Parse a string literal (already at the opening quote).
+priv fn _parse_string(st) {
+    _expect(st, "\"");
+    let out = "";
+    while (!_eof(st)) {
+        let c = _peek(st);
+        if (c == "\"") { _advance(st); return out; }
+        if (c == "\\") {
+            _advance(st);
+            if (_eof(st)) { throw "json: unterminated escape"; }
+            let e = _peek(st);
+            _advance(st);
+            if      (e == "n")  { out = out + "\n"; }
+            else if (e == "t")  { out = out + "\t"; }
+            else if (e == "r")  { out = out + "\r"; }
+            else if (e == "\\") { out = out + "\\"; }
+            else if (e == "\"") { out = out + "\""; }
+            else if (e == "/")  { out = out + "/"; }
+            else { throw "json: bad escape '\\" + e + "'"; }
+        } else {
+            out = out + c;
+            _advance(st);
+        }
+    }
+    throw "json: unterminated string";
+}
+
+// Parse a number — read digits, dot, minus sign — then to_num.
+priv fn _parse_number(st) {
+    let start = st["pos"];
+    let c = _peek(st);
+    if (c == "-") { _advance(st); }
+    while (!_eof(st)) {
+        c = _peek(st);
+        if (c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
+         || c == "5" || c == "6" || c == "7" || c == "8" || c == "9"
+         || c == ".") {
+            _advance(st);
+        } else {
+            break;
+        }
+    }
+    let num_str = str_slice(st["src"], start, st["pos"]);
+    return to_num(num_str);
+}
+
+priv fn _match_literal(st, lit) {
+    let n = len(lit);
+    let src = st["src"];
+    let p = st["pos"];
+    if (p + n > len(src)) { return 0; }
+    if (str_slice(src, p, p + n) == lit) {
+        st["pos"] = p + n;
+        return 1;
+    }
+    return 0;
+}
+
+// _parse_value is defined later; CalcLang's codegen collects all
+// top-level fn names in a pre-pass, so the forward reference is fine.
+
+priv fn _parse_array(st) {
+    _expect(st, "[");
+    let out = [];
+    _skip_ws(st);
+    if (_peek(st) == "]") { _advance(st); return out; }
+    while (1) {
+        _skip_ws(st);
+        push(out, _parse_value(st));
+        _skip_ws(st);
+        if (_peek(st) == ",") { _advance(st); }
+        else { _expect(st, "]"); return out; }
+    }
+    return out;
+}
+
+priv fn _parse_object(st) {
+    _expect(st, "{");
+    let out = {};
+    _skip_ws(st);
+    if (_peek(st) == "}") { _advance(st); return out; }
+    while (1) {
+        _skip_ws(st);
+        let key = _parse_string(st);
+        _skip_ws(st);
+        _expect(st, ":");
+        _skip_ws(st);
+        out[key] = _parse_value(st);
+        _skip_ws(st);
+        if (_peek(st) == ",") { _advance(st); }
+        else { _expect(st, "}"); return out; }
+    }
+    return out;
+}
+
+priv fn _parse_value(st) {
+    _skip_ws(st);
+    if (_eof(st)) { throw "json: unexpected end of input"; }
+    let c = _peek(st);
+    if (c == "\"") { return _parse_string(st); }
+    if (c == "{")  { return _parse_object(st); }
+    if (c == "[")  { return _parse_array(st); }
+    if (c == "-" || (c >= "0" && c <= "9")) { return _parse_number(st); }
+    if (_match_literal(st, "true"))  { return 1; }
+    if (_match_literal(st, "false")) { return 0; }
+    if (_match_literal(st, "null"))  { return 0; }
+    throw "json: unexpected char '" + c + "' at pos " + st["pos"];
+}
+
+pub fn json_parse(src) {
+    let st = {"src": src, "pos": 0};
+    let v = _parse_value(st);
+    _skip_ws(st);
+    if (!_eof(st)) { throw "json: trailing junk at pos " + st["pos"]; }
+    return v;
+}
+
+// ===== Encoder =====
+
+priv fn _enc_string(s) {
+    let out = "\"";
+    for (let i = 0; i < len(s); i = i + 1) {
+        let c = str_at(s, i);
+        if      (c == "\\") { out = out + "\\\\"; }
+        else if (c == "\"") { out = out + "\\\""; }
+        else if (c == "\n") { out = out + "\\n"; }
+        else if (c == "\t") { out = out + "\\t"; }
+        else if (c == "\r") { out = out + "\\r"; }
+        else                { out = out + c; }
+    }
+    return out + "\"";
+}
+
+pub fn json_encode(v) {
+    let t = type_of(v);
+    if (t == "num") { return to_str(v); }
+    if (t == "str") { return _enc_string(v); }
+    if (t == "arr") {
+        let out = "[";
+        for (let i = 0; i < len(v); i = i + 1) {
+            if (i > 0) { out = out + ","; }
+            out = out + json_encode(v[i]);
+        }
+        return out + "]";
+    }
+    if (t == "map") {
+        let out = "{";
+        let ks = keys(v);
+        for (let i = 0; i < len(ks); i = i + 1) {
+            if (i > 0) { out = out + ","; }
+            out = out + _enc_string(ks[i]) + ":" + json_encode(v[ks[i]]);
+        }
+        return out + "}";
+    }
+    throw "json_encode: unsupported type " + t;
+}

@@ -1,0 +1,57 @@
+// Phase 1 of the engineering-library prep: file I/O, system(), and
+// complex numbers. All native-only (no VM counterpart for this round),
+// so the test checks output against expected literals.
+
+// ===== File I/O =====
+file_write("build/phase1.txt", "alpha\n");
+file_append("build/phase1.txt", "beta\n");
+file_append("build/phase1.txt", "gamma\n");
+print file_exists("build/phase1.txt");       // 1
+print file_exists("build/no-such-file.txt"); // 0
+print file_read("build/phase1.txt");         // alpha\nbeta\ngamma\n  (one line)
+
+// Round-trip: write a value, read it back, parse it.
+file_write("build/phase1_num.txt", to_str(42.5));
+print to_num(str_trim(file_read("build/phase1_num.txt")));  // 42.5
+
+// ===== Complex numbers =====
+let z = complex(3, 4);
+let w = complex(1, 2);
+
+// Construction + projection
+print real(z);                    // 3
+print imag(z);                    // 4
+print real(5);                    // 5  (num accepted)
+print imag(5);                    // 0
+print abs(z);                     // 5  (magnitude)
+print abs(complex(-3, 0));        // 3
+print conj(z);                    // (3, -4)
+print arg(complex(1, 0));         // 0
+print arg(complex(0, 1));         // 1.570796327
+print arg(complex(-1, 0));        // 3.141592654
+
+// Arithmetic
+print z + w;                      // (4, 6)
+print z - w;                      // (2, 2)
+print z * w;                      // (-5, 10)
+print z / w;                      // (2.2, -0.4)
+print -z;                         // (-3, -4)  — unary minus routes to cl_op_neg
+
+// Auto-promote: num and cpx combine to cpx
+print 5 + complex(0, 3);          // (5, 3)
+print complex(2, 0) - 1;          // (1, 0)
+print 2 * complex(0, 1);          // (0, 2)
+print complex(0, 1) * complex(0, 1);  // (-1, 0)   i*i = -1
+
+// Equality
+print z == complex(3, 4);         // 1
+print z != w;                     // 1
+print z == w;                     // 0
+
+// type_of
+print type_of(z);                 // cpx
+print type_of(5);                 // num
+print type_of(z + 1);             // cpx
+
+// ===== system =====
+print system("echo from-the-shell");    // (prints) from-the-shell\n  (then) 0

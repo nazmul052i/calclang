@@ -1,0 +1,103 @@
+// fft.calc — Cooley-Tukey radix-2 FFT, built on CalcLang's first-
+// class complex numbers.
+//
+// Input: array of values (each either a num or a cpx; nums are
+// promoted to re + 0i automatically by complex arithmetic).
+// The array length MUST be a power of two.
+//
+// Output: array of cpx values — the DFT of the input.
+//
+// For inverse FFT, ifft(X) returns the time-domain signal.
+
+// Helper: round x to nearest integer; used to validate "power of 2".
+priv fn _is_pow2(n) {
+    if (n < 1) { return 0; }
+    while (n > 1) {
+        if (n % 2 != 0) { return 0; }
+        n = n / 2;
+    }
+    return 1;
+}
+
+// Forward FFT: X[k] = sum_n x[n] exp(-2πi k n / N).
+pub fn fft(x) {
+    let n = len(x);
+    if (n <= 1) { return x; }
+    if (!_is_pow2(n)) { throw "fft: length must be a power of 2"; }
+    // Split into even and odd indices.
+    let even = [];
+    let odd  = [];
+    for (let i = 0; i < n; i = i + 2) { push(even, x[i]); }
+    for (let i = 1; i < n; i = i + 2) { push(odd,  x[i]); }
+    // Recurse.
+    let E = fft(even);
+    let O = fft(odd);
+    // Combine using twiddle factor exp(-2πi k / N).
+    let half = n / 2;
+    let result = [];
+    for (let i = 0; i < n; i = i + 1) { push(result, 0); }
+    for (let k = 0; k < half; k = k + 1) {
+        let theta = -2 * pi() * k / n;
+        let w = complex(cos(theta), sin(theta));
+        let t = w * O[k];
+        result[k]        = E[k] + t;
+        result[k + half] = E[k] - t;
+    }
+    return result;
+}
+
+// Inverse FFT: x[n] = (1/N) sum_k X[k] exp(+2πi k n / N).
+// Implemented as fft with conjugated input, then conjugated output,
+// scaled by 1/N — the standard trick avoids a separate
+// implementation.
+priv fn _conjugate_all(x) {
+    let out = [];
+    for (let i = 0; i < len(x); i = i + 1) {
+        push(out, conj(x[i]));
+    }
+    return out;
+}
+
+pub fn ifft(X) {
+    let n = len(X);
+    if (n <= 0) { return X; }
+    if (!_is_pow2(n)) { throw "ifft: length must be a power of 2"; }
+    let conj_X = _conjugate_all(X);
+    let y      = fft(conj_X);
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) {
+        // y[i] is cpx; divide by n and conjugate.
+        let c = conj(y[i]);
+        push(out, complex(real(c) / n, imag(c) / n));
+    }
+    return out;
+}
+
+// Magnitude array: |X[k]| for each k. Useful for plotting spectra.
+pub fn fft_magnitude(X) {
+    let out = [];
+    for (let i = 0; i < len(X); i = i + 1) {
+        push(out, abs(X[i]));     // abs is overloaded: cpx -> magnitude
+    }
+    return out;
+}
+
+// Phase array: arg(X[k]) for each k.
+pub fn fft_phase(X) {
+    let out = [];
+    for (let i = 0; i < len(X); i = i + 1) {
+        push(out, arg(X[i]));
+    }
+    return out;
+}
+
+// Frequency bins for a sample rate fs: returns [0, fs/N, 2 fs/N, ...].
+// Only the first N/2 + 1 entries are physically meaningful (the rest
+// are aliases of negative frequencies).
+pub fn fft_freqs(n, fs) {
+    let out = [];
+    for (let k = 0; k < n; k = k + 1) {
+        push(out, k * fs / n);
+    }
+    return out;
+}

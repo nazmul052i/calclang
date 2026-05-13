@@ -1,0 +1,65 @@
+// Maps in action: records, configs, lookups, counters.
+
+// --- Records ---
+let alice = {
+    "name":  "Alice",
+    "age":   30,
+    "city":  "Berlin",
+    "tags":  ["admin", "dev"]
+};
+print alice["name"] + " is " + to_str(alice["age"]);
+print alice["tags"];
+
+// --- Config-style usage ---
+let config = {
+    "debug": 1,
+    "max_iters": 1000,
+    "name": "calclang"
+};
+if (config["debug"]) {
+    print "[debug] starting " + config["name"];
+}
+
+// --- Word count via map of counts ---
+fn count_words(words) {
+    let counts = {};
+    for (let i = 0; i < len(words); i++) {
+        let w = words[i];
+        if (has_key(counts, w)) {
+            counts[w] = counts[w] + 1;
+        } else {
+            counts[w] = 1;
+        }
+    }
+    return counts;
+}
+let text = str_split("the quick brown fox the lazy dog the fox", " ");
+let counts = count_words(text);
+print counts;
+
+// --- Reverse lookup ---
+let codes = {"red": 1, "green": 2, "blue": 3};
+fn find_name(m, target_value) {
+    let ks = keys(m);
+    for (let i = 0; i < len(ks); i++) {
+        if (m[ks[i]] == target_value) { return ks[i]; }
+    }
+    return "";
+}
+print find_name(codes, 2);                       // green
+print find_name(codes, 99);                      // (empty line)
+
+// --- Nested maps for a small contact book ---
+let book = {};
+book["alice"] = { "phone": "555-0101", "email": "a@example.com" };
+book["bob"]   = { "phone": "555-0202", "email": "b@example.com" };
+
+let ks = keys(book);
+for (let i = 0; i < len(ks); i++) {
+    let name = ks[i];
+    let entry = book[name];
+    print name + ": " + entry["phone"];
+}
+
+// --- type_of recognises maps ---
+print type_of(book);                              // map

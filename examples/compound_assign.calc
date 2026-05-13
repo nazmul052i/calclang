@@ -1,0 +1,30 @@
+// Compound assignment makes idiomatic loops/counters much shorter.
+
+// Accumulator pattern.
+let sum = 0;
+for (let i = 1; i <= 100; i++) {
+    sum += i;
+}
+print sum;              // 5050
+
+// Factorials by iteration with *=.
+let fact = 1;
+for (let n = 1; n <= 8; n++) {
+    fact *= n;
+}
+print fact;             // 40320
+
+// Counting down with --.
+let countdown = 5;
+while (countdown > 0) {
+    print countdown;    // 5 4 3 2 1
+    countdown--;
+}
+
+// All five compound forms on the same variable.
+let x = 1000;
+x += 23;  print x;      // 1023
+x -= 50;  print x;      // 973
+x *= 2;   print x;      // 1946
+x /= 4;   print x;      // 486.5
+x %= 10;  print x;      // 6.5

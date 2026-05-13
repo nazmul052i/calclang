@@ -1,0 +1,58 @@
+// Numerical methods showcase: root finding + integration.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/numerical.calc build/calclib/numeric.s -o build/numerical.exe
+
+extern fn bisect(f: fn, a: num, b: num, tol: num): num;
+extern fn newton(f: fn, df: fn, x0: num, tol: num, max_iter: num): num;
+extern fn secant(f: fn, x0: num, x1: num, tol: num, max_iter: num): num;
+extern fn trapezoidal(f: fn, a: num, b: num, n: num): num;
+extern fn simpson(f: fn, a: num, b: num, n: num): num;
+extern fn adaptive_simpson(f: fn, a: num, b: num, tol: num): num;
+extern fn poly_eval(coeffs: arr, x: num): num;
+extern fn poly_derivative(coeffs: arr): arr;
+extern fn linterp(xs: arr, ys: arr, x: num): num;
+
+// Root of cos(x) = 0  on [0, π], expected π/2 ≈ 1.5707963.
+let cos_fn = fn(x) { return cos(x); };
+print "cos(x) = 0 on [0, π]:";
+print "  bisect  -> " + bisect(cos_fn, 0, pi(), 0.000001);
+print "  secant  -> " + secant(cos_fn, 1, 2, 0.000001, 50);
+
+// Root of x³ - 2 via Newton (cube root of 2 ≈ 1.2599210).
+let f  = fn(x) { return x * x * x - 2; };
+let df = fn(x) { return 3 * x * x; };
+print "\ncube root of 2 (Newton):";
+print "  -> " + newton(f, df, 1.5, 0.0000001, 50);
+
+// Integrate sin(x) on [0, π], exact value = 2.
+let sin_fn = fn(x) { return sin(x); };
+print "\nintegrate sin(x) on [0, π] (exact: 2):";
+print "  trapezoidal n=10     -> " + trapezoidal(sin_fn, 0, pi(), 10);
+print "  simpson n=10         -> " + simpson(sin_fn, 0, pi(), 10);
+print "  adaptive (tol=1e-9)  -> " + adaptive_simpson(sin_fn, 0, pi(), 0.000000001);
+
+// Integrate a polynomial: ∫₀¹ (3x² + 2x + 1) dx = 1 + 1 + 1 = 3.
+let p = [1, 2, 3];           // 1 + 2x + 3x²
+let p_at = fn(x) { return poly_eval(p, x); };
+print "\nintegrate 1 + 2x + 3x² on [0, 1] (exact: 3):";
+print "  simpson n=20 -> " + simpson(p_at, 0, 1, 20);
+
+// Linear interpolation: tabulate sin at 11 points then sample.
+let xs = [];
+let ys = [];
+for (let i = 0; i <= 10; i = i + 1) {
+    let x = i / 10 * pi();
+    push(xs, x);
+    push(ys, sin(x));
+}
+print "\nlinterp of sin(π/3) (exact: 0.866...):";
+print "  -> " + linterp(xs, ys, pi() / 3);
+print "linterp clamps outside [xs[0], xs[n-1]]:";
+print "  linterp(.., -1)  -> " + linterp(xs, ys, -1) + "   (= ys[0])";
+print "  linterp(.., 100) -> " + linterp(xs, ys, 100) + "   (= ys[n-1])";
+
+// Polynomial derivative: d/dx (1 + 2x + 3x²) = 2 + 6x.
+print "\nderivative of [1, 2, 3]:";
+print poly_derivative(p);     // [2, 6]

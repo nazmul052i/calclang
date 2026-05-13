@@ -1,0 +1,42 @@
+// FFI: load a shared library and call C functions through it.
+// Platform-specific library path (msvcrt on Windows, libm/libc on Linux).
+// The test harness only runs this on platforms where msvcrt.dll exists.
+
+let lib = ffi_load("msvcrt.dll");
+
+// Math via libc: sqrt, pow, atan2.
+print ffi_call(lib, "sqrt",  "d:d",  [16]);             // 4
+print ffi_call(lib, "pow",   "d:dd", [2, 10]);          // 1024
+print ffi_call(lib, "atan2", "d:dd", [1, 1]);           // 0.7853981634
+
+// String functions: strlen, strcmp.
+print ffi_call(lib, "strlen", "i:s",  ["hello, world"]); // 12
+print ffi_call(lib, "strcmp", "i:ss", ["abc", "abc"]);   // 0
+
+// First-class FFI: wrap in a closure, pass to higher-order code.
+let csqrt = fn(x) { return ffi_call(lib, "sqrt", "d:d", [x]); };
+fn map(arr, f) {
+    let out = [];
+    for (let i = 0; i < len(arr); i = i + 1) {
+        push(out, f(arr[i]));
+    }
+    return out;
+}
+print map([1, 4, 9, 16, 25], csqrt);                    // [1, 2, 3, 4, 5]
+
+// FFI mixed with exceptions: throw if the result is nonsense.
+// Written as a let-bound closure (not a top-level fn) so it can
+// capture `lib` from main's scope — top-level fns are isolated.
+let safe_sqrt = fn(x) {
+    if (x < 0) {
+        throw "sqrt: negative argument";
+    }
+    return ffi_call(lib, "sqrt", "d:d", [x]);
+};
+try {
+    print safe_sqrt(25);                                // 5
+    print safe_sqrt(-1);                                // (throws, skipped)
+    print "unreachable";
+} catch (e) {
+    print "caught: " + e;                               // caught: sqrt: negative argument
+}

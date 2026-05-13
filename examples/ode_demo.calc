@@ -1,0 +1,68 @@
+// Solve ODEs with RK4 and plot the trajectory.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/ode_demo.calc \
+//       build/calclib/ode.s build/calclib/plot.s -o build/ode_demo.exe
+
+extern fn rk4(f: fn, t0: num, y0: num, t_end: num, n: num): map;
+extern fn euler(f: fn, t0: num, y0: num, t_end: num, n: num): map;
+extern fn rk4_vec(f: fn, t0: num, y0: arr, t_end: num, n: num): map;
+extern fn plot_lines(filename: str, xss: arr, yss: arr, labels: arr, title: str);
+
+// ===== Scalar: y' = -y, y(0) = 1.  Exact solution: y = e^(-t) =====
+let decay = fn(t, y) { return -y; };
+let sol = rk4(decay, 0, 1, 5, 100);
+let ts = sol["ts"];
+let ys_rk4 = sol["ys"];
+
+// Compare against Euler with the same step count.
+let sol_e = euler(decay, 0, 1, 5, 100);
+let ys_eu = sol_e["ys"];
+
+// And against the exact solution sampled at the same t's.
+let ys_ex = [];
+for (let i = 0; i < len(ts); i = i + 1) {
+    push(ys_ex, exp(-ts[i]));
+}
+
+print "y' = -y, y(0) = 1   (sampled at t=5)";
+print "  RK4   = " + ys_rk4[len(ys_rk4) - 1];
+print "  Euler = " + ys_eu[len(ys_eu) - 1];
+print "  exact = " + exp(-5);
+
+plot_lines("build/ode_decay.svg",
+    [ts, ts, ts],
+    [ys_rk4, ys_eu, ys_ex],
+    ["RK4", "Euler", "exact"],
+    "y' = -y, comparing methods");
+print "wrote build/ode_decay.svg";
+
+// ===== Vector: simple harmonic oscillator =====
+// y1' = y2;    y2' = -y1
+// y(0) = [1, 0] -> y1(t) = cos(t), y2(t) = -sin(t)
+let sho = fn(t, y) {
+    return [y[1], -y[0]];
+};
+let sol_v = rk4_vec(sho, 0, [1, 0], 10, 400);
+let tv  = sol_v["ts"];
+let ysv = sol_v["ys"];
+
+// Split components.
+let y1 = [];
+let y2 = [];
+for (let i = 0; i < len(ysv); i = i + 1) {
+    push(y1, ysv[i][0]);
+    push(y2, ysv[i][1]);
+}
+print "";
+print "harmonic oscillator at t=10:";
+print "  y1 = " + y1[len(y1) - 1] + "  (exact cos(10) = " + cos(10) + ")";
+print "  y2 = " + y2[len(y2) - 1] + "  (exact -sin(10) = " + (-sin(10)) + ")";
+
+plot_lines("build/ode_sho.svg",
+    [tv, tv],
+    [y1, y2],
+    ["y1 = cos(t)", "y2 = -sin(t)"],
+    "Simple harmonic oscillator: y'' = -y");
+print "wrote build/ode_sho.svg";

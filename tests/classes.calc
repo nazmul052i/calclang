@@ -1,0 +1,135 @@
+// Classes desugar at parse time:
+//   class Foo { fn init(p) { ... } fn m() { ... } }
+// becomes a constructor `fn Foo(p)` that builds an instance map,
+// attaches each method as a closure capturing `this`, then inlines
+// the init body. Instances are plain maps — `obj.field` and
+// `obj.method(args)` are the existing field-access and indirect-call
+// machinery.
+
+// ===== Basic class with fields and methods =====
+class Point {
+    fn init(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    fn dist() {
+        return sqrt(this.x * this.x + this.y * this.y);
+    }
+    fn label() {
+        return "(" + this.x + ", " + this.y + ")";
+    }
+}
+
+let p = Point(3, 4);
+print p.x;                          // 3
+print p.y;                          // 4
+print p.dist();                     // 5
+print p.label();                    // (3, 4)
+
+// ===== Method mutates instance state =====
+class Counter {
+    fn init() {
+        this.n = 0;
+    }
+    fn inc() {
+        this.n += 1;
+        return this.n;
+    }
+    fn add(k) {
+        this.n += k;
+        return this.n;
+    }
+    fn reset() {
+        this.n = 0;
+    }
+}
+
+let c = Counter();
+print c.inc();                      // 1
+print c.inc();                      // 2
+print c.add(10);                    // 12
+print c.add(8);                     // 20
+c.reset();
+print c.n;                          // 0
+
+// Each instance has its own state.
+let c2 = Counter();
+c2.add(100);
+print c2.n;                         // 100
+print c.n;                          // 0
+
+// ===== Methods calling other methods on the same object =====
+class Rect {
+    fn init(w, h) {
+        this.w = w;
+        this.h = h;
+    }
+    fn area() {
+        return this.w * this.h;
+    }
+    fn perimeter() {
+        return 2 * (this.w + this.h);
+    }
+    fn describe() {
+        return "area=" + this.area() + " perim=" + this.perimeter();
+    }
+}
+
+let r = Rect(4, 5);
+print r.area();                     // 20
+print r.perimeter();                // 18
+print r.describe();                 // area=20 perim=18
+
+// ===== Class with no init (zero-arg constructor) =====
+class Stack {
+    fn push_v(v) {
+        if (!has_key(this, "items")) {
+            this.items = [];
+        }
+        push(this.items, v);
+    }
+    fn pop_v() {
+        return pop(this.items);
+    }
+    fn size() {
+        if (!has_key(this, "items")) { return 0; }
+        return len(this.items);
+    }
+}
+
+let s = Stack();
+print s.size();                     // 0
+s.push_v(10);
+s.push_v(20);
+s.push_v(30);
+print s.size();                     // 3
+print s.pop_v();                    // 30
+print s.size();                     // 2
+
+// ===== Storing instances in arrays and maps =====
+let points = [Point(0, 0), Point(3, 4), Point(5, 12)];
+for (let i = 0; i < len(points); i = i + 1) {
+    print points[i].dist();
+}
+// expects: 0, 5, 13
+
+let by_name = {"origin": Point(0, 0), "corner": Point(1, 1)};
+print by_name.corner.x;             // 1
+print by_name.origin.dist();        // 0
+
+// ===== Methods are first-class function values =====
+let p2 = Point(6, 8);
+let bound = p2.dist;
+print bound();                      // 10
+
+// Pass a method through a higher-order function.
+fn apply(f) { return f(); }
+print apply(p2.dist);               // 10
+
+// ===== Class as a passed-around constructor =====
+fn make_two(ctor, a, b) {
+    return [ctor(a, 0), ctor(0, b)];
+}
+let pair = make_two(Point, 7, 9);
+print pair[0].x;                    // 7
+print pair[1].y;                    // 9

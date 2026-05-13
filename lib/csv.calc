@@ -1,0 +1,117 @@
+// csv.calc — read and write CSV files.
+//
+// This is a deliberately simple parser: split lines on '\n', split
+// each line on ','. It DOES NOT handle quoted fields with embedded
+// commas, escapes, or alternative delimiters. For most engineering
+// data that's enough; if you need RFC-4180 conformance, use a
+// purpose-built parser (or pre-process the file).
+//
+// Cells are returned as strings — convert with `to_num` if needed.
+
+// ===== Read =====
+
+// Returns an array of arrays of strings. Each inner array is one row.
+// Trailing empty line is ignored.
+pub fn csv_read(path) {
+    let raw = file_read(path);
+    // Strip a single trailing newline so we don't end up with a phantom
+    // empty row.
+    let n = len(raw);
+    if (n > 0 && str_at(raw, n - 1) == "\n") {
+        raw = str_slice(raw, 0, n - 1);
+    }
+    // Strip CR characters for cross-platform parity (Windows files).
+    raw = str_replace_all_cr(raw);
+    let lines = str_split(raw, "\n");
+    let out = [];
+    for (let i = 0; i < len(lines); i = i + 1) {
+        let row = str_split(lines[i], ",");
+        push(out, row);
+    }
+    return out;
+}
+
+// Same but treats the first line as headers and returns an array of
+// maps keyed by header name.
+pub fn csv_read_with_headers(path) {
+    let rows = csv_read(path);
+    if (len(rows) == 0) { return []; }
+    let headers = rows[0];
+    let out = [];
+    for (let i = 1; i < len(rows); i = i + 1) {
+        let row = rows[i];
+        let m = {};
+        for (let j = 0; j < len(headers); j = j + 1) {
+            let key = headers[j];
+            if (j < len(row)) {
+                m[key] = row[j];
+            } else {
+                m[key] = "";
+            }
+        }
+        push(out, m);
+    }
+    return out;
+}
+
+// Helper for converting all numeric columns in a string-row to nums.
+// Useful right after csv_read for purely-numeric data.
+pub fn csv_row_to_nums(row) {
+    let out = [];
+    for (let i = 0; i < len(row); i = i + 1) {
+        push(out, to_num(row[i]));
+    }
+    return out;
+}
+
+// ===== Write =====
+
+// Writes an array of arrays as a CSV file. Cells can be numbers or
+// strings; numbers are formatted with %.10g via to_str. No quoting
+// is applied — strings containing commas or newlines would round-
+// trip incorrectly, like the read side.
+pub fn csv_write(path, rows) {
+    file_write(path, "");
+    for (let i = 0; i < len(rows); i = i + 1) {
+        let row = rows[i];
+        for (let j = 0; j < len(row); j = j + 1) {
+            if (j > 0) { file_append(path, ","); }
+            file_append(path, to_str(row[j]));
+        }
+        file_append(path, "\n");
+    }
+}
+
+// Write rows that came from csv_read_with_headers (array of maps).
+// Header order is specified by `headers` so the column order is
+// reproducible.
+pub fn csv_write_with_headers(path, headers, rows) {
+    file_write(path, "");
+    for (let h = 0; h < len(headers); h = h + 1) {
+        if (h > 0) { file_append(path, ","); }
+        file_append(path, headers[h]);
+    }
+    file_append(path, "\n");
+    for (let i = 0; i < len(rows); i = i + 1) {
+        let m = rows[i];
+        for (let h = 0; h < len(headers); h = h + 1) {
+            if (h > 0) { file_append(path, ","); }
+            let v = "";
+            if (has_key(m, headers[h])) {
+                v = to_str(m[headers[h]]);
+            }
+            file_append(path, v);
+        }
+        file_append(path, "\n");
+    }
+}
+
+// ===== Internal helpers =====
+
+// Strip CR characters: a Windows-saved CSV has "\r\n" line endings;
+// after splitting on "\n", every cell except the last would carry a
+// trailing CR. Easier to scrub up front.
+priv fn str_replace_all_cr(s) {
+    let parts = str_split(s, "\r");
+    return str_join(parts, "");
+}

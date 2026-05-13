@@ -1,0 +1,41 @@
+// String concatenation and ordering.
+
+// Basic concat.
+print "hello" + " " + "world";              // hello world
+
+// Concat into variables.
+let a = "foo";
+let b = "bar";
+let c = a + b;
+print c;                                     // foobar
+
+// Left-associative chain.
+print "a" + "b" + "c" + "d";                 // abcd
+
+// Concat with empty.
+print "" + "hi";                             // hi
+print "hi" + "";                             // hi
+
+// Concat in a loop (each iteration allocates a new string).
+let s = "";
+for (let i = 0; i < 5; i++) {
+    s = s + "x";
+}
+print s;                                     // xxxxx
+
+// Concat across function call boundaries.
+fn join(x, y) {
+    return x + "-" + y;
+}
+print join("left", "right");                 // left-right
+
+// Lexicographic ordering.
+if ("apple" <  "banana") { print 1; }        // 1
+if ("zebra" >  "apple")  { print 2; }        // 2
+if ("foo"   == "foo")    { print 3; }        // 3
+if ("a"     <= "a")      { print 4; }        // 4
+if ("apple" <  "apples") { print 5; }        // 5 (prefix is less)
+if ("z"     >  "aa")     { print 6; }        // 6 (first char wins)
+
+// Concat result used immediately in a comparison.
+if ("foo" + "bar" == "foobar") { print 7; }  // 7

@@ -1,0 +1,67 @@
+// Showcase: if/else, while, for, break/continue, functions,
+// comparisons, logical ops, unary minus, modulo, block scope.
+
+// Sum of 1..10 with a while loop.
+let i   = 1;
+let sum = 0;
+while (i <= 10) {
+    sum = sum + i;
+    i   = i + 1;
+}
+print sum;            // 55
+
+// Factorial of 6 with a for loop.
+let acc = 1;
+for (let k = 2; k <= 6; k = k + 1) {
+    acc = acc * k;
+}
+print acc;            // 720
+
+// break and continue: print odd numbers in 1..10, stop at 7.
+for (let j = 0; j < 10; j = j + 1) {
+    if (j > 7) { break; }
+    if (j % 2 == 0) { continue; }
+    print j;          // 1 3 5 7
+}
+
+// if / else if / else with logical && and ||.
+let x = 7;
+if (x < 0 || x > 100) {
+    print 0;
+} else if (x % 2 == 0 && x > 0) {
+    print 2;
+} else {
+    print 1;          // odd  -- this one fires
+}
+
+// Unary minus and !.
+let y = -5;
+print -y;             // 5
+print !0;             // 1   (logical NOT of false)
+print !42;            // 0   (logical NOT of truthy)
+
+// Modulo.
+print 17 % 5;         // 2
+
+// Block scope: outer x is untouched by the inner shadow.
+let outer = 100;
+{
+    let outer = 7;
+    print outer;      // 7
+}
+print outer;          // 100
+
+// Functions.
+fn square(n) {
+    return n * n;
+}
+fn pow(base, exp) {
+    let acc = 1;
+    for (let i = 0; i < exp; i = i + 1) {
+        acc = acc * base;
+    }
+    return acc;
+}
+print square(9);      // 81
+print pow(2, 10);     // 1024
+print square(pow(2, 5)); // 32 ^ 2 = 1024

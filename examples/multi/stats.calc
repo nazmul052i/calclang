@@ -1,0 +1,47 @@
+// stats.calc — a tiny statistics library.
+// Build with:
+//   build/calcc   examples/multi/stats.calc build/stats.casm
+//   build/calcasm build/stats.casm           build/stats.co
+// Then link with the caller via `calcld <main>.co stats.co out.cexe`.
+
+pub fn sum(arr: arr): num {
+    let acc = 0;
+    for (let i = 0; i < len(arr); i++) {
+        acc += arr[i];
+    }
+    return acc;
+}
+
+pub fn mean(arr: arr): num {
+    return sum(arr) / len(arr);
+}
+
+pub fn variance(arr: arr): num {
+    let m = mean(arr);
+    let acc = 0;
+    for (let i = 0; i < len(arr); i++) {
+        let d = arr[i] - m;
+        acc += d * d;
+    }
+    return acc / len(arr);
+}
+
+pub fn stddev(arr: arr): num {
+    return sqrt(variance(arr));
+}
+
+pub fn minimum(arr: arr): num {
+    let v = arr[0];
+    for (let i = 1; i < len(arr); i++) {
+        v = min(v, arr[i]);
+    }
+    return v;
+}
+
+pub fn maximum(arr: arr): num {
+    let v = arr[0];
+    for (let i = 1; i < len(arr); i++) {
+        v = max(v, arr[i]);
+    }
+    return v;
+}

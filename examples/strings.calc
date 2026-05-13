@@ -1,0 +1,49 @@
+// First-class strings: literals, storage, escapes, ==/!=, truthiness.
+
+print "Hello, CalcLang!";
+
+let name = "Calc";
+let other = "Calc";
+let third = "Lang";
+
+if (name == other) {
+    print "name and other match";
+}
+if (name != third) {
+    print "name and third differ";
+}
+
+// Empty string is falsy.
+let empty = "";
+if (empty) {
+    print "won't fire";
+} else {
+    print "empty string is falsy";
+}
+
+// Variables can switch types: numbers and strings live in the same slot.
+let x = 1;
+print x;
+x = "now a string";
+print x;
+x = 3.14;
+print x;
+
+// Functions that take and return strings. Calls are expressions, so
+// for side effects you assign or print the result.
+fn label(prefix, n) {
+    if (n > 0) {
+        print prefix;
+        print n;
+    } else {
+        print "no items";
+    }
+    return n;
+}
+let _ = label("count:", 5);
+let _ = label("count:", 0);
+
+// Escapes.
+print "tabs:\t\there";
+print "two\nlines";
+print "a backslash \\ and a quote \"";

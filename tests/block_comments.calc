@@ -1,0 +1,24 @@
+/* This is a block comment that spans
+   multiple lines and may contain // line-comment markers
+   that don't terminate it. */
+
+let x = 10;
+print x;                 /* trailing block comment */ // and a line comment
+print 20; /* inline */
+
+/* Block comments can wrap entire statements:
+   let ignored = "this is in a comment";
+   print ignored;
+*/
+
+print /* shhh */ 30;     // block comment between tokens
+
+/* Block comments do not nest: the inner /* is just text */
+print 40;
+
+// A string literal containing /* and */ is still a normal string.
+let s = "/* not a comment, just a string */";
+print s;
+
+/**/                     // empty block comment is fine
+print 50;

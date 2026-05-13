@@ -1,0 +1,55 @@
+// Generate noisy linear data, fit a line, plot data + fit overlay.
+//
+// Build:
+//   build/calcnat --lib lib/stats.calc -o build/calclib/stats.s
+//   build/calcnat --lib lib/plot.calc  -o build/calclib/plot.s
+//   build/calcnat examples/regression.calc \
+//       build/calclib/stats.s build/calclib/plot.s -o build/regression.exe
+//   build/regression.exe
+
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+extern fn min_of(xs: arr): num;
+extern fn max_of(xs: arr): num;
+extern fn linreg(xs: arr, ys: arr): map;
+extern fn plot_data_with_fit(filename: str, xs: arr, ys_data: arr, ys_fit: arr, title: str);
+
+// Synthetic data: y = 1.7 * x + 4.2, with bounded "noise" so the
+// fit is decent but visibly imperfect. We use a tiny in-source PRNG
+// instead of random() so the plot is reproducible. rand01 is a
+// let-bound closure (not a top-level fn) so it can capture `seed`.
+let seed = 42;
+let rand01 = fn() {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296.0;
+};
+
+let xs = [];
+let ys = [];
+let n = 60;
+for (let i = 0; i < n; i = i + 1) {
+    let x = i;
+    let noise = (rand01() - 0.5) * 12;       // ~ U(-6, 6)
+    let y = 1.7 * x + 4.2 + noise;
+    push(xs, x);
+    push(ys, y);
+}
+
+print "n = " + n;
+print "x:  mean=" + mean(xs) + " stddev=" + stddev(xs) + " range=[" + min_of(xs) + ", " + max_of(xs) + "]";
+print "y:  mean=" + mean(ys) + " stddev=" + stddev(ys) + " range=[" + min_of(ys) + ", " + max_of(ys) + "]";
+
+let fit = linreg(xs, ys);
+print "linear fit:";
+print "  y = " + fit["slope"] + " * x + " + fit["intercept"];
+print "  R^2 = " + fit["r2"];
+print "(true model: y = 1.7 * x + 4.2)";
+
+let ys_fit = [];
+for (let i = 0; i < n; i = i + 1) {
+    push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
+}
+
+plot_data_with_fit("build/regression.svg", xs, ys, ys_fit,
+    "Linear regression: y = " + fit["slope"] + " x + " + fit["intercept"]);
+print "wrote build/regression.svg";

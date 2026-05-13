@@ -1,0 +1,47 @@
+// Tail-call optimization: `return foo(args);` inside fn foo becomes
+// a jump back to the function's body-start label after writing the
+// new args into the param slots. Self-recursion to arbitrary depth
+// runs in constant stack space.
+//
+// Without TCO, count_down(1_000_000) would blow the native stack.
+// With TCO, it's a loop.
+
+fn count_down(n) {
+    if (n <= 0) { return 0; }
+    return count_down(n - 1);
+}
+print count_down(1000000);            // 0
+
+// Tail-recursive accumulator factorial.
+fn fact_acc(n, acc) {
+    if (n <= 1) { return acc; }
+    return fact_acc(n - 1, n * acc);
+}
+print fact_acc(15, 1);                // 1307674368000
+print fact_acc(20, 1);                // 2432902008176640000
+
+// Sum 1..N tail-recursively.
+fn sum_to(n, acc) {
+    if (n <= 0) { return acc; }
+    return sum_to(n - 1, acc + n);
+}
+print sum_to(100000, 0);              // 5000050000
+
+// Non-tail recursion still works (uses real stack, modest depth only).
+fn fact(n) {
+    if (n <= 1) { return 1; }
+    return n * fact(n - 1);
+}
+print fact(10);                       // 3628800
+
+// Mixed: tail call from one branch, value-producing call from another.
+fn split(n) {
+    if (n <= 0) { return "done"; }
+    if (n == 1) {
+        return "almost: " + to_str(n);    // not a tail call (string concat)
+    }
+    return split(n - 1);                  // tail call
+}
+print split(0);                       // done
+print split(1);                       // almost: 1
+print split(100);                     // almost: 1  (tail-recurses down, hits n==1 first)

@@ -1,0 +1,29 @@
+// pub marks a function as visible to other compilation units at link
+// time. Bare `fn` is private to this file. Inside one source file you
+// can call either kind the same way — the difference shows up in the
+// generated .casm (look for `fn_name:` vs `.fn_name:`).
+
+pub fn pow_int(base: num, exp: num): num {
+    let acc = 1;
+    for (let i = 0; i < exp; i++) {
+        acc *= base;
+    }
+    return acc;
+}
+
+// Private helper — won't be exposed to other compilation units.
+fn even_only(n: num): num {
+    if (n % 2 == 0) { return n; }
+    return 0;
+}
+
+pub fn sum_even_squares(upto: num): num {
+    let acc = 0;
+    for (let i = 1; i <= upto; i++) {
+        acc += even_only(pow_int(i, 2));
+    }
+    return acc;
+}
+
+print pow_int(2, 10);          // 1024
+print sum_even_squares(6);     // 4 + 16 + 36 = 56

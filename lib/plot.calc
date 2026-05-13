@@ -1,0 +1,431 @@
+// plot.calc — minimal SVG plot generation.
+//
+// Each plot function streams to a file via file_append rather than
+// building one giant string; that keeps memory bounded for plots
+// with thousands of points and avoids the O(n²) cost of repeated
+// string concatenation.
+
+// Internal: find min/max so plot.calc stays standalone (doesn't need
+// to link against stats.calc).
+priv fn p_min(xs) {
+    let m = xs[0];
+    for (let i = 1; i < len(xs); i = i + 1) {
+        if (xs[i] < m) { m = xs[i]; }
+    }
+    return m;
+}
+priv fn p_max(xs) {
+    let m = xs[0];
+    for (let i = 1; i < len(xs); i = i + 1) {
+        if (xs[i] > m) { m = xs[i]; }
+    }
+    return m;
+}
+
+// Plot defaults.
+priv fn p_default_width()  { return 800; }
+priv fn p_default_height() { return 500; }
+priv fn p_padding()        { return 60; }
+
+// Map a data value in [lo, hi] to a pixel coordinate in [pad, size-pad].
+// y axis is flipped because SVG y grows downward.
+priv fn p_map_x(v, lo, hi, w) {
+    let pad = p_padding();
+    if (hi == lo) { return w / 2; }
+    return pad + (v - lo) / (hi - lo) * (w - 2 * pad);
+}
+priv fn p_map_y(v, lo, hi, h) {
+    let pad = p_padding();
+    if (hi == lo) { return h / 2; }
+    return h - pad - (v - lo) / (hi - lo) * (h - 2 * pad);
+}
+
+// Emit the SVG opening, including axis box and the title.
+priv fn p_open_svg(path, w, h, title) {
+    file_write(path, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    file_append(path, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"");
+    file_append(path, to_str(w));
+    file_append(path, "\" height=\"");
+    file_append(path, to_str(h));
+    file_append(path, "\" font-family=\"sans-serif\">\n");
+    // White background.
+    file_append(path, "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n");
+    // Title.
+    file_append(path, "<text x=\"");
+    file_append(path, to_str(w / 2));
+    file_append(path, "\" y=\"30\" font-size=\"18\" text-anchor=\"middle\">");
+    file_append(path, title);
+    file_append(path, "</text>\n");
+}
+
+// Axis box.
+priv fn p_axes(path, w, h) {
+    let pad = p_padding();
+    file_append(path, "<rect x=\"");
+    file_append(path, to_str(pad));
+    file_append(path, "\" y=\"");
+    file_append(path, to_str(pad));
+    file_append(path, "\" width=\"");
+    file_append(path, to_str(w - 2 * pad));
+    file_append(path, "\" height=\"");
+    file_append(path, to_str(h - 2 * pad));
+    file_append(path, "\" fill=\"none\" stroke=\"#888\" stroke-width=\"1\"/>\n");
+}
+
+// Axis tick labels: 5 along each axis.
+priv fn p_axis_labels(path, w, h, xmin, xmax, ymin, ymax) {
+    let pad = p_padding();
+    for (let i = 0; i <= 4; i = i + 1) {
+        let t = i / 4.0;
+        let xv = xmin + t * (xmax - xmin);
+        let yv = ymin + t * (ymax - ymin);
+        let xp = pad + t * (w - 2 * pad);
+        let yp = h - pad - t * (h - 2 * pad);
+        // x-axis tick
+        file_append(path, "<text x=\"");
+        file_append(path, to_str(xp));
+        file_append(path, "\" y=\"");
+        file_append(path, to_str(h - pad + 18));
+        file_append(path, "\" font-size=\"11\" text-anchor=\"middle\" fill=\"#444\">");
+        file_append(path, to_str(xv));
+        file_append(path, "</text>\n");
+        // y-axis tick
+        file_append(path, "<text x=\"");
+        file_append(path, to_str(pad - 6));
+        file_append(path, "\" y=\"");
+        file_append(path, to_str(yp + 4));
+        file_append(path, "\" font-size=\"11\" text-anchor=\"end\" fill=\"#444\">");
+        file_append(path, to_str(yv));
+        file_append(path, "</text>\n");
+    }
+}
+
+// Close SVG.
+priv fn p_close_svg(path) {
+    file_append(path, "</svg>\n");
+}
+
+// Single-series line plot.
+pub fn plot_line(filename, xs, ys, title) {
+    if (len(xs) != len(ys)) { throw "plot_line: xs/ys length mismatch"; }
+    if (len(xs) == 0)        { throw "plot_line: empty data"; }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    let xmin = p_min(xs);
+    let xmax = p_max(xs);
+    let ymin = p_min(ys);
+    let ymax = p_max(ys);
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
+    // The polyline path itself.
+    file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let px = p_map_x(xs[i], xmin, xmax, w);
+        let py = p_map_y(ys[i], ymin, ymax, h);
+        if (i > 0) { file_append(filename, " "); }
+        file_append(filename, to_str(px));
+        file_append(filename, ",");
+        file_append(filename, to_str(py));
+    }
+    file_append(filename, "\"/>\n");
+    p_close_svg(filename);
+}
+
+// Scatter plot — one circle per (x, y) point.
+pub fn plot_scatter(filename, xs, ys, title) {
+    if (len(xs) != len(ys)) { throw "plot_scatter: xs/ys length mismatch"; }
+    if (len(xs) == 0)        { throw "plot_scatter: empty data"; }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    let xmin = p_min(xs);
+    let xmax = p_max(xs);
+    let ymin = p_min(ys);
+    let ymax = p_max(ys);
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let px = p_map_x(xs[i], xmin, xmax, w);
+        let py = p_map_y(ys[i], ymin, ymax, h);
+        file_append(filename, "<circle cx=\"");
+        file_append(filename, to_str(px));
+        file_append(filename, "\" cy=\"");
+        file_append(filename, to_str(py));
+        file_append(filename, "\" r=\"3\" fill=\"crimson\"/>\n");
+    }
+    p_close_svg(filename);
+}
+
+// Multi-series line plot with a small legend in the top-right.
+// xss = array of x-series, yss = array of y-series, labels = names.
+pub fn plot_lines(filename, xss, yss, labels, title) {
+    let ns = len(xss);
+    if (ns == 0)                  { throw "plot_lines: no series"; }
+    if (len(yss) != ns)           { throw "plot_lines: yss length"; }
+    if (len(labels) != ns)        { throw "plot_lines: labels length"; }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    // Bounds: union over all series.
+    let xmin = p_min(xss[0]);  let xmax = p_max(xss[0]);
+    let ymin = p_min(yss[0]);  let ymax = p_max(yss[0]);
+    for (let s = 1; s < ns; s = s + 1) {
+        let v1 = p_min(xss[s]); if (v1 < xmin) { xmin = v1; }
+        let v2 = p_max(xss[s]); if (v2 > xmax) { xmax = v2; }
+        let v3 = p_min(yss[s]); if (v3 < ymin) { ymin = v3; }
+        let v4 = p_max(yss[s]); if (v4 > ymax) { ymax = v4; }
+    }
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
+    // One polyline per series, cycling through the palette.
+    let palette = ["steelblue","crimson","forestgreen","darkorange","purple","teal"];
+    for (let s = 0; s < ns; s = s + 1) {
+        let color = palette[s % len(palette)];
+        let xs = xss[s];
+        let ys = yss[s];
+        file_append(filename, "<polyline fill=\"none\" stroke=\"");
+        file_append(filename, color);
+        file_append(filename, "\" stroke-width=\"2\" points=\"");
+        for (let i = 0; i < len(xs); i = i + 1) {
+            if (i > 0) { file_append(filename, " "); }
+            file_append(filename, to_str(p_map_x(xs[i], xmin, xmax, w)));
+            file_append(filename, ",");
+            file_append(filename, to_str(p_map_y(ys[i], ymin, ymax, h)));
+        }
+        file_append(filename, "\"/>\n");
+    }
+    // Legend: top-right inside the plot area.
+    let pad = p_padding();
+    let leg_x = w - pad - 140;
+    let leg_y = pad + 12;
+    file_append(filename, "<rect x=\"");
+    file_append(filename, to_str(leg_x - 8));
+    file_append(filename, "\" y=\"");
+    file_append(filename, to_str(leg_y - 12));
+    file_append(filename, "\" width=\"148\" height=\"");
+    file_append(filename, to_str(ns * 18 + 6));
+    file_append(filename, "\" fill=\"white\" stroke=\"#ccc\"/>\n");
+    for (let s = 0; s < ns; s = s + 1) {
+        let color = palette[s % len(palette)];
+        let yy = leg_y + s * 18;
+        file_append(filename, "<rect x=\"");
+        file_append(filename, to_str(leg_x));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(yy - 8));
+        file_append(filename, "\" width=\"14\" height=\"10\" fill=\"");
+        file_append(filename, color);
+        file_append(filename, "\"/>\n");
+        file_append(filename, "<text x=\"");
+        file_append(filename, to_str(leg_x + 22));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(yy));
+        file_append(filename, "\" font-size=\"12\" fill=\"#222\">");
+        file_append(filename, labels[s]);
+        file_append(filename, "</text>\n");
+    }
+    p_close_svg(filename);
+}
+
+// Vertical bar chart. labels and values must have the same length.
+pub fn plot_bar(filename, labels, values, title) {
+    if (len(labels) != len(values)) { throw "plot_bar: length mismatch"; }
+    if (len(values) == 0)            { throw "plot_bar: empty data"; }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    let pad = p_padding();
+    let n   = len(values);
+    let vmax = p_max(values);
+    let vmin = p_min(values);
+    if (vmin > 0) { vmin = 0; }     // bars usually sit on zero baseline
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    // Y-axis ticks only (x labels are categorical).
+    for (let i = 0; i <= 4; i = i + 1) {
+        let t = i / 4.0;
+        let yv = vmin + t * (vmax - vmin);
+        let yp = h - pad - t * (h - 2 * pad);
+        file_append(filename, "<text x=\"");
+        file_append(filename, to_str(pad - 6));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(yp + 4));
+        file_append(filename, "\" font-size=\"11\" text-anchor=\"end\" fill=\"#444\">");
+        file_append(filename, to_str(yv));
+        file_append(filename, "</text>\n");
+    }
+    // Bars.
+    let slot = (w - 2 * pad) / n;
+    let bar_w = slot * 0.7;
+    let bar_pad = (slot - bar_w) / 2;
+    for (let i = 0; i < n; i = i + 1) {
+        let x = pad + i * slot + bar_pad;
+        let zero_y = p_map_y(0,         vmin, vmax, h);
+        let top_y  = p_map_y(values[i], vmin, vmax, h);
+        let bar_y  = top_y; if (values[i] < 0) { bar_y = zero_y; }
+        let bar_h  = abs(zero_y - top_y);
+        file_append(filename, "<rect x=\"");
+        file_append(filename, to_str(x));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(bar_y));
+        file_append(filename, "\" width=\"");
+        file_append(filename, to_str(bar_w));
+        file_append(filename, "\" height=\"");
+        file_append(filename, to_str(bar_h));
+        file_append(filename, "\" fill=\"steelblue\"/>\n");
+        // Category label below the bar.
+        file_append(filename, "<text x=\"");
+        file_append(filename, to_str(x + bar_w / 2));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(h - pad + 18));
+        file_append(filename, "\" font-size=\"11\" text-anchor=\"middle\" fill=\"#444\">");
+        file_append(filename, labels[i]);
+        file_append(filename, "</text>\n");
+    }
+    p_close_svg(filename);
+}
+
+// Log-Y line plot (Y-axis logarithmic). All y values must be > 0.
+pub fn plot_logy(filename, xs, ys, title) {
+    if (len(xs) != len(ys)) { throw "plot_logy: xs/ys length mismatch"; }
+    if (len(xs) == 0)        { throw "plot_logy: empty data"; }
+    // Transform y -> log10(y); validate positivity.
+    let log_ys = [];
+    for (let i = 0; i < len(ys); i = i + 1) {
+        if (ys[i] <= 0) { throw "plot_logy: y must be positive"; }
+        push(log_ys, log10(ys[i]));
+    }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    let xmin = p_min(xs);
+    let xmax = p_max(xs);
+    let ymin = p_min(log_ys);
+    let ymax = p_max(log_ys);
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    // X-axis labels (linear).
+    let pad = p_padding();
+    for (let i = 0; i <= 4; i = i + 1) {
+        let t = i / 4.0;
+        let xv = xmin + t * (xmax - xmin);
+        let xp = pad + t * (w - 2 * pad);
+        file_append(filename, "<text x=\"");
+        file_append(filename, to_str(xp));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(h - pad + 18));
+        file_append(filename, "\" font-size=\"11\" text-anchor=\"middle\" fill=\"#444\">");
+        file_append(filename, to_str(xv));
+        file_append(filename, "</text>\n");
+    }
+    // Y-axis labels (log scale — show 10^k labels).
+    for (let i = 0; i <= 4; i = i + 1) {
+        let t = i / 4.0;
+        let yv = ymin + t * (ymax - ymin);
+        let yp = h - pad - t * (h - 2 * pad);
+        let actual = pow(10, yv);
+        file_append(filename, "<text x=\"");
+        file_append(filename, to_str(pad - 6));
+        file_append(filename, "\" y=\"");
+        file_append(filename, to_str(yp + 4));
+        file_append(filename, "\" font-size=\"11\" text-anchor=\"end\" fill=\"#444\">");
+        file_append(filename, to_str(actual));
+        file_append(filename, "</text>\n");
+    }
+    // Line.
+    file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
+    for (let i = 0; i < len(xs); i = i + 1) {
+        if (i > 0) { file_append(filename, " "); }
+        file_append(filename, to_str(p_map_x(xs[i],     xmin, xmax, w)));
+        file_append(filename, ",");
+        file_append(filename, to_str(p_map_y(log_ys[i], ymin, ymax, h)));
+    }
+    file_append(filename, "\"/>\n");
+    p_close_svg(filename);
+}
+
+// plot_line with x/y axis labels (drawn beside the axes).
+pub fn plot_line_labeled(filename, xs, ys, title, x_label, y_label) {
+    let w = p_default_width();
+    let h = p_default_height();
+    plot_line(filename, xs, ys, title);
+    // plot_line emits </svg>; we patched the end... actually plot_line
+    // closes the SVG itself, so axis-label additions need to go in
+    // BEFORE the closing tag. Cleanest: re-emit the whole thing here
+    // with the extras inline. For now, do that.
+    // (Rewriting the file as one pass.)
+    let xmin = p_min(xs);
+    let xmax = p_max(xs);
+    let ymin = p_min(ys);
+    let ymax = p_max(ys);
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
+    // X-axis label: centered below the plot.
+    file_append(filename, "<text x=\"");
+    file_append(filename, to_str(w / 2));
+    file_append(filename, "\" y=\"");
+    file_append(filename, to_str(h - 12));
+    file_append(filename, "\" font-size=\"13\" text-anchor=\"middle\" fill=\"#222\">");
+    file_append(filename, x_label);
+    file_append(filename, "</text>\n");
+    // Y-axis label: rotated 90° at the left edge.
+    file_append(filename, "<text x=\"20\" y=\"");
+    file_append(filename, to_str(h / 2));
+    file_append(filename, "\" font-size=\"13\" text-anchor=\"middle\" fill=\"#222\" transform=\"rotate(-90 20,");
+    file_append(filename, to_str(h / 2));
+    file_append(filename, ")\">");
+    file_append(filename, y_label);
+    file_append(filename, "</text>\n");
+    // Polyline.
+    file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
+    for (let i = 0; i < len(xs); i = i + 1) {
+        if (i > 0) { file_append(filename, " "); }
+        file_append(filename, to_str(p_map_x(xs[i], xmin, xmax, w)));
+        file_append(filename, ",");
+        file_append(filename, to_str(p_map_y(ys[i], ymin, ymax, h)));
+    }
+    file_append(filename, "\"/>\n");
+    p_close_svg(filename);
+}
+
+// Two-series overlay (data points + a fitted line). xs is shared.
+pub fn plot_data_with_fit(filename, xs, ys_data, ys_fit, title) {
+    if (len(xs) != len(ys_data)) { throw "plot_data_with_fit: xs/ys_data length mismatch"; }
+    if (len(xs) != len(ys_fit))  { throw "plot_data_with_fit: xs/ys_fit length mismatch"; }
+    if (len(xs) == 0)            { throw "plot_data_with_fit: empty data"; }
+    let w  = p_default_width();
+    let h  = p_default_height();
+    let xmin = p_min(xs);
+    let xmax = p_max(xs);
+    // Bounds union of both y series.
+    let dmin = p_min(ys_data);
+    let dmax = p_max(ys_data);
+    let fmin = p_min(ys_fit);
+    let fmax = p_max(ys_fit);
+    let ymin = dmin; if (fmin < ymin) { ymin = fmin; }
+    let ymax = dmax; if (fmax > ymax) { ymax = fmax; }
+    p_open_svg(filename, w, h, title);
+    p_axes(filename, w, h);
+    p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
+    // Scatter for data points.
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let px = p_map_x(xs[i],     xmin, xmax, w);
+        let py = p_map_y(ys_data[i], ymin, ymax, h);
+        file_append(filename, "<circle cx=\"");
+        file_append(filename, to_str(px));
+        file_append(filename, "\" cy=\"");
+        file_append(filename, to_str(py));
+        file_append(filename, "\" r=\"3\" fill=\"crimson\" fill-opacity=\"0.7\"/>\n");
+    }
+    // Fit line.
+    file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
+    for (let i = 0; i < len(xs); i = i + 1) {
+        let px = p_map_x(xs[i],    xmin, xmax, w);
+        let py = p_map_y(ys_fit[i], ymin, ymax, h);
+        if (i > 0) { file_append(filename, " "); }
+        file_append(filename, to_str(px));
+        file_append(filename, ",");
+        file_append(filename, to_str(py));
+    }
+    file_append(filename, "\"/>\n");
+    p_close_svg(filename);
+}

@@ -1,0 +1,104 @@
+// ode.calc — ordinary differential equation solvers.
+//
+// Scalar form: y' = f(t, y).
+//   The user supplies f as a function of (t, y) returning the
+//   derivative at that point.
+//
+// Vector form: y' = f(t, y) where y is an array.
+//   f takes (t, y) and returns an array of the same length.
+//
+// Both forms return {"ts": [...], "ys": [...]}.
+
+// ===== Scalar RK4 =====
+
+priv fn _rk4_step(f, t, y, h) {
+    let k1 = f(t,         y);
+    let k2 = f(t + h / 2, y + h * k1 / 2);
+    let k3 = f(t + h / 2, y + h * k2 / 2);
+    let k4 = f(t + h,     y + h * k3);
+    return y + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6;
+}
+
+// Fixed-step RK4 from t0 to t_end with n equal steps.
+// Returns {"ts": [t0, t1, ..., t_end], "ys": [y0, y1, ...]}.
+pub fn rk4(f, t0, y0, t_end, n) {
+    if (n < 1) { throw "rk4: need n >= 1"; }
+    let h  = (t_end - t0) / n;
+    let ts = [t0];
+    let ys = [y0];
+    let t = t0;
+    let y = y0;
+    for (let i = 0; i < n; i = i + 1) {
+        y = _rk4_step(f, t, y, h);
+        t = t + h;
+        push(ts, t);
+        push(ys, y);
+    }
+    return {"ts": ts, "ys": ys};
+}
+
+// Euler's method — simpler, less accurate (O(h)). For didactic
+// comparison or when accuracy isn't critical.
+pub fn euler(f, t0, y0, t_end, n) {
+    if (n < 1) { throw "euler: need n >= 1"; }
+    let h  = (t_end - t0) / n;
+    let ts = [t0];
+    let ys = [y0];
+    let t = t0;
+    let y = y0;
+    for (let i = 0; i < n; i = i + 1) {
+        y = y + h * f(t, y);
+        t = t + h;
+        push(ts, t);
+        push(ys, y);
+    }
+    return {"ts": ts, "ys": ys};
+}
+
+// ===== Vector RK4 =====
+
+// Vector helpers (private). Both inputs must be same length.
+priv fn _v_add(a, b) {
+    let out = [];
+    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] + b[i]); }
+    return out;
+}
+priv fn _v_scale(a, s) {
+    let out = [];
+    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] * s); }
+    return out;
+}
+priv fn _v_lincomb4(a, b, c, d, wa, wb, wc, wd) {
+    let out = [];
+    for (let i = 0; i < len(a); i = i + 1) {
+        push(out, wa * a[i] + wb * b[i] + wc * c[i] + wd * d[i]);
+    }
+    return out;
+}
+
+priv fn _rk4_step_v(f, t, y, h) {
+    let k1 = f(t,         y);
+    let k2 = f(t + h / 2, _v_add(y, _v_scale(k1, h / 2)));
+    let k3 = f(t + h / 2, _v_add(y, _v_scale(k2, h / 2)));
+    let k4 = f(t + h,     _v_add(y, _v_scale(k3, h)));
+    // y + h/6 * (k1 + 2 k2 + 2 k3 + k4)
+    let combo = _v_lincomb4(k1, k2, k3, k4, 1, 2, 2, 1);
+    return _v_add(y, _v_scale(combo, h / 6));
+}
+
+// Fixed-step RK4 for a vector ODE.
+pub fn rk4_vec(f, t0, y0, t_end, n) {
+    if (n < 1) { throw "rk4_vec: need n >= 1"; }
+    let h  = (t_end - t0) / n;
+    let ts = [t0];
+    let ys = [y0];
+    let t = t0;
+    let y = y0;
+    for (let i = 0; i < n; i = i + 1) {
+        y = _rk4_step_v(f, t, y, h);
+        t = t + h;
+        push(ts, t);
+        push(ys, y);
+    }
+    return {"ts": ts, "ys": ys};
+}

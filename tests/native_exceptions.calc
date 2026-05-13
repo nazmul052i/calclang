@@ -1,0 +1,86 @@
+// `try { ... } catch (e) { ... }` installs a handler; `throw expr;`
+// transfers control non-locally to the topmost catch, binding the
+// thrown Value to the catch's name. Any function frames between the
+// throw and the catch are unwound — locals in those frames become
+// unreachable (the GC will collect them next cycle).
+
+// ===== Local throw + catch =====
+try {
+    throw "boom";
+} catch (e) {
+    print "caught: " + e;            // caught: boom
+}
+
+// Numeric exception.
+try {
+    throw 42;
+} catch (n) {
+    print "got number: " + n;        // got number: 42
+}
+
+// ===== Cross-function unwind =====
+fn safe_div(a, b) {
+    if (b == 0) {
+        throw "division by zero";
+    }
+    return a / b;
+}
+
+try {
+    print safe_div(10, 2);           // 5
+    print safe_div(7, 0);            // (throws — next line is skipped)
+    print "unreachable";
+} catch (msg) {
+    print "error: " + msg;           // error: division by zero
+}
+
+// ===== Nested try-catch =====
+try {
+    try {
+        throw "inner";
+    } catch (e) {
+        print "inner caught: " + e;  // inner caught: inner
+        throw "rethrown";
+    }
+} catch (e) {
+    print "outer caught: " + e;      // outer caught: rethrown
+}
+
+// ===== Handler stack unwinds correctly across deep calls =====
+fn deep(n) {
+    if (n <= 0) {
+        throw "bottom";
+    }
+    return deep(n - 1);              // (tail-call, but cl_throw still unwinds correctly)
+}
+try {
+    deep(50);
+    print "unreachable";
+} catch (e) {
+    print "deep: " + e;              // deep: bottom
+}
+
+// ===== Throw a complex value =====
+try {
+    throw complex(3, 4);
+} catch (z) {
+    print "got cpx: " + to_str(real(z)) + ", " + to_str(imag(z));
+    // got cpx: 3, 4
+}
+
+// ===== Throw a map =====
+try {
+    throw {"code": 404, "message": "not found"};
+} catch (err) {
+    print err["code"];               // 404
+    print err["message"];            // not found
+}
+
+// ===== Normal exit (no throw) skips catch entirely =====
+try {
+    print "no throw here";           // no throw here
+} catch (e) {
+    print "should not run: " + e;    // (not printed)
+}
+
+print "after all";                   // after all

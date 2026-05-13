@@ -1,0 +1,40 @@
+// JSON round-trip + read from disk + use the data.
+//
+// Build:
+//   make libs
+//   build/calcnat examples/json_demo.calc build/calclib/json.s -o build/json_demo.exe
+
+extern fn json_parse(src: str);
+extern fn json_encode(v): str;
+
+// ===== Encode a CalcLang value =====
+let person = {
+    "name": "Alice",
+    "age": 30,
+    "tags": ["admin", "engineer"],
+    "address": {"city": "NYC", "zip": "10001"},
+    "scores": [98, 87, 92]
+};
+let encoded = json_encode(person);
+print encoded;
+
+// ===== Round-trip =====
+let parsed = json_parse(encoded);
+print parsed["name"];                       // Alice
+print parsed["age"];                        // 30
+print parsed["tags"][0];                    // admin
+print parsed["address"]["city"];            // NYC
+print parsed["scores"][1];                  // 87
+
+// ===== Parse an inline literal =====
+let cfg = json_parse("{\"width\": 800, \"height\": 600, \"vsync\": true, \"name\": \"hello\\nworld\"}");
+print cfg["width"];                         // 800
+print cfg["vsync"];                         // 1   (true -> 1)
+print cfg["name"];                          // hello
+                                            // world  (the embedded \n is decoded)
+
+// ===== Write to a file, read it back =====
+file_write("build/data.json", json_encode([1, 2, 3, {"k": "v"}]));
+let loaded = json_parse(file_read("build/data.json"));
+print loaded;                               // [1, 2, 3, {"k": "v"}]
+print "wrote and re-read build/data.json";

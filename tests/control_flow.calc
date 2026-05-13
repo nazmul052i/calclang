@@ -1,0 +1,35 @@
+// Sum 1..100 (Gauss).
+let i   = 1;
+let sum = 0;
+while (i <= 100) {
+    sum = sum + i;
+    i   = i + 1;
+}
+print sum;                       // 5050
+
+// Nested if/else if/else.
+let n = 15;
+if (n % 15 == 0) {
+    print 1;
+} else if (n % 3 == 0) {
+    print 2;
+} else if (n % 5 == 0) {
+    print 3;
+} else {
+    print 4;
+}                                // 1
+
+// Logical ops + unary minus + comparisons.
+let a = -3;
+let b = 4;
+if (a < 0 && b > 0) { print 10; } else { print 20; }   // 10
+if (!(a == 0)) { print 30; }                            // 30
+if (a > 0 || b > 0) { print 40; }                       // 40
+
+// Block scope: inner `let x` shadows; outer x survives.
+let x = 100;
+{
+    let x = 7;
+    print x;                     // 7
+}
+print x;                         // 100

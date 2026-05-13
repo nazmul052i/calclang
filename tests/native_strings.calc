@@ -1,0 +1,83 @@
+// Strings in the native backend, exercised against the VM. Output
+// from both pipelines must be byte-identical.
+
+// ===== Literals + print =====
+print "hello, world";                    // hello, world
+print "";                                // (blank line)
+print "tab\there";                       // tab\there
+print "with \"quotes\"";                 // with "quotes"
+
+// ===== Concat (all coercion paths) =====
+print "a" + "b";                         // ab
+print "x = " + 5;                        // x = 5
+print 7 + " items";                      // 7 items
+print "neg = " + -3;                     // neg = -3
+print "pi = " + 3.14159;                 // pi = 3.14159
+print "a" + 1 + "b" + 2;                 // a1b2
+
+// ===== Reassignment that changes type =====
+let v = 10;
+print v + 5;                             // 15
+v = "now a string";
+print v + "!";                           // now a string!
+v = 99;
+print v * 2;                             // 198
+
+// ===== Builtins =====
+print len("calclang");                   // 8
+print len("");                           // 0
+print str_at("abcde", 0);                // a
+print str_at("abcde", 4);                // e
+print str_slice("hello world", 6, 11);   // world
+print str_slice("abc", 0, 3);            // abc
+print str_find("hello world", "world");  // 6
+print str_find("hello", "zzz");          // -1
+print str_upper("Hello, World");         // HELLO, WORLD
+print str_lower("Hello, World");         // hello, world
+print str_trim("   hi   ");              // hi
+print str_repeat("ab", 4);               // abababab
+print str_repeat("-", 0);                // (blank)
+print str_starts_with("foobar", "foo");  // 1
+print str_starts_with("foobar", "bar");  // 0
+print str_ends_with("foobar", "bar");    // 1
+print str_ends_with("foobar", "foo");    // 0
+
+// ===== to_str / to_num round trip =====
+print to_str(3.14159);                   // 3.14159
+print to_str(-42);                       // -42
+print to_num("100") + 1;                 // 101
+print to_num("3.5") * 2;                 // 7
+
+// ===== type_of =====
+print type_of(5);                        // num
+print type_of("hi");                     // str
+print type_of(to_str(7));                // str
+
+// ===== Strings as fn args and return values =====
+fn greet(name) {
+    return "hello, " + name;
+}
+print greet("calclang");                 // hello, calclang
+print greet("world");                    // hello, world
+
+fn announce(label, n) {
+    return label + ": " + n;
+}
+print announce("count", 42);             // count: 42
+print announce("ratio", 3.14);           // ratio: 3.14
+
+// ===== Strings flowing through control flow =====
+fn shout_if(c, msg) {
+    if (c) { return str_upper(msg); }
+    return msg;
+}
+print shout_if(1, "hello");              // HELLO
+print shout_if(0, "hello");              // hello
+
+// Build a string in a loop.
+let s = "";
+for (let i = 0; i < 5; i++) {
+    s = s + to_str(i);
+}
+print s;                                 // 01234
+print len(s);                            // 5

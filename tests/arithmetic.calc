@@ -1,0 +1,6 @@
+let a = 10 + 5 * 2;
+let b = (10 + 5) * 2;
+let c = b / 3;
+print a;
+print b;
+print c;

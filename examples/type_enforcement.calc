@@ -1,0 +1,63 @@
+// Function type annotations now turn into compile-time and runtime
+// checks. Missing or `any` annotations stay fully dynamic.
+
+// --- A typed library ---
+
+pub fn add(a: num, b: num): num {
+    return a + b;
+}
+
+pub fn greet(name: str, exclaim: bool): str {
+    if (exclaim) {
+        return "HELLO, " + name + "!";
+    }
+    return "hi " + name;
+}
+
+pub fn first_or(items: arr, fallback: any): any {
+    if (len(items) == 0) { return fallback; }
+    return items[0];
+}
+
+// `fn` is a valid type — accepts a function reference.
+pub fn apply(f: fn, x: num): num {
+    return f(x);
+}
+
+fn square(n: num): num { return n * n; }
+
+// --- Calls that pass enforcement ---
+
+print add(3, 4);                          // 7
+print greet("Calc", 1);                   // HELLO, Calc!
+print greet("Calc", 0);                   // hi Calc
+print first_or([10, 20, 30], "empty");    // 10
+print first_or([],          "empty");     // empty
+print apply(square, 9);                   // 81
+
+// --- Static analysis sees through binops ---
+// `1 + 2` is statically num, so this passes the compile-time check
+// without needing the function-entry TYPECHECK to fire.
+print add(1 + 2, 3 * 4);                  // 15
+
+// --- The following lines would all be compile-time errors. Uncomment
+//     them one at a time to see calcc reject the program before any
+//     bytecode is even produced. ---
+//
+// print add("foo", "bar");
+//   -> semantic error: argument 1 to 'add': expected num, got str
+//
+// print greet([1, 2], 1);
+//   -> semantic error: argument 1 to 'greet': expected str, got arr
+//
+// print first_or("not an array", 0);
+//   -> semantic error: argument 1 to 'first_or': expected arr, got str
+//
+// print add(1);
+//   -> semantic error: function 'add' takes 2 args, got 1
+
+// --- Runtime checks catch what the compiler can't ---
+// If the call passes a value whose type is unknown at compile time
+// (e.g. it comes through a variable or another function), the
+// function's entry-time TYPECHECK catches the mismatch when the
+// program actually runs.

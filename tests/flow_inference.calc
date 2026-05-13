@@ -1,0 +1,83 @@
+// Verify that the flow-sensitive type inference is actually flowing —
+// each program here works precisely because the analysis tracks types
+// per program point, not per variable. With the old "last write wins
+// then widen to any" inference, several of these would have lost
+// their inferred type after an intervening reassignment, but here
+// each use sees the right type.
+
+// ===== Reassignment to a different type then back =====
+let x = 5;
+print x + 10;                  // 15   — x: num at this point
+x = "hi";
+print x + " there";            // hi there  — x: str at this point
+x = 42;
+print x * 2;                   // 84   — x: num again
+
+// ===== Both branches assign the same type =====
+fn pick(c) {
+    let v = 0;
+    if (c) {
+        v = 100;
+    } else {
+        v = 200;
+    }
+    return v + 1;              // v: num at the join, even though set in branches
+}
+print pick(1);                 // 101
+print pick(0);                 // 201
+
+// ===== Branches diverge -> union type at the join =====
+fn either(c) {
+    let v = 0;
+    if (c) { v = 7; }
+    else   { v = "seven"; }
+    // v's type is {num, str} here; no single-type assertion possible.
+    // We can still print it (print accepts anything).
+    return v;
+}
+print either(1);               // 7
+print either(0);               // seven
+
+// ===== Loop variable retains its type across iterations =====
+let total = 0;
+for (let i = 0; i < 5; i++) {
+    total += i;
+}
+print total;                   // 10  — total: num at the print
+
+// ===== Type flows through conditionally-typed reassignment =====
+fn double_anything(x) {
+    if (type_of(x) == "num") {
+        return x * 2;
+    }
+    return x + x;              // str + str -> str concat
+}
+print double_anything(7);      // 14
+print double_anything("ab");   // abab
+
+// ===== Inferred type used at a call site =====
+fn need_num(n: num): num { return n + 1; }
+let y = to_str(99);
+y = 5;                         // reassignment narrows y back to num
+print need_num(y);             // 6  — y: num here, no runtime check needed
+
+// ===== Mutating through a loop body but type stays a singleton =====
+fn count_up(start, n) {
+    let v = start;
+    for (let k = 0; k < n; k++) {
+        v = v + 1;             // v: num all the way through
+    }
+    return v;
+}
+print count_up(10, 5);         // 15
+
+// ===== If a branch DOESN'T set, the post-state allows pre + branch =====
+fn maybe_set(c) {
+    let v = "default";
+    if (c) {
+        v = 999;
+    }
+    return v;                  // v: {num, str} after the if
+}
+print maybe_set(0);            // default
+print maybe_set(1);            // 999
