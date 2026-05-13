@@ -1,0 +1,155 @@
+// Tier-4 NR demo: Ridders' derivatives, distribution sampling,
+// Newton-Raphson on a nonlinear system, Levenberg-Marquardt fit.
+//
+// Build:
+//   make nr_libs
+//   build/calcnat examples/nr_demo4.calc \
+//       build/calclib/nr_diff.s build/calclib/nr_random_dist.s \
+//       build/calclib/nr_newton.s build/calclib/nr_fitnl.s \
+//       build/calclib/nr_lu.s build/calclib/random.s \
+//       -o build/nr_demo4.exe
+
+extern fn dfridr(f: fn, x: num, h: num): map;
+extern fn deriv(f: fn, x: num, h: num): num;
+extern fn gradient(f: fn, x: arr, h: num): arr;
+extern fn jacobian(f: fn, x: arr, h: num): arr;
+
+extern fn Rng(seed: num): map;
+extern fn gamma_sample(rng: map, shape: num, scale: num): num;
+extern fn beta_sample(rng: map, a: num, b: num): num;
+extern fn chi2_sample(rng: map, k: num): num;
+extern fn student_t_sample(rng: map, nu: num): num;
+extern fn cauchy_sample(rng: map, x0: num, gamma: num): num;
+extern fn binomial_sample(rng: map, n: num, p: num): num;
+extern fn triangular_sample(rng: map, a: num, b: num, c: num): num;
+
+extern fn newton_n(F: fn, J: fn, x0: arr, tol: num, max_iter: num): map;
+extern fn newton_num(F: fn, x0: arr, tol: num, max_iter: num): map;
+
+extern fn lm_fit(model: fn, xs: arr, ys: arr, a0: arr, tol: num, max_iter: num): map;
+
+// ===== Ridders' derivatives =====
+print "===== Ridders' polynomial-extrapolation derivatives =====";
+let f = fn(x) { return sin(x); };
+let r = dfridr(f, 1.0, 0.1);
+print "d/dx sin(x) at x=1 -> " + r["deriv"] + "   err est = " + r["err"];
+print "  exact: cos(1) = " + cos(1.0);
+
+// A pathological one for naive forward differences: 1/x near x=0.5.
+let g = fn(x) { return 1 / x; };
+let rg = dfridr(g, 0.5, 0.1);
+print "d/dx 1/x at x=0.5 -> " + rg["deriv"] + "   (exact: -4)";
+
+// Gradient of f(x,y,z) = x^2 + 3 y z at (1, 2, 4) -> (2, 12, 6).
+let h3 = fn(v) { return v[0] * v[0] + 3 * v[1] * v[2]; };
+let grad = gradient(h3, [1, 2, 4], 0.01);
+print "grad of x^2 + 3yz at (1,2,4) =";
+print grad;
+
+// ===== Distribution sampling =====
+print "";
+print "===== Sampling from non-uniform distributions =====";
+let rng = Rng(2026);
+
+let n_draw = 5000;
+let g_sum = 0;  let g_sum2 = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    let v = gamma_sample(rng, 3, 2);   // mean = shape * scale = 6
+    g_sum  = g_sum  + v;
+    g_sum2 = g_sum2 + v * v;
+}
+let g_mean = g_sum / n_draw;
+let g_var  = g_sum2 / n_draw - g_mean * g_mean;
+print "Gamma(shape=3, scale=2)  mean ~ " + g_mean
+    + "  (theory 6),  var ~ " + g_var + " (theory 12)";
+
+let b_sum = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    b_sum = b_sum + beta_sample(rng, 2, 5);
+}
+print "Beta(2, 5)             mean ~ " + (b_sum / n_draw)
+    + "  (theory 2/7 = " + (2.0 / 7.0) + ")";
+
+let c2_sum = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    c2_sum = c2_sum + chi2_sample(rng, 4);
+}
+print "Chi^2(4 dof)           mean ~ " + (c2_sum / n_draw) + "  (theory 4)";
+
+let t_sum = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    t_sum = t_sum + student_t_sample(rng, 10);
+}
+print "Student t(10 dof)      mean ~ " + (t_sum / n_draw) + "  (theory 0)";
+
+let bin_sum = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    bin_sum = bin_sum + binomial_sample(rng, 20, 0.3);
+}
+print "Binomial(n=20, p=0.3)  mean ~ " + (bin_sum / n_draw) + "  (theory 6)";
+
+let tri_sum = 0;
+for (let i = 0; i < n_draw; i = i + 1) {
+    tri_sum = tri_sum + triangular_sample(rng, 0, 1, 0.7);
+}
+print "Triangular(0,1,0.7)    mean ~ " + (tri_sum / n_draw)
+    + "  (theory " + ((0 + 1 + 0.7) / 3) + ")";
+
+// ===== Newton-Raphson on a 2-D nonlinear system =====
+print "";
+print "===== Newton-Raphson for nonlinear systems =====";
+// F = [ x^2 + y^2 - 25, x - y - 1 ]. Roots near (4, 3) and (-3, -4).
+let F = fn(v) {
+    return [v[0] * v[0] + v[1] * v[1] - 25,
+            v[0] - v[1] - 1];
+};
+let J = fn(v) {
+    return [[2 * v[0], 2 * v[1]],
+            [1,        -1]];
+};
+let nr_res = newton_n(F, J, [5, 0], 1e-12, 50);
+print "starting at (5, 0):";
+print "  x* =";  print nr_res["x"];           // expect ~ (4, 3)
+print "  iters = " + nr_res["iters"] + "   converged = " + nr_res["converged"];
+
+// Numerical-Jacobian variant.
+let nr_res2 = newton_num(F, [-1, -5], 1e-10, 50);
+print "starting at (-1, -5), numerical Jacobian:";
+print "  x* =";  print nr_res2["x"];          // expect ~ (-3, -4)
+print "  iters = " + nr_res2["iters"];
+
+// ===== Levenberg-Marquardt nonlinear least-squares =====
+print "";
+print "===== Levenberg-Marquardt fit: y = A * exp(-k x) + C =====";
+
+// Generate synthetic data: y = 2.5 * exp(-0.3 x) + 0.5 + small noise.
+let xs = [];
+let ys = [];
+let rng2 = Rng(7);
+for (let i = 0; i < 40; i = i + 1) {
+    let xi = i * 0.25;                    // 0, 0.25, ... 9.75
+    let yi = 2.5 * exp(-0.3 * xi) + 0.5 + rng2.normal(0, 0.02);
+    push(xs, xi);
+    push(ys, yi);
+}
+
+// Model: y = a0 * exp(-a1 * x) + a2.  Gradients:
+//   dy/da0 = exp(-a1 x)
+//   dy/da1 = -a0 x exp(-a1 x)
+//   dy/da2 = 1
+let model = fn(x, a) {
+    let e = exp(-a[1] * x);
+    return {"y":    a[0] * e + a[2],
+            "dyda": [e, -a[0] * x * e, 1]};
+};
+let fit = lm_fit(model, xs, ys, [1, 1, 0], 1e-10, 200);
+print "fitted a (truth: [2.5, 0.3, 0.5]):";
+print fit["a"];
+print "  final chi^2 = " + fit["chisq"]
+    + "   iters = " + fit["iters"]
+    + "   converged = " + fit["converged"];
+print "parameter variance estimates (covar diagonal):";
+let cv = fit["covar"];
+for (let i = 0; i < 3; i = i + 1) {
+    print "  sigma(a" + i + ") ~ " + sqrt(cv[i][i]);
+}

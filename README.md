@@ -82,6 +82,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/poly.calc`** — orthogonal-polynomial families: Chebyshev T_n, Legendre P_n, Hermite H_n, Laguerre L_n, Bessel J_0/J_1.
 - **`nr/minimize.calc`** — 1-D minimization (golden section, Brent's parabolic method) and Nelder–Mead downhill simplex for N-D.
 - **`nr/sort.calc`** — heapsort (in-place, with optional index-companion permutation) and quickselect / median (O(n) average).
+- **`nr/diff.calc`** — numerical differentiation by Ridders' polynomial extrapolation: scalar `deriv`, multivariate `gradient` / `jacobian`.
+- **`nr/random_dist.calc`** — gamma (Marsaglia–Tsang), chi², beta, Student's t, Cauchy, binomial, geometric, and triangular sampling on top of `Rng`.
+- **`nr/newton.calc`** — Newton-Raphson for nonlinear systems with Armijo line search; analytic or numerical Jacobian.
+- **`nr/fitnl.calc`** — Levenberg-Marquardt nonlinear least squares with parameter covariance estimate.
 
 ## Hello world
 

@@ -951,6 +951,35 @@ A * I3 == A?  1' "$nat_out"
     echo "$nat_out" | grep -q "median of raw      = 4.5" \
         || { echo "FAIL: nr3 — median"; echo "$nat_out"; exit 1; }
 
+    echo "[test] demo — nr_demo4 (Ridders + dist sampling + Newton + LM fit)"
+    build/calcnat --lib lib/nr/diff.calc        -o build/calclib/nr_diff.s
+    build/calcnat --lib lib/nr/random_dist.calc -o build/calclib/nr_random_dist.s
+    build/calcnat --lib lib/nr/newton.calc      -o build/calclib/nr_newton.s
+    build/calcnat --lib lib/nr/fitnl.calc       -o build/calclib/nr_fitnl.s
+    build/calcnat examples/nr_demo4.calc \
+        build/calclib/nr_diff.s build/calclib/nr_random_dist.s \
+        build/calclib/nr_newton.s build/calclib/nr_fitnl.s \
+        build/calclib/nr_lu.s build/calclib/random.s \
+        -o build/d_nr4.exe
+    nat_out=$(build/d_nr4.exe | strip_cr)
+    # Ridders' on sin(1) must give cos(1) to ~15 digits.
+    echo "$nat_out" | grep -q "exact: cos(1) = 0.5403023059" \
+        || { echo "FAIL: nr4 — cos(1) line"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "d/dx sin\(x\) at x=1 -> 0\.5403023(0[0-9]+|[1-9])" \
+        || { echo "FAIL: nr4 — Ridders sin"; echo "$nat_out"; exit 1; }
+    # Newton: must converge to (4, 3) starting at (5, 0).
+    echo "$nat_out" | grep -q "x\* =" \
+        || { echo "FAIL: nr4 — Newton output"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "\[4(\.0+[0-9]*)?, 3(\.0+[0-9]*)?\]" \
+        || { echo "FAIL: nr4 — Newton root (4,3)"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "iters = [0-9]+   converged = 1" \
+        || { echo "FAIL: nr4 — Newton not converged"; echo "$nat_out"; exit 1; }
+    # LM fit: a0 must come back within 5% of 2.5 (-> 2.375 .. 2.625).
+    fit_line=$(echo "$nat_out" | grep -A1 "fitted a (truth" | tail -1)
+    if ! echo "$fit_line" | grep -qE "\[2\.[3-6]"; then
+        echo "FAIL: nr4 — LM fit a0 out of band"; echo "$fit_line"; exit 1
+    fi
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

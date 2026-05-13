@@ -1388,6 +1388,80 @@ extern fn median(arr: arr): num;
 
 NR §8.3 (heapsort) and §8.5 (selection).
 
+#### `lib/nr/diff.calc` — Ridders' numerical differentiation
+
+Centered differences have a competing pair of errors: truncation O(h²) and roundoff O(eps/h). Ridders' method starts with a generous h, repeatedly halves it, and Neville-extrapolates up the resulting table — driving the truncation error well below the roundoff floor. NR §5.7.
+
+```calc
+extern fn dfridr(f: fn, x: num, h: num): map;
+extern fn deriv(f: fn, x: num, h: num): num;     // just the derivative
+extern fn gradient(f: fn, x: arr, h: num): arr;  // scalar f, vector x
+extern fn jacobian(f: fn, x: arr, h: num): arr;  // vector f, vector x
+
+let r = dfridr(fn(x) { return sin(x); }, 1.0, 0.1);
+print r["deriv"];                                 // 0.5403023059  = cos(1)
+print r["err"];                                   // ~1e-15
+```
+
+`gradient` and `jacobian` build on `dfridr` to handle the multivariate cases — useful with `newton_num` below or any other gradient-driven solver.
+
+#### `lib/nr/random_dist.calc` — extra distributions
+
+Builds on `lib/random.calc`'s `Rng` (already provides uniform / Box-Muller normal / exponential / Poisson). Each function here takes an `Rng` instance and produces one sample from the named distribution. NR §7.3.
+
+```calc
+extern fn gamma_sample(rng: map, shape: num, scale: num): num;
+extern fn chi2_sample(rng: map, k: num): num;
+extern fn beta_sample(rng: map, a: num, b: num): num;
+extern fn student_t_sample(rng: map, nu: num): num;
+extern fn cauchy_sample(rng: map, x0: num, gamma: num): num;
+extern fn binomial_sample(rng: map, n: num, p: num): num;
+extern fn geometric_sample(rng: map, p: num): num;
+extern fn triangular_sample(rng: map, a: num, b: num, c: num): num;
+```
+
+`gamma_sample` uses the Marsaglia–Tsang 2000 squeeze method (with the U^(1/shape) boost for shape < 1). chi² / beta / Student's t are derived from it.
+
+#### `lib/nr/newton.calc` — Newton-Raphson for nonlinear systems
+
+Solves F(x) = 0 for F: Rⁿ → Rⁿ. Each step solves J·dx = -F via the LU factorization from `lib/nr/lu.calc`. An Armijo back-tracking line search widens the basin of convergence (the full Newton step is halved until ||F|| actually decreases). NR §9.6–9.7.
+
+```calc
+extern fn newton_n(F: fn, J: fn, x0: arr, tol: num, max_iter: num): map;
+extern fn newton_num(F: fn, x0: arr, tol: num, max_iter: num): map;
+
+// Intersection of a circle and a line:
+//   x^2 + y^2 = 25,   x - y = 1
+let F = fn(v) {
+    return [v[0]*v[0] + v[1]*v[1] - 25, v[0] - v[1] - 1];
+};
+let J = fn(v) { return [[2*v[0], 2*v[1]], [1, -1]]; };
+let r = newton_n(F, J, [5, 0], 1e-12, 50);
+print r["x"];     // [4, 3]
+```
+
+`newton_num` computes the Jacobian numerically (Ridders') — convenient when an analytic Jacobian is hard, at the cost of n + 1 extra function calls per step.
+
+#### `lib/nr/fitnl.calc` — Levenberg-Marquardt nonlinear least squares
+
+Fits y_i ≈ model(x_i; a) by minimizing Σ (y_i - model)². At each step builds the curvature matrix αⱼₖ = Σ (∂model/∂aⱼ)(∂model/∂aₖ) with a Marquardt diagonal boost (1+λ), solves α·δa = β = Σ rᵢ ∂model/∂aⱼ for a step, and adjusts λ depending on whether χ² decreased. Returns the fitted parameters, final χ², and the covariance matrix C = α⁻¹ (with λ=0) for parameter uncertainties. NR §15.5.
+
+```calc
+extern fn lm_fit(model: fn, xs: arr, ys: arr, a0: arr, tol: num, max_iter: num): map;
+
+// model returns BOTH the prediction and the gradient wrt parameters.
+let model = fn(x, a) {
+    let e = exp(-a[1] * x);
+    return {"y": a[0]*e + a[2], "dyda": [e, -a[0]*x*e, 1]};
+};
+let fit = lm_fit(model, xs, ys, [1, 1, 0], 1e-10, 200);
+print fit["a"];          // recovered parameters
+print fit["chisq"];      // residual sum of squares
+print fit["covar"];      // parameter covariance matrix
+```
+
+The `dyda` array is the gradient with respect to a — supplying it directly (rather than finite-differencing) is faster and more accurate.
+
 #### Building the NR libraries
 
 ```bash
@@ -1395,6 +1469,7 @@ make nr_libs          # compile lib/nr/*.calc -> build/calclib/nr_*.s
 make nr_demo          # tier 1: Brent + spline + special + Jacobi
 make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
 make nr_demo3         # tier 3: minimization + sort/select
+make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
 ```
 
 ### Building demos
@@ -1416,6 +1491,7 @@ make fft_demo                            # FFT spectrum of a synthetic signal
 make nr_demo                             # Brent + spline + special fns + Jacobi
 make nr_demo2                            # LU + Romberg + RK45 + polynomial families
 make nr_demo3                            # 1-D / N-D minimization + sort/select
+make nr_demo4                            # Ridders' + distributions + Newton + LM fit
 make demos                               # all of the above
 ```
 

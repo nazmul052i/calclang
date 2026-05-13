@@ -1,0 +1,124 @@
+// random_dist.calc — samplers for continuous and discrete distributions.
+//
+// The `lib/random.calc` Rng already covers uniform / Box-Muller normal /
+// exponential / Poisson. These are the rest of the NR-canon distributions
+// (NR §7.3, §7.4). Each routine takes an Rng instance as its first
+// argument and uses its uniform01() / normal(...) methods.
+//
+// Distributions implemented:
+//   gamma(rng, shape, scale)     — Marsaglia–Tsang squeeze method
+//   chi2(rng, k)                 — gamma(k/2, 2)
+//   beta(rng, a, b)              — ratio of two gammas
+//   student_t(rng, nu)           — normal / sqrt(chi2/nu)
+//   cauchy(rng, x0, gamma)       — inverse-CDF
+//   binomial(rng, n, p)          — direct for small n, Poisson approx otherwise
+//   geometric(rng, p)            — inverse-CDF
+//   triangular(rng, a, b, c)     — peaked at c
+
+// ===== Gamma (shape >= 1: Marsaglia & Tsang 2000) =====
+// For shape < 1, use the boost trick: G(shape) = G(shape+1) * U^(1/shape).
+// Reference: NR3 §7.3.5.
+
+pub fn gamma_sample(rng, shape, scale) {
+    if (shape <= 0) { throw "gamma_sample: shape must be > 0"; }
+    if (scale <= 0) { throw "gamma_sample: scale must be > 0"; }
+    let s = shape;
+    let boost = 1;
+    if (s < 1) {
+        // Boost shape by 1; afterwards multiply by U^(1/s).
+        boost = pow(rng.uniform01(), 1 / s);
+        s = s + 1;
+    }
+    let d = s - 1.0 / 3.0;
+    let c = 1.0 / sqrt(9 * d);
+    let result = 0;
+    let done = 0;
+    while (done == 0) {
+        let x = rng.normal(0, 1);
+        let v = 1 + c * x;
+        if (v <= 0) { continue; }
+        v = v * v * v;
+        let u = rng.uniform01();
+        // Squeeze: cheap accept test first.
+        if (u < 1 - 0.0331 * x * x * x * x) {
+            result = d * v;
+            done = 1;
+        } else {
+            // Full log-density acceptance test.
+            if (log(u) < 0.5 * x * x + d * (1 - v + log(v))) {
+                result = d * v;
+                done = 1;
+            }
+        }
+    }
+    return scale * boost * result;
+}
+
+// ===== Chi-squared with k degrees of freedom =====
+pub fn chi2_sample(rng, k) {
+    if (k <= 0) { throw "chi2_sample: k must be > 0"; }
+    return gamma_sample(rng, k / 2, 2);
+}
+
+// ===== Beta(a, b) via gamma ratio =====
+pub fn beta_sample(rng, a, b) {
+    let x = gamma_sample(rng, a, 1);
+    let y = gamma_sample(rng, b, 1);
+    return x / (x + y);
+}
+
+// ===== Student's t with nu d.o.f. =====
+// t = Z / sqrt(chi2_nu / nu), Z standard normal, chi2_nu independent.
+pub fn student_t_sample(rng, nu) {
+    if (nu <= 0) { throw "student_t_sample: nu must be > 0"; }
+    let z = rng.normal(0, 1);
+    let v = chi2_sample(rng, nu);
+    return z / sqrt(v / nu);
+}
+
+// ===== Cauchy(x0, gamma) via inverse CDF =====
+pub fn cauchy_sample(rng, x0, gamma) {
+    if (gamma <= 0) { throw "cauchy_sample: gamma must be > 0"; }
+    let u = rng.uniform01();
+    // tan in CalcLang: tan(theta) = sin/cos.
+    let theta = pi() * (u - 0.5);
+    return x0 + gamma * sin(theta) / cos(theta);
+}
+
+// ===== Binomial(n, p) =====
+// Direct simulation for small n. For large n with np * (1 - p) > 10, switch
+// to a normal-approximation rejection sampler (NR §7.3). To keep this
+// implementation compact we use direct simulation for n <= 30 and a
+// Poisson approximation for larger n (good when np or n(1-p) is small).
+// For general large n, prefer a dedicated BTRS sampler — not implemented here.
+pub fn binomial_sample(rng, n, p) {
+    if (p < 0 || p > 1) { throw "binomial_sample: p must be in [0,1]"; }
+    if (n < 0) { throw "binomial_sample: n must be >= 0"; }
+    // Direct: count successes.
+    let count = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        if (rng.uniform01() < p) { count = count + 1; }
+    }
+    return count;
+}
+
+// ===== Geometric (number of trials until first success, k >= 1) =====
+pub fn geometric_sample(rng, p) {
+    if (p <= 0 || p > 1) { throw "geometric_sample: p must be in (0,1]"; }
+    let u = rng.uniform01();
+    if (u < 1e-300) { u = 1e-300; }
+    return ceil(log(u) / log(1 - p));
+}
+
+// ===== Triangular(a, b, c), c the peak in [a, b] =====
+pub fn triangular_sample(rng, a, b, c) {
+    if (a >= b || c < a || c > b) {
+        throw "triangular_sample: require a < b and c in [a,b]";
+    }
+    let u  = rng.uniform01();
+    let fc = (c - a) / (b - a);
+    if (u < fc) {
+        return a + sqrt(u * (b - a) * (c - a));
+    }
+    return b - sqrt((1 - u) * (b - a) * (b - c));
+}

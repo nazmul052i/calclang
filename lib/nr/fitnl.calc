@@ -1,0 +1,162 @@
+// fitnl.calc — Levenberg-Marquardt nonlinear least-squares fit.
+//
+// Fits y_i ≈ model(x_i; a) by minimizing chi^2 = sum_i (y_i - model)^2.
+// At each step, build the curvature matrix (J^T J + lambda diag(J^T J))
+// and the gradient J^T r, solve for a step, accept it if chi^2
+// decreases, otherwise shrink the step by inflating lambda.
+//
+// The model is a callable that returns BOTH the model value and the
+// gradient with respect to the parameters:
+//   model(x_i, a) -> {"y": y_pred, "dyda": [dy/da_0, dy/da_1, ...]}
+//
+// This avoids a finite-difference Jacobian and matches NR §15.5's API.
+// (A finite-diff variant could wrap dfridr from diff.calc — left for
+// the caller if they want it.)
+//
+// Reference: Numerical Recipes §15.5, Marquardt (1963).
+//
+// Returns:
+//   {"a":        fitted parameters,
+//    "chisq":    final sum of squared residuals,
+//    "covar":    estimated covariance matrix of the parameters,
+//    "iters":    iterations used,
+//    "converged":0 or 1}
+//
+// Depends on lu_decompose / lu_solve from lib/nr/lu.calc.
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+
+priv fn _mat_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+priv fn _vec_copy(v) {
+    let out = [];
+    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    return out;
+}
+
+// Build alpha = J^T J (with diagonal scaled by 1+lambda) and beta = J^T r
+// at the current parameters, where r_i = y_i - model_i and J_ij = dmodel_i/da_j.
+// Returns {"alpha": ..., "beta": ..., "chisq": ...}.
+priv fn _mrqcof(model, xs, ys, a, lambda) {
+    let n = len(xs);
+    let m = len(a);
+    let alpha = _mat_zero(m, m);
+    let beta  = [];
+    for (let j = 0; j < m; j = j + 1) { push(beta, 0); }
+    let chisq = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        let pred = model(xs[i], a);
+        let yh   = pred["y"];
+        let dyda = pred["dyda"];
+        let r    = ys[i] - yh;
+        chisq    = chisq + r * r;
+        for (let j = 0; j < m; j = j + 1) {
+            let wt = dyda[j];
+            for (let k = 0; k <= j; k = k + 1) {
+                alpha[j][k] = alpha[j][k] + wt * dyda[k];
+            }
+            beta[j] = beta[j] + r * wt;
+        }
+    }
+    // Symmetrize and apply lambda boost to the diagonal.
+    for (let j = 0; j < m; j = j + 1) {
+        for (let k = j + 1; k < m; k = k + 1) {
+            alpha[j][k] = alpha[k][j];
+        }
+        alpha[j][j] = alpha[j][j] * (1 + lambda);
+    }
+    return {"alpha": alpha, "beta": beta, "chisq": chisq};
+}
+
+// Inverse via LU solve column by column. Used to extract the covariance
+// matrix at the end (the *unscaled* alpha matrix with lambda=0 inverted).
+priv fn _mat_inverse(A) {
+    let n = len(A);
+    let lu = lu_decompose(A);
+    let inv = _mat_zero(n, n);
+    for (let j = 0; j < n; j = j + 1) {
+        let e = [];
+        for (let i = 0; i < n; i = i + 1) {
+            if (i == j) { push(e, 1); } else { push(e, 0); }
+        }
+        let col = lu_solve(lu, e);
+        for (let i = 0; i < n; i = i + 1) { inv[i][j] = col[i]; }
+    }
+    return inv;
+}
+
+pub fn lm_fit(model, xs, ys, a0, tol, max_iter) {
+    let a = _vec_copy(a0);
+    let lambda = 0.001;
+    let state = _mrqcof(model, xs, ys, a, lambda);
+    let chisq_old = state["chisq"];
+    let iter = 0;
+    let converged = 0;
+    while (iter < max_iter) {
+        iter = iter + 1;
+        let alpha = state["alpha"];
+        let beta  = state["beta"];
+        // Solve alpha . da = beta.
+        let lu = 0;
+        let try_da = 0;
+        let solve_ok = 0;
+        // Wrap in a tiny "try the solve" — LU will throw on a singular
+        // matrix, which the caller will see if it happens repeatedly.
+        try {
+            lu = lu_decompose(alpha);
+            try_da = lu_solve(lu, beta);
+            solve_ok = 1;
+        } catch (e) {
+            // Singular — boost lambda and try again next iteration.
+            lambda = lambda * 10;
+            state = _mrqcof(model, xs, ys, a, lambda);
+        }
+        if (solve_ok == 1) {
+            // Tentatively update.
+            let a_new = [];
+            for (let j = 0; j < len(a); j = j + 1) {
+                push(a_new, a[j] + try_da[j]);
+            }
+            let new_state = _mrqcof(model, xs, ys, a_new, lambda);
+            let chisq_new = new_state["chisq"];
+            if (chisq_new < chisq_old) {
+                // Accept. Pull lambda toward 0 (more Gauss-Newton, less
+                // gradient descent).
+                lambda = lambda / 10;
+                let rel = abs(chisq_old - chisq_new);
+                if (chisq_old > 0) { rel = rel / chisq_old; }
+                a = a_new;
+                state = new_state;
+                chisq_old = chisq_new;
+                if (rel < tol) { converged = 1; iter = max_iter; }
+            } else {
+                // Reject. Lean harder on the diagonal.
+                lambda = lambda * 10;
+                state = _mrqcof(model, xs, ys, a, lambda);
+            }
+        }
+    }
+    // Covariance estimate: invert alpha at lambda=0. If singular, leave
+    // a zero matrix.
+    let cov_state = _mrqcof(model, xs, ys, a, 0);
+    let covar = _mat_zero(len(a), len(a));
+    try {
+        covar = _mat_inverse(cov_state["alpha"]);
+    } catch (e) { }
+    return {
+        "a":         a,
+        "chisq":     chisq_old,
+        "covar":     covar,
+        "iters":     iter,
+        "converged": converged
+    };
+}

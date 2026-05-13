@@ -1,0 +1,124 @@
+// diff.calc — numerical differentiation by Ridders' polynomial extrapolation.
+//
+// Centered differences (f(x+h) - f(x-h)) / (2h) have truncation error O(h^2)
+// and roundoff error O(eps / h). The sweet spot moves with h, and a single
+// fixed h gives ~7 digits at best. Ridders' method (NR §5.7) starts with a
+// generous h, halves it repeatedly, and applies Neville-style extrapolation
+// to the resulting table — the higher-order Richardson cancellations push
+// the truncation error well below roundoff. Returns the best estimate along
+// with the corresponding error indicator.
+//
+// API:
+//   dfridr(f, x, h)
+//     -> {"deriv": df, "err": estimated_error}
+//
+// h is the initial step; pick it large rather than small (NR's advice).
+// For poorly-scaled problems, h ~ 0.01 * |x| is a reasonable default.
+
+pub fn dfridr(f, x, h) {
+    if (h == 0) { throw "dfridr: initial h must be nonzero"; }
+    let CON   = 1.4;            // step shrinkage per row
+    let CON2  = CON * CON;
+    let BIG   = 1e30;
+    let NTAB  = 10;             // table size; ~7-10 is plenty
+    let SAFE  = 2;              // stop if error grows by SAFE
+
+    // Allocate an NTAB x NTAB Neville table.
+    let a = [];
+    for (let i = 0; i < NTAB; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < NTAB; j = j + 1) { push(row, 0); }
+        push(a, row);
+    }
+    let hh = h;
+    a[0][0] = (f(x + hh) - f(x - hh)) / (2 * hh);
+    let err = BIG;
+    let ans = a[0][0];
+
+    for (let i = 1; i < NTAB; i = i + 1) {
+        hh = hh / CON;
+        a[0][i] = (f(x + hh) - f(x - hh)) / (2 * hh);
+        let fac = CON2;
+        // Build the i-th column by extrapolating up the rows.
+        for (let j = 1; j <= i; j = j + 1) {
+            a[j][i] = (a[j-1][i] * fac - a[j-1][i-1]) / (fac - 1);
+            fac = fac * CON2;
+            let errt = abs(a[j][i] - a[j-1][i]);
+            let errb = abs(a[j][i] - a[j-1][i-1]);
+            let e = errt;  if (errb > e) { e = errb; }
+            if (e <= err) {
+                err = e;
+                ans = a[j][i];
+            }
+        }
+        // If the highest-order error blew up by SAFE, stop — we've
+        // crossed the roundoff floor.
+        let diff = abs(a[i][i] - a[i-1][i-1]);
+        if (diff >= SAFE * err) {
+            return {"deriv": ans, "err": err};
+        }
+    }
+    return {"deriv": ans, "err": err};
+}
+
+// Convenience: just the derivative.
+pub fn deriv(f, x, h) {
+    let r = dfridr(f, x, h);
+    return r["deriv"];
+}
+
+// Numerical gradient of a scalar function of an n-vector. Returns an
+// n-length array of partials. h is per-component initial step.
+pub fn gradient(f, x, h) {
+    let n = len(x);
+    let g = [];
+    for (let i = 0; i < n; i = i + 1) {
+        // Build a one-variable section: vary x[i], hold the rest fixed.
+        let fi = fn(t) {
+            let xc = [];
+            for (let k = 0; k < n; k = k + 1) { push(xc, x[k]); }
+            xc[i] = t;
+            return f(xc);
+        };
+        push(g, deriv(fi, x[i], h));
+    }
+    return g;
+}
+
+// Numerical Jacobian of a vector function f: R^n -> R^m. Returns m x n
+// matrix J where J[i][j] = df_i/dx_j.
+pub fn jacobian(f, x, h) {
+    let n = len(x);
+    // Probe once to learn m.
+    let f0 = f(x);
+    let m = len(f0);
+    // Build column by column.
+    let cols = [];
+    for (let j = 0; j < n; j = j + 1) {
+        let fj = fn(t) {
+            let xc = [];
+            for (let k = 0; k < n; k = k + 1) { push(xc, x[k]); }
+            xc[j] = t;
+            return f(xc);
+        };
+        // Want df/dx_j at x[j] for each output component. Reuse dfridr by
+        // selecting one component at a time.
+        let col = [];
+        for (let i = 0; i < m; i = i + 1) {
+            let fij = fn(t) {
+                let v = fj(t);
+                return v[i];
+            };
+            push(col, deriv(fij, x[j], h));
+        }
+        push(cols, col);
+    }
+    // Assemble m x n from columns.
+    let J = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < n; j = j + 1) { push(row, cols[j][i]); }
+        push(J, row);
+    }
+    return J;
+}

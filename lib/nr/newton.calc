@@ -1,0 +1,86 @@
+// newton.calc — Newton-Raphson for systems of nonlinear equations.
+//
+// Solves F(x) = 0 where F : R^n -> R^n. At each step we form the Jacobian
+// J = dF/dx, solve J dx = -F for dx, and update x <- x + dx. Quadratic
+// convergence near the root; can diverge if started far away.
+//
+// Two flavors:
+//   newton_n     — caller supplies F and J (the analytic Jacobian).
+//   newton_num   — same but J is computed numerically by Ridders'.
+//
+// Both use a back-tracking line search to widen the basin of convergence:
+// if a full Newton step would *increase* ||F||, halve the step until it
+// no longer does (a simple form of Armijo, NR §9.7).
+//
+// Reference: Numerical Recipes §9.6, §9.7.
+//
+// Depends on lu_decompose / lu_solve from lib/nr/lu.calc and (for the
+// _num variant) jacobian() from lib/nr/diff.calc.
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+extern fn jacobian(f: fn, x: arr, h: num): arr;
+
+priv fn _norm2(v) {
+    let s = 0;
+    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    return sqrt(s);
+}
+
+priv fn _neg(v) {
+    let out = [];
+    for (let i = 0; i < len(v); i = i + 1) { push(out, -v[i]); }
+    return out;
+}
+
+priv fn _add_scaled(x, alpha, dx) {
+    let out = [];
+    for (let i = 0; i < len(x); i = i + 1) { push(out, x[i] + alpha * dx[i]); }
+    return out;
+}
+
+// Caller-supplied Jacobian. Inputs:
+//   F        : fn(arr) -> arr  (residual)
+//   J        : fn(arr) -> arr  (Jacobian as n x n matrix)
+//   x0       : initial guess
+//   tol      : convergence on ||F||
+//   max_iter : iteration cap
+// Returns {"x": x, "iters": k, "converged": 0|1}.
+pub fn newton_n(F, J, x0, tol, max_iter) {
+    let x = [];
+    for (let i = 0; i < len(x0); i = i + 1) { push(x, x0[i]); }
+    let fx = F(x);
+    let f_norm = _norm2(fx);
+    for (let k = 0; k < max_iter; k = k + 1) {
+        if (f_norm < tol) {
+            return {"x": x, "iters": k, "converged": 1};
+        }
+        let jac = J(x);
+        let lu  = lu_decompose(jac);
+        let dx  = lu_solve(lu, _neg(fx));
+        // Armijo back-tracking.
+        let alpha = 1;
+        let xn    = _add_scaled(x, alpha, dx);
+        let fn_   = F(xn);
+        let nrm   = _norm2(fn_);
+        let tries = 0;
+        while (nrm > f_norm && tries < 20) {
+            alpha = alpha / 2;
+            xn  = _add_scaled(x, alpha, dx);
+            fn_ = F(xn);
+            nrm = _norm2(fn_);
+            tries = tries + 1;
+        }
+        x      = xn;
+        fx     = fn_;
+        f_norm = nrm;
+    }
+    return {"x": x, "iters": max_iter, "converged": 0};
+}
+
+// Same, but the Jacobian is computed numerically with Ridders' method.
+pub fn newton_num(F, x0, tol, max_iter) {
+    let h_init = 0.01;
+    let Jnum = fn(x) { return jacobian(F, x, h_init); };
+    return newton_n(F, Jnum, x0, tol, max_iter);
+}
