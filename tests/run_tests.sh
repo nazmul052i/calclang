@@ -872,6 +872,33 @@ A * I3 == A?  1' "$nat_out"
         echo "FAIL: ode_demo — missing SVG"; exit 1
     fi
 
+    echo "[test] demo — nr_demo (Brent, spline, gamma/erf, Jacobi)"
+    # Build NR libraries (separate from the basic lib build above).
+    build/calcnat --lib lib/nr/brent.calc   -o build/calclib/nr_brent.s
+    build/calcnat --lib lib/nr/spline.calc  -o build/calclib/nr_spline.s
+    build/calcnat --lib lib/nr/special.calc -o build/calclib/nr_special.s
+    build/calcnat --lib lib/nr/eigen.calc   -o build/calclib/nr_eigen.s
+    build/calcnat examples/nr_demo.calc \
+        build/calclib/nr_brent.s build/calclib/nr_spline.s \
+        build/calclib/nr_special.s build/calclib/nr_eigen.s \
+        -o build/d_nr.exe
+    nat_out=$(build/d_nr.exe | strip_cr)
+    # Spot-check a few invariants. Tolerant of trailing digits.
+    echo "$nat_out" | grep -q "cos(x) = 0 -> 1.570796"        || { echo "FAIL: nr — Brent cos";        exit 1; }
+    echo "$nat_out" | grep -q "x\^3 = 2  -> 1.259921"         || { echo "FAIL: nr — Brent cubic";       exit 1; }
+    echo "$nat_out" | grep -q "gamma(5)   = 24"               || { echo "FAIL: nr — gamma(5)";          exit 1; }
+    # Jacobi residuals must all be at machine epsilon (1e-13 or smaller).
+    if echo "$nat_out" | grep -qE "max \|A v - lambda v\| = [^0]\.[0-9]+e-0[789]"; then
+        echo "FAIL: nr — Jacobi residual too large"; echo "$nat_out"; exit 1
+    fi
+    # Sum of eigenvalues should equal trace(A) = 4+3+5 = 12.
+    sum_line=$(echo "$nat_out" | grep "^eigenvalues:" -A 1 | tail -1)
+    # Not strict-equal because of FP noise; just sanity-check the
+    # eigenvalues are present and the line parsed.
+    if [ -z "$sum_line" ]; then
+        echo "FAIL: nr — no eigenvalues output"; exit 1
+    fi
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

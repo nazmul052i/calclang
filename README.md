@@ -70,6 +70,13 @@ Language features:
 - **`ode.calc`** — fourth-order Runge-Kutta for scalar and vector ODEs (plus Euler for comparison).
 - **`fft.calc`** — Cooley-Tukey radix-2 FFT using CalcLang's first-class complex numbers.
 
+Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), **Numerical-Recipes-style algorithms**:
+
+- **`nr/brent.calc`** — Brent's root finder (robust bracketed method with inverse-quadratic interpolation).
+- **`nr/spline.calc`** — natural cubic spline interpolation (two-step `setup`/`eval` interface, NR style).
+- **`nr/special.calc`** — gamma / lgamma / beta / erf / erfc via Lanczos + Abramowitz rational Chebyshev.
+- **`nr/eigen.calc`** — Jacobi eigenvalue decomposition for real symmetric matrices (eigenvalues + eigenvectors).
+
 ## Hello world
 
 ```calc

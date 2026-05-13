@@ -1,0 +1,86 @@
+// brent.calc — Brent's method root finder.
+//
+// A bracketed root finder that combines bisection's reliability with
+// secant / inverse-quadratic interpolation's speed. Always converges
+// (the bracket only shrinks) and usually does so superlinearly.
+//
+// Algorithm: Numerical Recipes 9.3, originally R. P. Brent (1973).
+//
+// Caller must bracket the root: f(a) and f(b) must have opposite signs.
+// On success returns x with |f(x)| or bracket width below tol.
+// Caps at max_iter iterations (default 100 is plenty for double).
+
+pub fn brent_root(f, a_in, b_in, tol, max_iter) {
+    let a = a_in;
+    let b = b_in;
+    let fa = f(a);
+    let fb = f(b);
+    if (fa * fb > 0) {
+        throw "brent_root: f(a) and f(b) must straddle zero";
+    }
+    // Ensure b is the better estimate (|f(b)| <= |f(a)|).
+    if (abs(fa) < abs(fb)) {
+        let t = a; a = b; b = t;
+        let ft = fa; fa = fb; fb = ft;
+    }
+    let c  = a;
+    let fc = fa;
+    let mflag = 1;
+    let d = 0;        // unused on first iteration
+
+    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+        if (abs(fb) < tol) { return b; }
+        if (b - a == 0)     { return b; }
+
+        let s = 0;
+        if (fa != fc && fb != fc) {
+            // Inverse quadratic interpolation.
+            let term_a = a * fb * fc / ((fa - fb) * (fa - fc));
+            let term_b = b * fa * fc / ((fb - fa) * (fb - fc));
+            let term_c = c * fa * fb / ((fc - fa) * (fc - fb));
+            s = term_a + term_b + term_c;
+        } else {
+            // Secant.
+            s = b - fb * (b - a) / (fb - fa);
+        }
+
+        // Decide whether to accept s or fall back to bisection.
+        // The classic five-condition Brent test:
+        let cond1_lo = (3 * a + b) / 4;
+        let cond1_hi = b;
+        if (cond1_lo > cond1_hi) { let t = cond1_lo; cond1_lo = cond1_hi; cond1_hi = t; }
+        let in_band = (s >= cond1_lo) && (s <= cond1_hi);
+        let bad =
+            !in_band
+         || (mflag    && abs(s - b) >= abs(b - c) / 2)
+         || (!mflag   && abs(s - b) >= abs(c - d) / 2)
+         || (mflag    && abs(b - c) < tol)
+         || (!mflag   && abs(c - d) < tol);
+
+        if (bad) {
+            // Bisection step.
+            s = (a + b) / 2;
+            mflag = 1;
+        } else {
+            mflag = 0;
+        }
+
+        let fs = f(s);
+        d  = c;     // store previous c for next iteration's test
+        c  = b;
+        fc = fb;
+        if (fa * fs < 0) {
+            b  = s;
+            fb = fs;
+        } else {
+            a  = s;
+            fa = fs;
+        }
+        // Re-order so b is the better estimate.
+        if (abs(fa) < abs(fb)) {
+            let t = a; a = b; b = t;
+            let ft = fa; fa = fb; fb = ft;
+        }
+    }
+    throw "brent_root: didn't converge within max_iter iterations";
+}

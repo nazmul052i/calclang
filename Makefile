@@ -63,6 +63,14 @@ libs: all
 	$(BUILD)/calcnat --lib lib/ode.calc     -o $(CALCLIB)/ode.s
 	$(BUILD)/calcnat --lib lib/fft.calc     -o $(CALCLIB)/fft.s
 
+# Numerical-Recipes-style algorithms (branch `numerical-library`).
+nr_libs: all
+	mkdir -p $(CALCLIB)
+	$(BUILD)/calcnat --lib lib/nr/brent.calc   -o $(CALCLIB)/nr_brent.s
+	$(BUILD)/calcnat --lib lib/nr/spline.calc  -o $(CALCLIB)/nr_spline.s
+	$(BUILD)/calcnat --lib lib/nr/special.calc -o $(CALCLIB)/nr_special.s
+	$(BUILD)/calcnat --lib lib/nr/eigen.calc   -o $(CALCLIB)/nr_eigen.s
+
 sine_plot: libs
 	$(BUILD)/calcnat examples/sine_plot.calc $(CALCLIB)/plot.s -o $(BUILD)/sine_plot
 	$(BUILD)/sine_plot
@@ -103,8 +111,14 @@ fft_demo: libs
 	$(BUILD)/calcnat examples/fft_demo.calc $(CALCLIB)/fft.s $(CALCLIB)/random.s $(CALCLIB)/plot.s -o $(BUILD)/fft_demo
 	$(BUILD)/fft_demo
 
+nr_demo: nr_libs
+	$(BUILD)/calcnat examples/nr_demo.calc \
+	    $(CALCLIB)/nr_brent.s $(CALCLIB)/nr_spline.s \
+	    $(CALCLIB)/nr_special.s $(CALCLIB)/nr_eigen.s -o $(BUILD)/nr_demo
+	$(BUILD)/nr_demo
+
 demos: sine_plot regression linsys numerical monte_carlo csv_demo \
-       multi_plot json_demo ode_demo fft_demo
+       multi_plot json_demo ode_demo fft_demo nr_demo
 
 test: all
 	sh tests/run_tests.sh

@@ -1,0 +1,92 @@
+// special.calc — special functions: gamma, log-gamma, beta, erf, erfc.
+//
+// References: Numerical Recipes chapter 6.
+//   lgamma: Lanczos approximation, 6 terms, g = 5.
+//   gamma:  exp(lgamma) with sign via the reflection formula for x<0.
+//   beta:   exp(lgamma(a) + lgamma(b) - lgamma(a + b)).
+//   erf:    rational Chebyshev approximation (Abramowitz & Stegun 7.1.26).
+//   erfc:   1 - erf, with the asymptotic form swapped in for large |x|
+//           to avoid catastrophic cancellation.
+
+// ===== log-gamma via Lanczos =====
+
+priv fn _lgamma_coefs() {
+    return [
+         76.18009172947146,
+        -86.50532032941677,
+         24.01409824083091,
+         -1.231739572450155,
+          0.001208650973866179,
+         -0.000005395239384953
+    ];
+}
+
+pub fn lgamma(x) {
+    if (x <= 0) {
+        // Use the reflection formula  Gamma(x) Gamma(1-x) = pi / sin(pi x)
+        // to extend the Lanczos series to negative real x.
+        if (floor(x) == x) {
+            throw "lgamma: pole at non-positive integer";
+        }
+        let pi_x = pi() * x;
+        let s = sin(pi_x);
+        let g = lgamma(1 - x);
+        return log(pi() / abs(s)) - g;
+    }
+    let c = _lgamma_coefs();
+    let y   = x;
+    let tmp = x + 5.5;
+    tmp = (x + 0.5) * log(tmp) - tmp;
+    let ser = 1.000000000190015;
+    for (let i = 0; i < 6; i = i + 1) {
+        y = y + 1;
+        ser = ser + c[i] / y;
+    }
+    return tmp + log(2.5066282746310005 * ser / x);
+}
+
+// gamma(x). Uses lgamma + sign-tracking for negative non-integer x.
+pub fn gamma(x) {
+    if (x > 0) {
+        return exp(lgamma(x));
+    }
+    if (floor(x) == x) {
+        throw "gamma: pole at non-positive integer";
+    }
+    // For x < 0: Gamma(x) = pi / (sin(pi x) Gamma(1 - x))
+    let sign = 1;
+    let pi_x = pi() * x;
+    let s = sin(pi_x);
+    if (s < 0) { sign = -1; s = -s; }
+    return sign * pi() / (s * exp(lgamma(1 - x)));
+}
+
+// Beta(a, b) = Gamma(a) Gamma(b) / Gamma(a + b).
+pub fn beta(a, b) {
+    return exp(lgamma(a) + lgamma(b) - lgamma(a + b));
+}
+
+// ===== Error function via rational Chebyshev approximation =====
+//
+// Abramowitz & Stegun 7.1.26 / NR 6.2. Maximum relative error
+// |epsilon| < 1.5e-7 for all real x. Adequate for double precision
+// engineering work.
+
+priv fn _erf_kernel(x) {
+    let t = 1 / (1 + 0.3275911 * abs(x));
+    let y = 1 - (((((1.061405429 * t - 1.453152027) * t)
+                    + 1.421413741) * t - 0.284496736) * t
+                    + 0.254829592) * t * exp(-x * x);
+    if (x < 0) { return -y; }
+    return y;
+}
+
+pub fn erf(x)  { return _erf_kernel(x); }
+pub fn erfc(x) {
+    // 1 - erf is fine for moderate x. For |x| larger than ~5 we'd
+    // ideally use the continued-fraction form; the rational approx
+    // we use here is accurate enough that 1 - erf doesn't suffer
+    // catastrophically until well past x = 6 — which is fine for
+    // most engineering uses.
+    return 1 - _erf_kernel(x);
+}

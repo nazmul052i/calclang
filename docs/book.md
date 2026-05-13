@@ -1209,6 +1209,87 @@ Input length must be a power of 2. The forward `fft` accepts either real (`num`)
 
 CalcLang's first-class complex type means there's no manual `{re, im}` packing — the inner-loop arithmetic in `lib/fft.calc` is the literal mathematical form: `let t = w * O[k]; result[k] = E[k] + t;`.
 
+### `lib/nr/` — Numerical-Recipes-style algorithms
+
+A separate directory of more substantial numerical algorithms, in the spirit of Press et al.'s *Numerical Recipes in C*. Each one is a well-known piece of canonical numerical computing, implemented from the NR explanations / pseudocode.
+
+#### `lib/nr/brent.calc` — Brent's root finder
+
+A bracketed root finder that combines bisection's reliability with secant / inverse-quadratic interpolation's speed. Always converges (the bracket only shrinks) and usually does so superlinearly. The standard "robust" choice for one-dimensional root finding.
+
+```calc
+extern fn brent_root(f: fn, a: num, b: num, tol: num, max_iter: num): num;
+
+let f = fn(x) { return cos(x); };
+print brent_root(f, 0, pi(), 0.0000000001, 100);   // 1.5707963268...
+```
+
+Caller must bracket the root (`f(a) * f(b) < 0`). Converges in ~10 iterations for typical engineering tolerances.
+
+#### `lib/nr/spline.calc` — natural cubic spline
+
+Smooth interpolation through a sequence of (xs, ys) knots. Two-step interface (the NR style): pre-compute second derivatives once with `spline_setup`, reuse for every interpolation query.
+
+```calc
+extern fn spline_setup(xs: arr, ys: arr): arr;
+extern fn spline_eval(xs: arr, ys: arr, y2: arr, x: num): num;
+
+// Tabulate sin at 7 points and interpolate.
+let xs = [];  let ys = [];
+for (let i = 0; i < 7; i = i + 1) {
+    let x = i / 6.0 * 2 * pi();
+    push(xs, x);  push(ys, sin(x));
+}
+let y2 = spline_setup(xs, ys);
+print spline_eval(xs, ys, y2, 1.0);   // 0.84... (close to sin(1) = 0.8415)
+```
+
+The spline reproduces ys exactly at the knots. Off-knot error scales with the fourth power of the knot spacing — 7 evenly-spaced knots over [0, 2π] gives max error ~0.004 against the true sine.
+
+#### `lib/nr/special.calc` — gamma, beta, erf
+
+Special functions that come up everywhere in stats and physics.
+
+```calc
+extern fn gamma(x: num): num;
+extern fn lgamma(x: num): num;
+extern fn beta(a: num, b: num): num;
+extern fn erf(x: num): num;
+extern fn erfc(x: num): num;
+
+print gamma(5);            // 24                (= 4!)
+print gamma(0.5);          // 1.7724538509...   (= sqrt(π))
+print lgamma(100);         // log(99!)
+print beta(2, 3);          // 0.08333... (= 1/12)
+print erf(1);              // 0.8427...
+```
+
+`lgamma` uses the Lanczos approximation (6-term, g = 5). `gamma` is `exp(lgamma)` plus reflection-formula handling for non-positive non-integer x. `erf` uses Abramowitz & Stegun's rational Chebyshev approximation (7.1.26), accurate to about 7 decimal places — plenty for engineering work. `erfc` is `1 - erf`.
+
+#### `lib/nr/eigen.calc` — Jacobi eigenvalue decomposition
+
+For real symmetric matrices: returns all eigenvalues and the full eigenvector matrix. O(n³) per sweep, O(log(1/eps)) sweeps — solid for small to medium problems (a few hundred rows). Not the right tool for huge dense matrices (use a real LAPACK binding for those), but plenty for engineering work on smallish matrices.
+
+```calc
+extern fn jacobi_eigen(a: arr): map;
+
+let A = [[4, 1, 2],
+         [1, 3, 0],
+         [2, 0, 5]];
+let eig = jacobi_eigen(A);
+print eig["values"];     // [3.476..., 1.855..., 6.669...]   (sum = trace = 12)
+let V = eig["vectors"];   // V[r][i] is the r-th component of the i-th eigenvector.
+```
+
+Each iteration finds the largest off-diagonal element and rotates it to zero with a Givens-like 2×2 plane rotation. The product of all rotations is the full eigenvector matrix; the diagonal of the rotated matrix converges to the eigenvalues. Residuals `|A v - λ v|` come out at machine epsilon (~1e-13) for well-conditioned problems.
+
+#### Building the NR libraries
+
+```bash
+make nr_libs          # compile lib/nr/*.calc -> build/calclib/nr_*.s
+make nr_demo          # build + run examples/nr_demo.calc
+```
+
 ### Building demos
 
 The `lib/` modules compile once as libraries; demos link against them:
@@ -1225,6 +1306,7 @@ make multi_plot                          # multi-series + bar + log-Y + axis lab
 make json_demo                           # JSON parse/encode round-trip
 make ode_demo                            # exp-decay + harmonic oscillator via RK4
 make fft_demo                            # FFT spectrum of a synthetic signal
+make nr_demo                             # Brent + spline + special fns + Jacobi
 make demos                               # all of the above
 ```
 
