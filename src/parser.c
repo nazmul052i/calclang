@@ -961,30 +961,43 @@ static void parse_import(Parser *p, Program *out) {
 
     /* Path resolution. In order:
          - Absolute path:                used as-is.
-         - "./..." or "../...":          always importer-relative.
-         - Bare name like "math":        rewritten to "lib/<name>.calc".
-         - Anything else with a slash:   try cwd first, then importer-relative.
+         - "./..." or "../...":          importer-relative.
+         - Path ending in ".calc":       used as a literal path (cwd then
+                                         importer-relative fallback).
+         - Anything else:                module spec — rewritten to
+                                         "lib/<spec>.calc". Works for both
+                                         flat names ("math") and nested
+                                         libs ("nr/poly").
 
-       The bare-name form lets `import "math"` Just Work from the project
-       root: it resolves to `lib/math.calc` next to the other engineering
-       libraries. Use `./foo.calc` for a co-located helper file, or a full
-       relative path like `"lib/nr/fft.calc"` for nested libraries. */
+       Examples:
+         import "math";          ->  lib/math.calc
+         import "nr/poly";        ->  lib/nr/poly.calc
+         import "./helper.calc";  ->  importer-dir/helper.calc
+         import "lib/math.calc";  ->  as a literal path */
     const char *raw = path_tok.text;
     int is_abs = raw[0] == '/' || raw[0] == '\\' ||
                  (raw[0] != '\0' && raw[1] == ':');
     int is_dot = raw[0] == '.' && (raw[1] == '/' || raw[1] == '\\'
                  || (raw[1] == '.' && (raw[2] == '/' || raw[2] == '\\')));
-    int has_slash = 0;
-    for (const char *q = raw; *q; q++) {
-        if (*q == '/' || *q == '\\') { has_slash = 1; break; }
-    }
+    /* Path-like if it ends in .calc OR starts with lib/. */
+    size_t rlen = strlen(raw);
+    int ends_calc = rlen >= 5 && strcmp(raw + rlen - 5, ".calc") == 0;
+    int starts_lib = (rlen >= 4 && (strncmp(raw, "lib/", 4) == 0 || strncmp(raw, "lib\\", 4) == 0));
 
     char rewritten[512];
     const char *path = raw;
-    if (!is_abs && !is_dot && !has_slash) {
-        /* Bare name. Try `lib/<name>.calc`. The user can override by
-           writing the full path. */
-        snprintf(rewritten, sizeof rewritten, "lib/%s.calc", raw);
+    if (!is_abs && !is_dot && !ends_calc && !starts_lib) {
+        /* Module spec — flat ("math"), nested with slash ("nr/poly"),
+           or nested with dot ("nr.poly"). Both separators are accepted;
+           dots get translated to slashes Python-style before joining.
+           Final form: lib/<spec>.calc. */
+        char tmp[512];
+        size_t i = 0;
+        for (const char *q = raw; *q && i + 1 < sizeof tmp; q++) {
+            tmp[i++] = (*q == '.') ? '/' : *q;
+        }
+        tmp[i] = '\0';
+        snprintf(rewritten, sizeof rewritten, "lib/%s.calc", tmp);
         path = rewritten;
     }
 
@@ -1016,16 +1029,19 @@ static void parse_import(Parser *p, Program *out) {
     parser_init_with_path(&sub, src, full_path);
     Program sub_prog = parser_parse_program(&sub);
 
-    /* Inline the library's pub items (with body) into the current
-       Program. The codegen will compile them right alongside the
-       consumer's own code — no separate `--lib` build step needed.
-       Top-level statements in the library (anything that's not a fn
-       definition or another import-projected fn) are dropped, matching
-       the `--lib` model. */
+    /* Inline ALL fn definitions (pub AND priv) into the current
+       Program. The pub fns expose the library's API; the priv fns are
+       internal helpers the pub bodies call. Both must be compiled into
+       the consumer's binary or the pub bodies won't link. Top-level
+       statements in the library (anything that's not a fn definition)
+       are dropped, matching the `--lib` model. Privacy is preserved
+       socially: priv names are conventionally underscore-prefixed and
+       not part of the documented API, but the import system can't
+       enforce that without per-symbol visibility checks at the call
+       site (a future addition). */
     for (int i = 0; i < sub_prog.count; i++) {
         AST *item = sub_prog.items[i];
         if (item->kind != NODE_FN) continue;
-        if (!item->as.fn_def.is_public)  continue;   /* skip priv */
         if (out->count >= CL_MAX_NODES) cl_die("too many top-level items after import");
         out->items[out->count++] = item;
     }
