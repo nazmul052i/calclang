@@ -145,8 +145,10 @@ typedef struct {
 } CgClosure;
 
 typedef struct {
-    char name[CL_MAX_TEXT];
-    int  param_count;
+    char      name[CL_MAX_TEXT];
+    int       param_count;
+    TypeAnnot param_types[CL_MAX_PARAMS];
+    TypeAnnot return_type;
 } CgFn;
 
 typedef struct {
@@ -316,7 +318,69 @@ static void collect_fns(Cg *cg, const Program *prog) {
             CgFn *f = &cg->fns[cg->fn_count++];
             cl_strncpy_z(f->name, n->as.fn_def.name, CL_MAX_TEXT);
             f->param_count = n->as.fn_def.param_count;
+            for (int j = 0; j < n->as.fn_def.param_count; j++) {
+                f->param_types[j] = n->as.fn_def.param_types[j];
+            }
+            f->return_type = n->as.fn_def.return_type;
         }
+    }
+}
+
+/* Does `expected` accept a value of `actual`? Mirrors codegen.c so
+   the VM and native pipelines reject the same programs. */
+static int x64_type_accepts(TypeAnnot expected, TypeAnnot actual) {
+    if (expected == TYPE_ANY)  return 1;
+    if (expected == TYPE_BOOL) return actual == TYPE_NUM;
+    return expected == actual;
+}
+
+/* Best-effort static type of an expression. Returns 1 + writes *out
+   when statically knowable, 0 when we'd need runtime info. */
+static int x64_static_arg_type(Cg *cg, AST *arg, TypeAnnot *out) {
+    switch (arg->kind) {
+        case NODE_NUMBER:    *out = TYPE_NUM; return 1;
+        case NODE_STRING:    *out = TYPE_STR; return 1;
+        case NODE_ARRAY_LIT: *out = TYPE_ARR; return 1;
+        case NODE_MAP_LIT:   *out = TYPE_MAP; return 1;
+        case NODE_UNOP: {
+            TokenType op = arg->as.unop.op;
+            if (op == TOK_BANG || op == TOK_TILDE) { *out = TYPE_NUM; return 1; }
+            /* unary minus: num iff operand is num */
+            TypeAnnot inner;
+            if (x64_static_arg_type(cg, arg->as.unop.operand, &inner)
+                && inner == TYPE_NUM) {
+                *out = TYPE_NUM;
+                return 1;
+            }
+            return 0;
+        }
+        case NODE_BINOP: {
+            TokenType op = arg->as.binop.op;
+            if (op == TOK_PLUS) return 0;  /* could be num or str */
+            *out = TYPE_NUM;
+            return 1;
+        }
+        case NODE_VAR: {
+            if (arg->inferred_type != TYPE_ANY) {
+                *out = (TypeAnnot)arg->inferred_type;
+                return 1;
+            }
+            /* Bare function-name reference is a fn value. */
+            CgFn *uf = lookup_fn(cg, arg->as.var);
+            if (uf) { *out = TYPE_FN; return 1; }
+            return 0;
+        }
+        case NODE_CALL: {
+            if (arg->as.call.callee) return 0;
+            CgFn *uf = lookup_fn(cg, arg->as.call.name);
+            if (uf && uf->return_type != TYPE_ANY) {
+                *out = uf->return_type;
+                return 1;
+            }
+            return 0;
+        }
+        default:
+            return 0;
     }
 }
 
@@ -1227,6 +1291,26 @@ static void gen_call(Cg *cg, AST *n) {
             f->name, f->param_count,
             f->param_count == 1 ? "" : "s", n->as.call.arg_count);
         exit(1);
+    }
+
+    /* Compile-time per-arg type check. Anything statically knowable
+       gets verified here; ambiguous args (e.g. unresolved variables)
+       defer to the function-entry TYPECHECK at runtime. Mirrors the
+       VM-side check in codegen.c so both pipelines reject the same
+       programs. */
+    for (int i = 0; i < n->as.call.arg_count; i++) {
+        TypeAnnot expected = f->param_types[i];
+        TypeAnnot actual;
+        if (expected != TYPE_ANY
+            && x64_static_arg_type(cg, n->as.call.args[i], &actual)
+            && !x64_type_accepts(expected, actual)) {
+            fprintf(stderr,
+                "semantic error: argument %d to '%s': expected %s, got %s\n",
+                i + 1, f->name,
+                type_annot_name(expected),
+                type_annot_name(actual));
+            exit(1);
+        }
     }
 
     /* Evaluate args left-to-right but push in reverse order so arg0
