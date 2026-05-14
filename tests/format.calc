@@ -1,0 +1,24 @@
+// format.calc — printf, println, fmt with both % and {} placeholders.
+
+// printf — like C: no trailing newline; caller controls via \n.
+printf "x = %d\n", 42;
+printf "%-10s = %.2f\n", "pi", pi();
+
+// println — like Rust: trailing newline; Rust-style {} placeholders.
+println "hello {}, age {}", "alice", 30;
+println "values: {} {} {}", 1, 2, 3;
+println "pi to 4 digits: {:.4f}", pi();
+println "padded: {:5d}|{:-5d}|{:05d}", 1, 22, 333;
+println "hex: 0x{:x}  bin: 0b{:b}", 255, 10;
+
+// Mix both placeholder styles in one format
+println "rust={}, c={:5d}", "yes", 99;
+
+// {{ and }} for literal braces
+println "literal {{ and }} braces around {}", "x";
+
+// fmt() captures the string (still works, both styles)
+let s1 = fmt("%-8s = %d", ["count", 7]);
+let s2 = fmt("count = {}", [7]);
+print s1;
+print s2;

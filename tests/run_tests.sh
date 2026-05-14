@@ -30,6 +30,20 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] format — printf / println / fmt with %% and {} placeholders"
+out=$(run format)
+check "format" 'x = 42
+pi         = 3.14
+hello alice, age 30
+values: 1 2 3
+pi to 4 digits: 3.1416
+padded:     1|22   |00333
+hex: 0xff  bin: 0b1010
+rust=yes, c=   99
+literal { and } braces around x
+count    = 7
+count = 7' "$out"
+
 echo "[test] optimizer — constant folding, algebraic, dead-branch"
 out=$(run optimizer)
 check "optimizer" '14

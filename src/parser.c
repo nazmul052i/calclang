@@ -424,6 +424,35 @@ static AST *parse_stmt(Parser *p) {
         expect(p, TOK_SEMICOLON);
         return ast_print(e);
     }
+    /* printf / println: convenience statements that desugar to a
+       fmt(...)-then-output call. Form:
+           printf  FORMAT, expr1, expr2, ...;     -> write(fmt(FORMAT, [args]))
+           println FORMAT, expr1, expr2, ...;     -> print fmt(FORMAT, [args])
+       The args are collected into an array literal so we don't need
+       variadic builtin support — fmt's existing (str, arr) signature
+       handles them. */
+    if (p->current.type == TOK_PRINTF || p->current.type == TOK_PRINTLN) {
+        int is_println = (p->current.type == TOK_PRINTLN);
+        next(p);
+        AST *format = parse_expr(p);
+        AST *args = ast_array_lit();
+        while (p->current.type == TOK_COMMA) {
+            next(p);
+            ast_array_lit_add(args, parse_expr(p));
+        }
+        expect(p, TOK_SEMICOLON);
+        AST *fmt_call = ast_call("fmt");
+        ast_call_add_arg(fmt_call, format);
+        ast_call_add_arg(fmt_call, args);
+        if (is_println) {
+            return ast_print(fmt_call);
+        }
+        /* printf: write the string with no trailing newline.
+           Build write(fmt(...)) — write is a calclib builtin. */
+        AST *write_call = ast_call("write");
+        ast_call_add_arg(write_call, fmt_call);
+        return write_call;
+    }
     if (p->current.type == TOK_IF) {
         next(p);
         expect(p, TOK_LPAREN);

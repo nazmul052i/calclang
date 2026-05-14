@@ -73,12 +73,68 @@ static _Noreturn void type_error(const char *op_name) {
     exit(1);
 }
 
+/* Translate {} / {:spec} fragments to the equivalent %-form. Used by
+   cl_vm_format below so both C-style and Rust-style format syntax work. */
+static int vm_translate_brace(const char *p, char *out) {
+    const char *end = p + 1;
+    while (*end && *end != '}') end++;
+    if (*end != '}') return 0;
+    char spec[16]; int slen = 0;
+    if (p[1] == ':') {
+        const char *q = p + 2;
+        while (q < end && slen < (int)sizeof(spec) - 2) spec[slen++] = *q++;
+    }
+    spec[slen] = '\0';
+    char conv = 's';
+    int  spec_end = slen;
+    if (slen > 0) {
+        char last = spec[slen - 1];
+        if (last == 'd' || last == 'i' || last == 'x' || last == 'X'
+         || last == 'o' || last == 'b' || last == 'f' || last == 'e'
+         || last == 'E' || last == 'g' || last == 'G' || last == 's'
+         || last == 'c') {
+            conv = last;
+            spec_end = slen - 1;
+        }
+    }
+    out[0] = '%';
+    int oi = 1;
+    for (int i = 0; i < spec_end && oi < 14; i++) out[oi++] = spec[i];
+    out[oi++] = conv;
+    out[oi] = '\0';
+    return (int)(end - p) + 1;
+}
+
+static char *vm_normalize_format(const char *src) {
+    size_t cap = strlen(src) * 2 + 16;
+    char *out = (char *)cl_track_malloc(cap);
+    size_t oi = 0;
+    for (const char *p = src; *p; ) {
+        if (oi + 32 >= cap) { cap *= 2; out = (char *)cl_track_realloc(out, cap); }
+        if (p[0] == '{' && p[1] == '{') { out[oi++] = '{'; p += 2; continue; }
+        if (p[0] == '}' && p[1] == '}') { out[oi++] = '}'; p += 2; continue; }
+        if (p[0] == '{') {
+            char buf[16];
+            int n = vm_translate_brace(p, buf);
+            if (n == 0) { out[oi++] = *p++; continue; }
+            for (int i = 0; buf[i]; i++) out[oi++] = buf[i];
+            p += n;
+            continue;
+        }
+        out[oi++] = *p++;
+    }
+    out[oi] = '\0';
+    return out;
+}
+
 /* Lightweight printf-style formatter for the `fmt(format, [args])` builtin.
    Supports %d (int), %f / %.Nf (float), %e (scientific), %g (default),
    %s (string), %x (hex int), %o (octal int), %b (binary int), %% (literal),
-   plus optional width and zero-padding (%5d, %05d, %-5d, %8.2f).
+   plus optional width and zero-padding (%5d, %05d, %-5d, %8.2f). Also
+   accepts Rust-style {} and {:spec} placeholders, normalized to %-form.
    Args is an array of Values. Returns a heap-allocated string. */
-static char *cl_vm_format(const char *fmt, Array *args) {
+static char *cl_vm_format(const char *fmt_in, Array *args) {
+    const char *fmt = vm_normalize_format(fmt_in);
     char *buf = (char *)cl_track_malloc(64);
     size_t cap = 64;
     size_t len = 0;
