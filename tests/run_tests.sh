@@ -1080,6 +1080,36 @@ A * I3 == A?  1' "$nat_out"
     awk -v v="$mc_var" 'BEGIN { exit !(v > 3 && v < 5) }' \
         || { echo "FAIL: nr7 — MCMC mean x^2 out of band"; echo "v=$mc_var"; exit 1; }
 
+    echo "[test] demo — nr_demo8 (Welch + wavelet + Toeplitz + simplex LP)"
+    build/calcnat --lib lib/nr/welch.calc      -o build/calclib/nr_welch.s
+    build/calcnat --lib lib/nr/wavelet.calc    -o build/calclib/nr_wavelet.s
+    build/calcnat --lib lib/nr/toeplitz.calc   -o build/calclib/nr_toeplitz.s
+    build/calcnat --lib lib/nr/simplex_lp.calc -o build/calclib/nr_simplex_lp.s
+    build/calcnat examples/nr_demo8.calc \
+        build/calclib/nr_welch.s build/calclib/nr_wavelet.s \
+        build/calclib/nr_toeplitz.s build/calclib/nr_simplex_lp.s \
+        build/calclib/fft.s build/calclib/random.s \
+        -o build/d_nr8.exe
+    nat_out=$(build/d_nr8.exe | strip_cr)
+    # Welch peak at 17 Hz (the injected tone).
+    echo "$nat_out" | grep -q "peak at f = 17 Hz" \
+        || { echo "FAIL: nr8 — Welch peak"; echo "$nat_out"; exit 1; }
+    # Haar / D4 round-trip both at machine epsilon.
+    h_err=$(echo "$nat_out" | grep "round-trip RMS error =" | head -1 | awk '{print $NF}')
+    d_err=$(echo "$nat_out" | grep "D4 round-trip RMS error" | awk '{print $NF}')
+    awk -v e="$h_err" 'BEGIN { exit !(e < 1e-12) }' \
+        || { echo "FAIL: nr8 — Haar round-trip error"; echo "$h_err"; exit 1; }
+    awk -v e="$d_err" 'BEGIN { exit !(e < 1e-12) }' \
+        || { echo "FAIL: nr8 — D4 round-trip error"; echo "$d_err"; exit 1; }
+    # Levinson: T x = [9, 7, 5, 3].
+    echo "$nat_out" | grep -q "\[9, 7, 5, 3\]" \
+        || { echo "FAIL: nr8 — Levinson reconstruction"; echo "$nat_out"; exit 1; }
+    # Simplex: textbook example must return x = [2, 6], value = 36.
+    echo "$nat_out" | grep -q "\[2, 6\]" \
+        || { echo "FAIL: nr8 — simplex x"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "value   = 36" \
+        || { echo "FAIL: nr8 — simplex value"; echo "$nat_out"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

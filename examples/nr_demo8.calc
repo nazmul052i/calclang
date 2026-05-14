@@ -1,0 +1,149 @@
+// Tier-8 NR demo: Welch periodogram, discrete wavelets (Haar + D4),
+// Toeplitz / Levinson, simplex linear programming.
+
+extern fn welch(xs: arr, fs: num, n_per_seg: num, overlap_frac: num): map;
+extern fn hann_window(N: num): arr;
+
+extern fn haar_forward(xs: arr): arr;
+extern fn haar_inverse(ys: arr): arr;
+extern fn d4_forward(xs: arr): arr;
+extern fn d4_inverse(ys: arr): arr;
+
+extern fn levinson_solve(r: arr, y: arr): arr;
+extern fn yule_walker(autocorr: arr, p: num): map;
+
+extern fn simplex_lp(c: arr, A: arr, b: arr): map;
+
+extern fn Rng(seed: num): map;
+
+// ===== Welch PSD =====
+print "===== Welch's PSD estimate =====";
+// Generate 1024 samples at fs=128 Hz of a 17 Hz tone + noise.
+let fs = 128;
+let N  = 1024;
+let f0 = 17;
+let rng = Rng(2026);
+let xs = [];
+for (let i = 0; i < N; i = i + 1) {
+    let t = i / fs;
+    push(xs, cos(2 * pi() * f0 * t) + 0.3 * rng.normal(0, 1));
+}
+let w = welch(xs, fs, 128, 0.5);
+let psd = w["psd"];
+let freqs = w["freqs"];
+// Locate the peak frequency.
+let pkbin = 0;  let pkval = 0;
+for (let i = 0; i < len(psd); i = i + 1) {
+    if (psd[i] > pkval) { pkval = psd[i]; pkbin = i; }
+}
+print "peak at f = " + freqs[pkbin] + " Hz (expected ~17 Hz)";
+print "psd[peak]  = " + pkval;
+print "psd[0]     = " + psd[0] + "  (DC)";
+
+// ===== Wavelets =====
+print "";
+print "===== Haar discrete wavelet transform =====";
+let signal8 = [1, 2, 3, 4, 5, 6, 7, 8];
+let h = haar_forward(signal8);
+print "forward Haar on [1..8]:";  print h;
+let hi = haar_inverse(h);
+print "round-trip:";  print hi;
+let rt_err = 0;
+for (let i = 0; i < 8; i = i + 1) { rt_err = rt_err + (hi[i] - signal8[i]) * (hi[i] - signal8[i]); }
+print "round-trip RMS error = " + sqrt(rt_err / 8);
+
+print "";
+print "===== Daubechies-4 round-trip =====";
+let sig16 = [];
+for (let i = 0; i < 16; i = i + 1) {
+    push(sig16, sin(2 * pi() * i / 8) + 0.5 * cos(2 * pi() * i / 4));
+}
+let d = d4_forward(sig16);
+let di = d4_inverse(d);
+let d4_err = 0;
+for (let i = 0; i < 16; i = i + 1) { d4_err = d4_err + (di[i] - sig16[i]) * (di[i] - sig16[i]); }
+print "D4 round-trip RMS error = " + sqrt(d4_err / 16);
+
+// ===== Toeplitz / Yule-Walker =====
+print "";
+print "===== Toeplitz solve via Levinson =====";
+// Symmetric Toeplitz matrix with first column r = [4, 3, 2, 1].
+// Solve T x = y for y = [9, 7, 5, 3] — handcrafted x.
+let r = [4, 3, 2, 1];
+let y = [9, 7, 5, 3];
+let xt = levinson_solve(r, y);
+print "x = ";  print xt;
+// Verify by reconstructing T x and comparing to y.
+let yhat = [0, 0, 0, 0];
+for (let i = 0; i < 4; i = i + 1) {
+    let s = 0;
+    for (let j = 0; j < 4; j = j + 1) {
+        let idx = i - j;  if (idx < 0) { idx = -idx; }
+        s = s + r[idx] * xt[j];
+    }
+    yhat[i] = s;
+}
+print "T x = ";  print yhat;
+
+// AR(p) estimation from a synthetic AR(2) process.
+print "";
+print "===== Yule-Walker AR(2) coefficient estimation =====";
+// Generate AR(2) data: x[n] = 0.7 x[n-1] - 0.2 x[n-2] + N(0, 1)
+let M = 2000;
+let sig = [];
+push(sig, 0);  push(sig, 0);
+let rng2 = Rng(99);
+for (let n = 2; n < M; n = n + 1) {
+    push(sig, 0.7 * sig[n - 1] - 0.2 * sig[n - 2] + rng2.normal(0, 1));
+}
+// Compute biased autocorrelation r[0..2].
+let mean_sig = 0;
+for (let i = 0; i < M; i = i + 1) { mean_sig = mean_sig + sig[i]; }
+mean_sig = mean_sig / M;
+let ac = [0, 0, 0];
+for (let k = 0; k < 3; k = k + 1) {
+    let s = 0;
+    for (let i = 0; i < M - k; i = i + 1) {
+        s = s + (sig[i] - mean_sig) * (sig[i + k] - mean_sig);
+    }
+    ac[k] = s / M;
+}
+let yw = yule_walker(ac, 2);
+print "estimated coefs (true: a1=0.7, a2=-0.2):";  print yw["coef"];
+print "residual variance:                          " + yw["sigma2"];
+
+// ===== Simplex LP =====
+print "";
+print "===== Simplex LP =====";
+// Classic textbook example:
+//   max 3 x1 + 5 x2
+//   s.t.   x1     <=  4
+//                 2 x2 <= 12
+//          3 x1 + 2 x2 <= 18
+//          x1, x2 >= 0
+// Optimum: x1 = 2, x2 = 6, value = 36.
+let c = [3, 5];
+let A = [[1, 0],
+         [0, 2],
+         [3, 2]];
+let b = [4, 12, 18];
+let r1 = simplex_lp(c, A, b);
+print "max 3 x1 + 5 x2 with the textbook 2x3 constraint set:";
+print "  x       = ";  print r1["x"];
+print "  value   = " + r1["value"] + "   (expected 36)";
+print "  status  = " + r1["status"] + "   (0 = optimal)";
+
+// Diet problem (smaller variant): minimize cost while meeting nutrient mins.
+// Cast as max -c^T x to fit our maximize-form solver.
+print "";
+print "Diet problem (minimum-cost mix of two foods to meet nutrient minima):";
+//   foods 1, 2 cost 2 and 3 per unit; min 8 of nutrient A, 10 of nutrient B.
+//   Each food provides:
+//     food 1:  A=3, B=1
+//     food 2:  A=1, B=2
+//   minimize 2 x1 + 3 x2  s.t.  3x1 + x2 >= 8;  x1 + 2x2 >= 10.
+//   Flip signs for <=:  -3 x1 -  x2 <= -8;  -x1 - 2x2 <= -10.
+//   And maximize -(2 x1 + 3 x2) = -2 x1 - 3 x2.
+let r2 = simplex_lp([-2, -3], [[-3, -1], [-1, -2]], [-8, -10]);
+print "  x       = ";  print r2["x"];
+print "  min cost = " + (-r2["value"]);   // negate back

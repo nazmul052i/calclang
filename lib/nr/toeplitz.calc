@@ -1,0 +1,88 @@
+// toeplitz.calc — Levinson-Durbin recursion for Toeplitz / autoregressive systems.
+//
+// A Toeplitz matrix has constant diagonals: T[i][j] = r[|i - j|]. The
+// Levinson algorithm exploits this structure to solve T x = y in
+// O(n^2) instead of the O(n^3) of a general LU. Reference: NR §2.8.
+//
+// Special-case it for the Yule-Walker normal equations of autoregressive
+// model estimation: given a signal's autocorrelation r[0..p], the AR(p)
+// coefficients and the prediction-error variance are obtained by a
+// single sweep of Levinson. Reference: NR §13.6.
+//
+// API:
+//   levinson_solve(r, y)         -> x such that T x = y, where T is the
+//                                   symmetric Toeplitz matrix with first
+//                                   column r[0..n-1] and first row r[0..n-1].
+//                                   r must have length n; y length n.
+//   yule_walker(autocorr, p)     -> {"coef": [a_1, ..., a_p], "sigma2": variance}
+//                                   for the AR(p) fit.
+
+priv fn _vec_copy(v) {
+    let out = [];
+    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    return out;
+}
+
+pub fn levinson_solve(r, y) {
+    let n = len(r);
+    if (len(y) != n) { throw "levinson_solve: r and y must have the same length"; }
+    if (r[0] == 0)   { throw "levinson_solve: zero r[0]"; }
+    let x = [];
+    let f = [];   // forward predictor coefficients
+    let b = [];   // backward predictor coefficients (identical for symmetric T)
+    for (let i = 0; i < n; i = i + 1) { push(x, 0); push(f, 0); push(b, 0); }
+    x[0] = y[0] / r[0];
+    if (n == 1) { return x; }
+    f[0] = 1 / r[0];
+    b[0] = 1 / r[0];
+    let alpha = 1;
+    for (let k = 1; k < n; k = k + 1) {
+        // Compute the Schur parameter.
+        let ef = 0;
+        let eb = 0;
+        for (let j = 0; j < k; j = j + 1) {
+            ef = ef + r[k - j] * f[j];
+            eb = eb + r[j + 1] * b[j];
+        }
+        let alpha_new = 1 - ef * eb;
+        // Update forward and backward predictors.
+        let f_new = [];
+        let b_new = [];
+        for (let i = 0; i <= k; i = i + 1) { push(f_new, 0); push(b_new, 0); }
+        for (let i = 0; i <= k; i = i + 1) {
+            let fi = 0;  if (i < k) { fi = f[i]; }
+            let bi = 0;  if (i > 0) { bi = b[i - 1]; }
+            f_new[i] = (fi - ef * bi) / alpha_new;
+            b_new[i] = (bi - eb * fi) / alpha_new;
+        }
+        for (let i = 0; i <= k; i = i + 1) { f[i] = f_new[i]; b[i] = b_new[i]; }
+        // Update solution.
+        let dy = y[k];
+        for (let j = 0; j < k; j = j + 1) { dy = dy - r[k - j] * x[j]; }
+        for (let i = 0; i <= k; i = i + 1) { x[i] = x[i] + dy * b[i]; }
+        alpha = alpha_new;
+    }
+    return x;
+}
+
+// AR(p) coefficient estimation via the Yule-Walker normal equations:
+//   R a = -r, where R[i][j] = autocorr[|i - j|], r = autocorr[1..p].
+// The minus sign convention: x[n] = -sum_{k=1}^p a_k x[n-k] + noise.
+// (Equivalent to coef array such that the AR polynomial roots define
+// the model; NR uses the opposite sign — we match Statsmodels.)
+pub fn yule_walker(autocorr, p) {
+    if (p < 1) { throw "yule_walker: p must be >= 1"; }
+    if (len(autocorr) < p + 1) { throw "yule_walker: need autocorr[0..p]"; }
+    // RHS: r[1..p].
+    let R_first = [];
+    let y = [];
+    for (let i = 0; i < p; i = i + 1) {
+        push(R_first, autocorr[i]);
+        push(y, autocorr[i + 1]);
+    }
+    let coef = levinson_solve(R_first, y);
+    // Prediction-error variance: sigma^2 = r[0] - sum a_k r[k].
+    let s = autocorr[0];
+    for (let k = 0; k < p; k = k + 1) { s = s - coef[k] * autocorr[k + 1]; }
+    return {"coef": coef, "sigma2": s};
+}

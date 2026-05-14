@@ -1610,6 +1610,42 @@ extern fn metropolis_rw(log_pi: fn, x0: arr, step: num,
 
 Markov-chain Monte Carlo for sampling from an unnormalized target. Operates in log-space for numerical stability across many decades of probability. `metropolis_rw` is the symmetric random-walk variant for Rⁿ. Returns the post-burn-in, thinned samples plus the acceptance rate (target ~25–40% for Gaussian walks).
 
+#### `lib/nr/welch.calc` — Welch's periodogram
+
+```calc
+extern fn welch(xs: arr, fs: num, n_per_seg: num, overlap_frac: num): map;
+extern fn hann_window(N: num): arr;
+```
+
+Splits the signal into overlapping Hann-windowed segments, FFTs each, and averages |X(f)|² across segments. The averaging reduces estimator variance vs a single periodogram; the taper reduces leakage. Output is `{"freqs", "psd"}` of length `n_per_seg/2 + 1`. NR §13.4.
+
+#### `lib/nr/wavelet.calc` — discrete wavelet transforms
+
+```calc
+extern fn haar_forward(xs: arr): arr;     extern fn haar_inverse(ys: arr): arr;
+extern fn d4_forward(xs: arr): arr;       extern fn d4_inverse(ys: arr): arr;
+```
+
+Two transform families: the simplest possible (Haar) and Daubechies's compactly-supported orthogonal D4. Length must be a power of two; output layout is `[final-approx, coarse-detail, ..., finest-detail]`. Both transforms round-trip to machine epsilon. NR §13.10.
+
+#### `lib/nr/toeplitz.calc` — Levinson-Durbin
+
+```calc
+extern fn levinson_solve(r: arr, y: arr): arr;
+extern fn yule_walker(autocorr: arr, p: num): map;
+```
+
+Levinson exploits the constant-diagonal structure of a symmetric Toeplitz matrix `T[i][j] = r[|i-j|]` to solve `T x = y` in O(n²) instead of O(n³). `yule_walker` builds on it: given an autocorrelation sequence, returns the AR(p) coefficients and the residual variance σ². NR §2.8, §13.6.
+
+#### `lib/nr/simplex_lp.calc` — linear programming
+
+```calc
+extern fn simplex_lp(c: arr, A: arr, b: arr): map;
+// Solves:  max c^T x  subject to  A x <= b,  x >= 0.
+```
+
+Two-phase simplex method with big-M handling for negative RHS entries. Returns `{"status", "x", "value"}` where status ∈ {0=optimal, 1=unbounded, 2=infeasible}. NR §10.8. Cast minimization problems by negating `c`; cast `>=` constraints by negating the row.
+
 #### Building the NR libraries
 
 ```bash
@@ -1621,6 +1657,7 @@ make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
 make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
 make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make nr_demo7         # tier 7: Cholesky + CG + simulated annealing + MCMC
+make nr_demo8         # tier 8: Welch PSD + wavelets + Toeplitz + simplex LP
 ```
 
 ### Building demos
@@ -1646,6 +1683,7 @@ make nr_demo4                            # Ridders' + distributions + Newton + L
 make nr_demo5                            # QR + SVD + Laguerre polyroots + convolution
 make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make nr_demo7                            # Cholesky + CG + simulated annealing + MCMC
+make nr_demo8                            # Welch PSD + wavelets + Toeplitz + simplex LP
 make demos                               # all of the above
 ```
 

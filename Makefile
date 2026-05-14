@@ -92,6 +92,10 @@ nr_libs: all
 	$(BUILD)/calcnat --lib lib/nr/cg.calc          -o $(CALCLIB)/nr_cg.s
 	$(BUILD)/calcnat --lib lib/nr/anneal.calc      -o $(CALCLIB)/nr_anneal.s
 	$(BUILD)/calcnat --lib lib/nr/mcmc.calc        -o $(CALCLIB)/nr_mcmc.s
+	$(BUILD)/calcnat --lib lib/nr/welch.calc       -o $(CALCLIB)/nr_welch.s
+	$(BUILD)/calcnat --lib lib/nr/wavelet.calc     -o $(CALCLIB)/nr_wavelet.s
+	$(BUILD)/calcnat --lib lib/nr/toeplitz.calc    -o $(CALCLIB)/nr_toeplitz.s
+	$(BUILD)/calcnat --lib lib/nr/simplex_lp.calc  -o $(CALCLIB)/nr_simplex_lp.s
 
 sine_plot: libs
 	$(BUILD)/calcnat examples/sine_plot.calc $(CALCLIB)/plot.s -o $(BUILD)/sine_plot
@@ -178,8 +182,15 @@ nr_demo7: nr_libs libs
 	    $(CALCLIB)/random.s -o $(BUILD)/nr_demo7
 	$(BUILD)/nr_demo7
 
+nr_demo8: nr_libs libs
+	$(BUILD)/calcnat examples/nr_demo8.calc \
+	    $(CALCLIB)/nr_welch.s $(CALCLIB)/nr_wavelet.s \
+	    $(CALCLIB)/nr_toeplitz.s $(CALCLIB)/nr_simplex_lp.s \
+	    $(CALCLIB)/fft.s $(CALCLIB)/random.s -o $(BUILD)/nr_demo8
+	$(BUILD)/nr_demo8
+
 demos: sine_plot regression linsys numerical monte_carlo csv_demo \
-       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5 nr_demo6 nr_demo7
+       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5 nr_demo6 nr_demo7 nr_demo8
 
 test: all
 	sh tests/run_tests.sh

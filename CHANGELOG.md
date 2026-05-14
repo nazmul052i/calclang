@@ -6,7 +6,7 @@ Reverse-chronological. Tracks language- and library-level changes. Bug-fix-only 
 
 ### Numerical-Recipes library (branch `numerical-library`)
 
-Seven tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo7` exercise each.
+Eight tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo8` exercise each.
 
 - Tier 1: `brent` (root finder), `spline` (natural cubic), `special` (gamma/erf), `eigen` (Jacobi).
 - Tier 2: `lu` (Doolittle + partial pivoting), `romberg` (Richardson extrapolation), `rk45` (Cash-Karp adaptive), `poly` (Chebyshev/Legendre/Hermite/Laguerre/Bessel).
@@ -15,6 +15,7 @@ Seven tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_dem
 - Tier 5: `qr` (Householder), `svd` (Jacobi-based + pseudo-inverse), `polyroots` (Laguerre + deflation), `conv` (direct & FFT convolution / correlation).
 - Tier 6: `cheb` (Chebyshev approximation + exact coefficient calculus), `savgol` (Savitzky-Golay smoothing / derivative filters), `kalman` (discrete linear Kalman filter), `pde` (Crank-Nicolson 1-D diffusion via Thomas solver).
 - Tier 7: `cholesky` (SPD factorization + solve + log-det + inverse), `cg` (conjugate gradient with optional preconditioner), `anneal` (simulated annealing), `mcmc` (Metropolis-Hastings sampler).
+- Tier 8: `welch` (Welch periodogram PSD), `wavelet` (Haar + Daubechies-4 DWT), `toeplitz` (Levinson-Durbin + Yule-Walker AR estimation), `simplex_lp` (two-phase simplex linear programming).
 
 ### Bug fix: complex arithmetic type inference
 

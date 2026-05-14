@@ -1,0 +1,162 @@
+// wavelet.calc — discrete wavelet transforms (Haar and Daubechies-4).
+//
+// Each level of the transform applies the wavelet's lowpass and
+// highpass quadrature-mirror filter pair, downsamples by 2, and then
+// recurses on the lowpass half. The result is N coefficients laid out
+// as [final approximation, detail at coarsest level, detail at
+// previous level, ..., detail at finest level]. The transform is
+// orthogonal (energy-preserving) and trivially invertible.
+//
+// Reference: Numerical Recipes 13.10 (Daubechies coefficients are
+// from Daubechies 1992).
+
+// ===== Haar =====
+priv fn _haar_step(x) {
+    let n = len(x) / 2;
+    let s = 1 / sqrt(2);
+    let out = [];
+    for (let i = 0; i < 2 * n; i = i + 1) { push(out, 0); }
+    for (let i = 0; i < n; i = i + 1) {
+        out[i]       = s * (x[2 * i] + x[2 * i + 1]);   // approximations
+        out[n + i]   = s * (x[2 * i] - x[2 * i + 1]);   // details
+    }
+    return out;
+}
+
+priv fn _haar_step_inv(y) {
+    let n = len(y) / 2;
+    let s = 1 / sqrt(2);
+    let out = [];
+    for (let i = 0; i < 2 * n; i = i + 1) { push(out, 0); }
+    for (let i = 0; i < n; i = i + 1) {
+        out[2 * i]     = s * (y[i] + y[n + i]);
+        out[2 * i + 1] = s * (y[i] - y[n + i]);
+    }
+    return out;
+}
+
+priv fn _wv_is_pow2(n) {
+    if (n < 1) { return 0; }
+    let p = 1;
+    while (p < n) { p = p * 2; }
+    if (p == n) { return 1; }
+    return 0;
+}
+
+pub fn haar_forward(xs) {
+    let n = len(xs);
+    if (_wv_is_pow2(n) == 0) { throw "haar_forward: length must be a power of two"; }
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, xs[i]); }
+    let m = n;
+    while (m >= 2) {
+        let head = [];
+        for (let i = 0; i < m; i = i + 1) { push(head, x[i]); }
+        let stepped = _haar_step(head);
+        for (let i = 0; i < m; i = i + 1) { x[i] = stepped[i]; }
+        m = m / 2;
+    }
+    return x;
+}
+
+pub fn haar_inverse(ys) {
+    let n = len(ys);
+    if (_wv_is_pow2(n) == 0) { throw "haar_inverse: length must be a power of two"; }
+    let y = [];
+    for (let i = 0; i < n; i = i + 1) { push(y, ys[i]); }
+    let m = 2;
+    while (m <= n) {
+        let head = [];
+        for (let i = 0; i < m; i = i + 1) { push(head, y[i]); }
+        let stepped = _haar_step_inv(head);
+        for (let i = 0; i < m; i = i + 1) { y[i] = stepped[i]; }
+        m = m * 2;
+    }
+    return y;
+}
+
+// ===== Daubechies-4 (D4) =====
+// Filter coefficients (NR Table 13.10.1):
+//   h0 = (1+sqrt 3)/(4 sqrt 2),  h1 = (3+sqrt 3)/(4 sqrt 2),
+//   h2 = (3-sqrt 3)/(4 sqrt 2),  h3 = (1-sqrt 3)/(4 sqrt 2).
+
+priv fn _d4_coefs() {
+    let s = 4 * sqrt(2);
+    let r = sqrt(3);
+    return [(1 + r) / s, (3 + r) / s, (3 - r) / s, (1 - r) / s];
+}
+
+priv fn _d4_step(x) {
+    let n = len(x);
+    let coefs = _d4_coefs();
+    let h0 = coefs[0];  let h1 = coefs[1];
+    let h2 = coefs[2];  let h3 = coefs[3];
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) { push(out, 0); }
+    let half = n / 2;
+    for (let i = 0; i < half; i = i + 1) {
+        let j  = 2 * i;
+        let j1 = (j + 1) % n;
+        let j2 = (j + 2) % n;
+        let j3 = (j + 3) % n;
+        // Approximation (lowpass).
+        out[i]        = h0 * x[j] + h1 * x[j1] + h2 * x[j2] + h3 * x[j3];
+        // Detail (highpass): mirror coefficients (h3, -h2, h1, -h0).
+        out[half + i] = h3 * x[j] - h2 * x[j1] + h1 * x[j2] - h0 * x[j3];
+    }
+    return out;
+}
+
+priv fn _d4_step_inv(y) {
+    let n = len(y);
+    let coefs = _d4_coefs();
+    let h0 = coefs[0];  let h1 = coefs[1];
+    let h2 = coefs[2];  let h3 = coefs[3];
+    let half = n / 2;
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) { push(out, 0); }
+    for (let i = 0; i < half; i = i + 1) {
+        let ip = (i + half - 1) % half;
+        // Reconstruction: pairwise reverse of the forward filtering.
+        let s_lo = y[ip];           let s_lo_next = y[i];
+        let s_hi = y[half + ip];    let s_hi_next = y[half + i];
+        let j  = 2 * i;
+        let j1 = j + 1;
+        out[j]  = h2 * s_lo + h1 * s_hi + h0 * s_lo_next + h3 * s_hi_next;
+        out[j1] = h3 * s_lo - h0 * s_hi + h1 * s_lo_next - h2 * s_hi_next;
+    }
+    return out;
+}
+
+pub fn d4_forward(xs) {
+    let n = len(xs);
+    if (_wv_is_pow2(n) == 0) { throw "d4_forward: length must be a power of two"; }
+    if (n < 4) { throw "d4_forward: length must be >= 4"; }
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, xs[i]); }
+    let m = n;
+    while (m >= 4) {
+        let head = [];
+        for (let i = 0; i < m; i = i + 1) { push(head, x[i]); }
+        let stepped = _d4_step(head);
+        for (let i = 0; i < m; i = i + 1) { x[i] = stepped[i]; }
+        m = m / 2;
+    }
+    return x;
+}
+
+pub fn d4_inverse(ys) {
+    let n = len(ys);
+    if (_wv_is_pow2(n) == 0) { throw "d4_inverse: length must be a power of two"; }
+    let y = [];
+    for (let i = 0; i < n; i = i + 1) { push(y, ys[i]); }
+    let m = 4;
+    while (m <= n) {
+        let head = [];
+        for (let i = 0; i < m; i = i + 1) { push(head, y[i]); }
+        let stepped = _d4_step_inv(head);
+        for (let i = 0; i < m; i = i + 1) { y[i] = stepped[i]; }
+        m = m * 2;
+    }
+    return y;
+}

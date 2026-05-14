@@ -98,6 +98,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/cg.calc`** — conjugate-gradient solver for SPD linear systems (basic and preconditioned variants).
 - **`nr/anneal.calc`** — simulated annealing for combinatorial and continuous global optimization with user-supplied proposal.
 - **`nr/mcmc.calc`** — Metropolis-Hastings sampler in log-space; symmetric random-walk convenience wrapper for R^n targets.
+- **`nr/welch.calc`** — Welch periodogram for power spectral density estimation with Hann tapering and overlapping segments.
+- **`nr/wavelet.calc`** — discrete wavelet transforms: Haar and Daubechies-4 forward and inverse; periodic boundary handling.
+- **`nr/toeplitz.calc`** — Levinson-Durbin recursion for symmetric Toeplitz systems in O(n²) and the Yule-Walker AR estimator built on top.
+- **`nr/simplex_lp.calc`** — two-phase simplex method for `max c^T x s.t. A x <= b, x >= 0`; reports optimal / unbounded / infeasible.
 
 ## Hello world
 

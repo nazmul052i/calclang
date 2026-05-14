@@ -1,0 +1,75 @@
+// welch.calc — Welch's method for power spectral density estimation.
+//
+// Splits the signal into overlapping windows, applies a tapering window
+// (Hann), runs the FFT, averages |X(f)|^2 across windows. The averaging
+// reduces variance vs a single periodogram and the taper reduces
+// spectral leakage. Reference: NR §13.4, Welch (1967).
+//
+// API:
+//   hann_window(N)                  -> length-N taper
+//   welch(xs, fs, n_per_seg, overlap_frac)
+//      -> {"freqs": [...], "psd": [...]}
+//
+// fs is the sampling rate (samples / second). The output has length
+// n_per_seg/2 + 1; freqs run from 0 to fs/2.
+
+extern fn fft(x: arr): arr;
+
+priv fn _wel_next_pow2(n) {
+    let p = 1;
+    while (p < n) { p = p * 2; }
+    return p;
+}
+
+pub fn hann_window(N) {
+    let w = [];
+    for (let n = 0; n < N; n = n + 1) {
+        push(w, 0.5 * (1 - cos(2 * pi() * n / (N - 1))));
+    }
+    return w;
+}
+
+pub fn welch(xs, fs, n_per_seg, overlap_frac) {
+    let n = len(xs);
+    if (n_per_seg > n) { throw "welch: n_per_seg larger than signal"; }
+    let N = _wel_next_pow2(n_per_seg);     // pad each segment to a power of two
+    let step = floor(n_per_seg * (1 - overlap_frac));
+    if (step < 1) { step = 1; }
+    let win = hann_window(n_per_seg);
+    // Window normalization for unbiased PSD (NR's `wss`).
+    let wss = 0;
+    for (let i = 0; i < n_per_seg; i = i + 1) { wss = wss + win[i] * win[i]; }
+    let norm = 1 / (fs * wss);
+    let half = floor(N / 2) + 1;
+    let psd = [];
+    for (let i = 0; i < half; i = i + 1) { push(psd, 0); }
+    let n_segs = 0;
+    let start = 0;
+    while (start + n_per_seg <= n) {
+        // Build windowed segment, zero-padded to N.
+        let seg = [];
+        for (let i = 0; i < N; i = i + 1) {
+            if (i < n_per_seg) { push(seg, xs[start + i] * win[i]); }
+            else               { push(seg, 0); }
+        }
+        let X = fft(seg);
+        for (let k = 0; k < half; k = k + 1) {
+            let re = real(X[k]);  let im = imag(X[k]);
+            let p = re * re + im * im;
+            psd[k] = psd[k] + p;
+        }
+        n_segs = n_segs + 1;
+        start = start + step;
+    }
+    if (n_segs == 0) { throw "welch: no segments — increase n_per_seg or shrink overlap"; }
+    let freqs = [];
+    for (let k = 0; k < half; k = k + 1) {
+        push(freqs, k * fs / N);
+        // Average and apply 1/(fs * wss) normalization; double for one-sided
+        // PSD on the interior bins.
+        let scale = norm / n_segs;
+        if (k != 0 && k != half - 1) { scale = 2 * scale; }
+        psd[k] = psd[k] * scale;
+    }
+    return {"freqs": freqs, "psd": psd};
+}
