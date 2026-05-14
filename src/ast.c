@@ -254,6 +254,35 @@ AST *ast_throw(AST *expr) {
     return n;
 }
 
+AST *ast_switch(AST *discriminant) {
+    AST *n = make(NODE_SWITCH);
+    n->as.switch_stmt.discriminant = discriminant;
+    n->as.switch_stmt.case_values  = NULL;
+    n->as.switch_stmt.case_bodies  = NULL;
+    n->as.switch_stmt.case_count   = 0;
+    n->as.switch_stmt.case_cap     = 0;
+    n->as.switch_stmt.default_body = NULL;
+    return n;
+}
+
+void ast_switch_add_case(AST *sw, AST *value, AST *body) {
+    if (sw->as.switch_stmt.case_count >= sw->as.switch_stmt.case_cap) {
+        int nc = sw->as.switch_stmt.case_cap == 0 ? 4 : sw->as.switch_stmt.case_cap * 2;
+        sw->as.switch_stmt.case_values = (AST **)cl_track_realloc(
+            sw->as.switch_stmt.case_values, sizeof(AST *) * (size_t)nc);
+        sw->as.switch_stmt.case_bodies = (AST **)cl_track_realloc(
+            sw->as.switch_stmt.case_bodies, sizeof(AST *) * (size_t)nc);
+        sw->as.switch_stmt.case_cap = nc;
+    }
+    int i = sw->as.switch_stmt.case_count++;
+    sw->as.switch_stmt.case_values[i] = value;
+    sw->as.switch_stmt.case_bodies[i] = body;
+}
+
+void ast_switch_set_default(AST *sw, AST *body) {
+    sw->as.switch_stmt.default_body = body;
+}
+
 void ast_map_lit_add(AST *m, AST *key, AST *value) {
     if (m->as.map_lit.count >= m->as.map_lit.cap) {
         int nc = m->as.map_lit.cap == 0 ? 4 : m->as.map_lit.cap * 2;
@@ -395,6 +424,19 @@ void ast_print_debug(AST *n, int indent) {
             printf("Throw\n");
             ast_print_debug(n->as.throw_stmt.expr, indent + 2);
             break;
+        case NODE_SWITCH:
+            printf("Switch(%d cases%s)\n",
+                n->as.switch_stmt.case_count,
+                n->as.switch_stmt.default_body ? " + default" : "");
+            ast_print_debug(n->as.switch_stmt.discriminant, indent + 2);
+            for (int i = 0; i < n->as.switch_stmt.case_count; i++) {
+                ast_print_debug(n->as.switch_stmt.case_values[i], indent + 2);
+                ast_print_debug(n->as.switch_stmt.case_bodies[i], indent + 4);
+            }
+            if (n->as.switch_stmt.default_body) {
+                ast_print_debug(n->as.switch_stmt.default_body, indent + 2);
+            }
+            break;
     }
 }
 
@@ -482,6 +524,14 @@ static void free_node(AST *n) {
             break;
         case NODE_THROW:
             free_node(n->as.throw_stmt.expr);
+            break;
+        case NODE_SWITCH:
+            free_node(n->as.switch_stmt.discriminant);
+            for (int i = 0; i < n->as.switch_stmt.case_count; i++) {
+                free_node(n->as.switch_stmt.case_values[i]);
+                free_node(n->as.switch_stmt.case_bodies[i]);
+            }
+            free_node(n->as.switch_stmt.default_body);
             break;
         case NODE_NUMBER:
         case NODE_STRING:

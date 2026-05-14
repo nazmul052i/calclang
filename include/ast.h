@@ -45,7 +45,8 @@ typedef enum {
     NODE_INDEX_OPASSIGN,
     NODE_MAP_LIT,
     NODE_TRY,
-    NODE_THROW
+    NODE_THROW,
+    NODE_SWITCH
 } NodeKind;
 
 typedef struct AST AST;
@@ -111,6 +112,21 @@ struct AST {
             AST *catch_body;
         } try_stmt;
         struct { AST *expr; } throw_stmt;
+        /* switch (discriminant) { case v1: ...; case v2: ...; default: ...; }
+           - cases[i].value: the expression to compare against (always a
+             literal in practice; the parser doesn't enforce this).
+           - cases[i].body: a block of statements.
+           - default_body: NULL if no `default:` clause.
+           - Fall-through is C-style: a case body without `break;` runs
+             into the next case. */
+        struct {
+            AST  *discriminant;
+            AST **case_values;
+            AST **case_bodies;
+            int   case_count;
+            int   case_cap;
+            AST  *default_body;
+        } switch_stmt;
     } as;
 };
 
@@ -153,6 +169,9 @@ AST *ast_map_lit(void);
 void ast_map_lit_add(AST *m, AST *key, AST *value);
 AST *ast_try(AST *try_body, const char *catch_name, AST *catch_body);
 AST *ast_throw(AST *expr);
+AST *ast_switch(AST *discriminant);
+void ast_switch_add_case(AST *sw, AST *value, AST *body);
+void ast_switch_set_default(AST *sw, AST *body);
 
 void ast_print_debug(AST *n, int indent);
 void program_free(Program *p);

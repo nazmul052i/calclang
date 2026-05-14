@@ -26,6 +26,9 @@ typedef enum {
     TOK_TRY,
     TOK_CATCH,
     TOK_THROW,
+    TOK_SWITCH,
+    TOK_CASE,
+    TOK_DEFAULT,
 
     /* arithmetic */
     TOK_PLUS,
