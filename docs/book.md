@@ -2207,11 +2207,11 @@ If any of these matter, build the equivalent on top of the closure pattern in Ch
 
 ## Chapter 8 — Multi-file programs
 
-A single `.calc` file works for hundreds of lines. Past that, splitting into modules helps. CalcLang's multi-file model is straightforward: one file exports `pub` definitions, another file declares `extern fn` to import them, and the linker (handled transparently by `calcnat`) wires the symbols together.
+A single `.calc` file works for hundreds of lines. Past that, splitting into modules helps. CalcLang's module system is the simplest possible: one statement, one command, no separate library-build step.
 
-### The pattern
+### `import`
 
-A library file holds pure definitions and *no* top-level code:
+Put `import "name";` at the top of any file. The parser inlines the named library's definitions into your program. One command builds the whole thing.
 
 **lib.calc:**
 
@@ -2224,152 +2224,126 @@ pub fn greet(name) {
     return "hello, " + name;
 }
 
-// Bare `fn` (or `priv fn`) is file-local — not visible to other files.
-fn _internal_helper(x) {
+// Bare `fn` (or `priv fn`) is a file-local helper. Imports inline it
+// too — pub bodies often call private helpers — but conventionally it
+// stays out of the consumer's working vocabulary.
+priv fn _internal_helper(x) {
     return x * 2;
 }
 ```
 
-An entry-point file declares the externs and uses them:
-
 **main.calc:**
 
 ```calc
-extern fn add(a: num, b: num): num;
-extern fn greet(name: str): str;
+import "./lib.calc";     // co-located helper (./ + .calc = sibling file)
 
 print add(2, 3);            // 5
 print greet("world");       // hello, world
 ```
 
-Build them together:
+Build and run:
 
 ```bash
-# Compile the library as a "library object" — no main, no top-level code:
-build/calcnat --lib lib.calc -o lib.s
-
-# Compile the entry-point and link with the library:
-build/calcnat main.calc lib.s -o app.exe
-
+build/calcnat main.calc -o app.exe
 ./app.exe
 # 5
 # hello, world
 ```
 
-### The rules
-
-- `pub fn` (or `pub class`) in a library is **exported** — its symbol is visible across compilation units.
-- Bare `fn` / `priv fn` / bare `class` is **file-local** — invisible to other files even though it might end up in the same final binary.
-- `extern fn` declares a function from another file. Annotations on extern declarations let the caller's compiler type-check the call. They aren't enforced against the actual signature in the other file — keep them consistent yourself.
-- A `.calc` file built with `--lib` must not have top-level statements other than `let`s used to define module-level constants. Top-level code in a library is silently ignored — keep it pure.
-- The first non-library file on the `calcnat` command line is the entry point. Its top-level code becomes the program's main.
-
-### `import` — single-command library use
-
-The simplest model: one command builds your program, libraries and all. No separate build step, no `.s` files on the link line.
+No `make libs`, no `--lib`, no `.s` files on the command line. The same model works for the standard engineering libraries:
 
 ```calc
-// my_prog.calc
-import "math";
-import "stats";
-
-let xs = [1, 4, 9, 16, 25];
-print mean(xs);                   // 11
-print fmt("sqrt(2) = {:.6f}", [hypot(1, 1)]);
+import "math";              // lib/math.calc — sq, cube, hypot, lerp, ...
+import "stats";             // lib/stats.calc — mean, stddev, linreg, ...
+import "nr.brent";          // lib/nr/brent.calc — root finding
 ```
-
-```bash
-build/calcnat my_prog.calc
-./my_prog.exe
-```
-
-That's it. No `make libs`, no `--lib`, no extra files on the command line.
 
 #### How it works
 
 When the parser sees `import "name";`, it:
 
 1. **Resolves the path** (table below).
-2. **Reads and parses the named file** in a fresh sub-parser.
-3. **Inlines every `pub fn` (and `pub class`)** — body and all — into the current program's AST.
-4. **Recursively processes imports** inside that file too, with cycle detection.
+2. **Reads and parses the file** in a fresh sub-parser.
+3. **Inlines every fn definition** (pub *and* priv) into the current program's AST.
+4. **Recursively processes nested imports** with cycle detection.
 
-Then the regular codegen compiles everything together as one program. The library's functions get the same `calc_<name>` symbols they'd have as a standalone build; they just happen to live in the consumer's binary.
+Then the regular codegen compiles everything as one program. The library's functions get the same `calc_<name>` symbols they'd have as a standalone build; they just live in the consumer's binary.
 
 #### Path resolution
 
 | Form                  | Resolved as                                            |
 |-----------------------|--------------------------------------------------------|
-| `"math"`              | bare name → `lib/math.calc` (the standard library)     |
-| `"nr/poly"`           | has a slash → tried as `nr/poly` then importer-relative |
-| `"./helper.calc"`     | importer-relative (force-local)                        |
+| `"math"`              | module spec → `lib/math.calc`                          |
+| `"nr.brent"`          | dot-syntax module spec → `lib/nr/brent.calc`           |
+| `"nr/brent"`          | slash-syntax (equivalent) → `lib/nr/brent.calc`        |
+| `"./helper.calc"`     | importer-relative                                      |
 | `"/abs/path.calc"`    | absolute — used as given                               |
-| `"lib/math.calc"`     | tried as cwd-relative first, then importer-relative    |
+| `"lib/math.calc"`     | literal `.calc` path — cwd-relative, then importer-relative |
 
-The bare-name rule catches the most common case: `import "math"` works from anywhere as long as `lib/math.calc` exists next to the project's working directory. Add a slash or extension when you need anything else.
+The "module spec" rule (anything not absolute, not dot-prefixed, not ending in `.calc`, not starting with `lib/`) is the common case: `import "math"` Just Works from anywhere in the project, and nested libraries use Python-style dots (`nr.brent`) that translate to slashes (`nr/brent`) before joining with `lib/`.
 
 #### Cycle detection
 
-Each canonical file path is imported at most once. If `a.calc` imports `b.calc`, and both import `math`, the math module is included once and shared.
+Each canonical file path is imported at most once. If `nr/svd.calc` imports `nr.eigen`, and your program also imports `nr.eigen` directly, the eigen module is included once.
 
 ```calc
-// a.calc
-import "math";       // -> lib/math.calc (first time)
-import "stats";       // -> lib/stats.calc (which itself imports "math")
-                      // The recursive import of "math" is skipped silently.
+// my_app.calc
+import "nr.svd";        // svd.calc itself does `import "nr.eigen";`
+import "nr.eigen";      // already in the import set — silently skipped
 ```
 
-Direct circular imports (`a` imports `b` imports `a`) are also handled — the second occurrence of `a` finds itself already in the import set and stops.
+Direct circular imports (`a` imports `b` imports `a`) are also handled.
 
-#### `import` vs. `extern fn`
+#### Visibility — `pub` vs. `priv`
 
-`import` is the simple path. `extern fn` is the explicit one — useful when you want to:
-
-- **Subset a library's API** (only import what you name).
-- **Use a pre-compiled `.s`** (e.g. a closed-source library shipped as assembly).
-- **Forward-declare across multiple files** that you link separately.
+A library's `pub` items are its documented API. `priv` items are internal helpers — the import system still inlines them (pub bodies depend on them), but they're not part of what callers should rely on. Conventionally, prefix private helpers with `_`:
 
 ```calc
-// Explicit per-function declarations + manual --lib step:
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-// ... and pass build/stats.s on the command line
-
-// Or just:
-import "stats";
+// lib/nr/svd.calc
+priv fn _svd_matmul(A, B) { ... }    // internal — don't call from outside
+pub  fn svd(A) { ... }                // API — what consumers use
 ```
 
-Both produce the same calls to `mean` / `stddev`. With `import`, the lib's body is inlined into your binary. With `extern fn`, it stays in a separate object file.
+If two imports both define the same symbol name, codegen rejects the program at compile time. Pick names that don't collide.
 
-#### When to use which
+### Top-level state in libraries
 
-- **Default**: `import "math";`. Simplest, works.
-- **Library author shipping precompiled `.s`**: clients use `extern fn`.
-- **Many programs sharing one library binary** (codesize concern): clients use `extern fn` so they link against one shared object instead of inlining the lib N times.
-- **Subset import**: `extern fn` (the only way to be selective).
+A library can declare top-level `let`s for shared constants:
 
-#### Limitations (current)
+```calc
+// lib.calc
+let SCALE = 1.5;     // module-level constant
 
-- **No selective import** like Python's `from X import Y, Z`. Everything `pub` from the imported file comes in.
-- **No name aliasing**. If two imports both export `mean`, the codegen will detect duplicate functions and fail at link time.
-- **No package system**. `import "math"` resolves to `lib/math.calc` relative to cwd; there's no install-able package registry. Add one when there's a clear need.
-- **Library code is inlined per consumer**. If 10 programs all `import "math"`, each binary contains its own copy. This is cheap (math.calc is small) but matters for very large libraries — use `extern fn` + `--lib` to share.
-
-### Putting multiple libraries together
-
-You can link several library objects in one command:
-
-```bash
-build/calcnat --lib lib/stats.calc -o build/stats.s
-build/calcnat --lib lib/plot.calc  -o build/plot.s
-build/calcnat main.calc build/stats.s build/plot.s -o app.exe
+pub fn boost(x) {
+    return x * SCALE;     // works
+}
 ```
 
-The order on the command line doesn't matter for symbol resolution — the entire link is resolved together. Just keep the entry-point `.calc` first.
+But there's a catch: a top-level `pub fn` in the native backend doesn't see top-level `let`s. So this won't work the way you might hope:
+
+```calc
+// lib.calc — BROKEN PATTERN
+let counter = 0;
+pub fn bump() {
+    counter = counter + 1;     // top-level `fn` can't reach top-level `let`
+    return counter;
+}
+```
+
+For stateful libraries, wrap the state in a class:
+
+```calc
+pub class Counter {
+    fn init(start) { this.n = start; }
+    fn bump() { this.n = this.n + 1; return this.n; }
+}
+```
+
+Callers do `let c = Counter(0); c.bump();` — the state rides along with the instance.
 
 ### Using a class from another file
 
-Classes export the same way:
+Classes export the same way as fns:
 
 **shapes.calc:**
 
@@ -2383,13 +2357,41 @@ pub class Circle {
 **main.calc:**
 
 ```calc
-extern fn Circle(r: num): map;        // a class is a fn that returns a map
+import "./shapes.calc";
 
 let c = Circle(5);
 print c.area();                        // 78.53981634
 ```
 
-The `extern fn Name(...): map` form works because instances are maps and the constructor IS a function value.
+### `extern fn` — the lower-level alternative
+
+`import` is the default. For specialized cases there's also `extern fn`, which declares a single symbol from another compilation unit and links against a pre-built `.s` file:
+
+```calc
+// main.calc — explicit declarations, manual link step
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+```
+
+```bash
+build/calcnat --lib lib/stats.calc -o build/stats.s
+build/calcnat main.calc build/stats.s -o app.exe
+```
+
+Use `extern fn` when you want to:
+
+- **Subset a library's API** (only declare what you name — useful if a lib has 200 fns and you want 3).
+- **Use a pre-compiled `.s`** (e.g. a closed-source library shipped as assembly).
+- **Share one library binary across many programs** (avoids inlining the lib N times).
+
+For day-to-day work, `import` is what you want.
+
+### Current limitations
+
+- **No selective import** like Python's `from X import Y, Z`. Everything from the imported file comes in.
+- **No name aliasing**. If two imports both export `mean`, codegen rejects the program. Pick names that don't collide.
+- **No package system**. `import "math"` resolves to `lib/math.calc` under cwd; there's no install-able registry.
+- **Library code is inlined per consumer**. If 10 programs all `import "math"`, each binary contains its own copy. Cheap for small libs, matters for very large ones — use `extern fn` + `--lib` to share if it matters.
 
 ### A bigger example — splitting an app
 
@@ -2438,9 +2440,8 @@ pub class Rng {
 **main.calc:**
 
 ```calc
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-extern fn Rng(seed: num): map;
+import "./stats.calc";
+import "./random.calc";
 
 let rng = Rng(2026);
 let samples = [];
@@ -2454,52 +2455,17 @@ print "stddev = " + stddev(samples);      // ~ 1
 Build:
 
 ```bash
-build/calcnat --lib stats.calc  -o stats.s
-build/calcnat --lib random.calc -o random.s
-build/calcnat main.calc stats.s random.s -o sim.exe
+build/calcnat main.calc -o sim.exe
 ./sim.exe
 # mean   = -0.001234...
 # stddev = 0.998765...
 ```
 
-### A note on top-level state in libraries
-
-A library can declare top-level `let`s for shared constants:
-
-```calc
-// lib.calc
-let SCALE = 1.5;     // module-level constant
-
-pub fn boost(x) {
-    return x * SCALE;     // works
-}
-```
-
-But there's a catch: a top-level `pub fn` in the native backend doesn't see top-level `let`s. So this won't link the way you might hope:
-
-```calc
-// lib.calc — BROKEN PATTERN
-let counter = 0;
-pub fn bump() {
-    counter = counter + 1;     // top-level `fn` can't reach top-level `let`
-    return counter;
-}
-```
-
-The workaround is the same as in Chapter 6: use a let-bound closure, and export the closure itself by storing it in a class or by exposing accessor functions that all take the state as an explicit parameter. The cleanest pattern, for stateful libraries, is to wrap the state in a class:
-
-```calc
-pub class Counter {
-    fn init(start) { this.n = start; }
-    fn bump() { this.n = this.n + 1; return this.n; }
-}
-```
-
-Then callers do `let c = Counter(0); c.bump();` — the state rides along with the instance.
+One command, no per-library `--lib` step. The leading `./` on each import says "look next to main.calc"; without it the parser would search `lib/stats.calc` first.
 
 ### Same source, both pipelines
 
-Multi-file programs work with the bytecode VM too. The equivalent build steps:
+Multi-file programs also work on the bytecode VM, but with the older `extern fn`/`--lib`/per-file `.co` model (the VM's frontend doesn't expand `import` directives across compilation units). For the VM you still write:
 
 ```bash
 build/calcc   lib.calc  lib.casm
@@ -2510,7 +2476,7 @@ build/calcld  main.co lib.co  app.cexe     # main MUST come first — its top-le
 build/calcvm  app.cexe
 ```
 
-Symbols flow the same way: `pub fn` exports, `extern fn` imports, bare `fn` stays local. The VM and native pipeline are deliberately byte-identical in output for the features they share, and the test suite cross-checks them.
+The two pipelines produce byte-identical output for the features they share. For new code, prefer the native backend + `import`.
 
 ---
 
@@ -3468,10 +3434,10 @@ print clamp(15, 0, 10);            // 10
 print remap(5, 0, 10, 100, 200);   // 150
 ```
 
-Build it like any other lib:
+Use it from any program:
 
-```bash
-build/calcnat --lib lib/math.calc -o build/calclib/math.s
+```calc
+import "math";
 ```
 
 ### `lib/linalg.calc` — matrices
@@ -4207,67 +4173,62 @@ extern fn pca_transform(model: map, X_new: arr): arr;
 
 Centers the data matrix and SVDs it. The columns of V are the principal directions (sorted by decreasing variance); U·diag(S) gives the projected coordinates. `pca_transform` projects new samples onto an existing model's axes.
 
-#### Building the NR libraries
-
-```bash
-make nr_libs          # compile lib/nr/*.calc -> build/calclib/nr_*.s
-make nr_demo          # tier 1: Brent + spline + special + Jacobi
-make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
-make nr_demo3         # tier 3: minimization + sort/select
-make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
-make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
-make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
-make nr_demo7         # tier 7: Cholesky + CG + simulated annealing + MCMC
-make nr_demo8         # tier 8: Welch PSD + wavelets + Toeplitz + simplex LP
-make nr_demo9         # tier 9:  2-D FFT + 2-D quadrature + power eigen + B-spline
-make nr_demo10        # tier 10: Neville interp + Gauss-Legendre + BFGS + PCA
-```
-
 ### Building demos
 
-The `lib/` modules compile once as libraries; demos link against them:
+Every demo is a single `import "..."; ...` source file. The Makefile targets are one-liners:
 
 ```bash
-make libs                                # compiles all lib/*.calc -> build/calclib/*.s
-make sine_plot                           # build + run examples/sine_plot.calc
-make regression                          # build + run examples/regression.calc
-make linsys                              # build + run examples/linsys.calc
-make numerical                           # build + run examples/numerical.calc
-make monte_carlo                         # build + run examples/monte_carlo.calc
-make csv_demo                            # build + run examples/csv_demo.calc
-make multi_plot                          # multi-series + bar + log-Y + axis labels
-make json_demo                           # JSON parse/encode round-trip
-make ode_demo                            # exp-decay + harmonic oscillator via RK4
-make fft_demo                            # FFT spectrum of a synthetic signal
-make nr_demo                             # Brent + spline + special fns + Jacobi
-make nr_demo2                            # LU + Romberg + RK45 + polynomial families
-make nr_demo3                            # 1-D / N-D minimization + sort/select
-make nr_demo4                            # Ridders' + distributions + Newton + LM fit
-make nr_demo5                            # QR + SVD + Laguerre polyroots + convolution
-make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
-make nr_demo7                            # Cholesky + CG + simulated annealing + MCMC
-make nr_demo8                            # Welch PSD + wavelets + Toeplitz + simplex LP
-make nr_demo9                            # 2-D FFT + 2-D quadrature + power eigen + B-spline
-make nr_demo10                           # Neville + arbitrary-order GL + BFGS + PCA
-make demos                               # all of the above
+make math_demo            # examples/math_demo.calc — sq, cube, hypot, lerp, ...
+make sine_plot            # examples/sine_plot.calc — writes build/sine.svg
+make regression           # examples/regression.calc — linear regression + plot
+make linsys               # examples/linsys.calc — Ax = b via LU
+make numerical            # examples/numerical.calc — roots, integrals, interp
+make monte_carlo          # examples/monte_carlo.calc — PRNG class + π estimate
+make csv_demo             # examples/csv_demo.calc — CSV write/read/fit/plot
+make multi_plot           # examples/multi_plot.calc — multi-series + bar + log-Y
+make json_demo            # examples/json_demo.calc — JSON round-trip
+make ode_demo             # examples/ode_demo.calc — exp-decay + SHO via RK4
+make fft_demo             # examples/fft_demo.calc — spectrum of a synthetic signal
+make nr_demo              # examples/nr_demo.calc — Brent + spline + special + Jacobi
+make nr_demo2             # examples/nr_demo2.calc — LU + Romberg + RK45 + poly families
+make nr_demo3             # examples/nr_demo3.calc — minimization + sort/select
+make nr_demo4             # examples/nr_demo4.calc — Ridders' + dist + Newton + LM
+make nr_demo5             # examples/nr_demo5.calc — QR + SVD + polyroots + conv
+make nr_demo6             # examples/nr_demo6.calc — Chebyshev + Sav-Gol + Kalman + CN
+make nr_demo7             # examples/nr_demo7.calc — Cholesky + CG + annealing + MCMC
+make nr_demo8             # examples/nr_demo8.calc — Welch + wavelets + Toeplitz + simplex
+make nr_demo9             # examples/nr_demo9.calc — 2-D FFT + 2-D quad + power eig + B-spline
+make nr_demo10            # examples/nr_demo10.calc — Neville + GL + BFGS + PCA
+make demos                # all of the above
 ```
 
-Or by hand:
+The Makefile is one `define DEMO_template`:
+
+```makefile
+define DEMO_template
+$(1): all
+	$$(BUILD)/calcnat examples/$(1).calc -o $$(BUILD)/$(1)
+	$$(BUILD)/$(1)
+endef
+$(eval $(call DEMO_template,math_demo))
+$(eval $(call DEMO_template,sine_plot))
+# ... one $(eval) per demo
+```
+
+By hand, every demo is the same shape:
 
 ```bash
-build/calcnat --lib lib/plot.calc  -o build/calclib/plot.s
-build/calcnat examples/sine_plot.calc build/calclib/plot.s -o build/sine_plot.exe
+build/calcnat examples/sine_plot.calc -o build/sine_plot.exe
 build/sine_plot.exe                       # writes build/sine.svg
 ```
+
+The example does `import "plot";` itself; the parser pulls in `lib/plot.calc` (and any libraries that `plot.calc` imports, transitively). No `--lib` step.
 
 ### Worked example: linear regression with plot
 
 ```calc
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-extern fn linreg(xs: arr, ys: arr): map;
-extern fn plot_data_with_fit(filename: str, xs: arr, ys_data: arr,
-                             ys_fit: arr, title: str);
+import "stats";
+import "plot";
 
 // Deterministic in-source PRNG (let-bound closure so it can capture seed).
 let seed = 42;
@@ -4304,9 +4265,9 @@ The fit recovers ~`y = 1.71 x + 4.10` with R² ≈ 0.985 — very close to the t
 Two patterns to remember when factoring an engineering program:
 
 1. A **top-level `fn`** does NOT see top-level `let` bindings — top-level fns are compiled as standalone units. Use a **let-bound closure** (`let foo = fn(...) { ... };`) when you need to capture top-level state like a library handle, a PRNG seed, or a configuration map.
-2. Library files compiled with `--lib` contribute only their function bodies. The entry-point unit (compiled without `--lib`) owns `main`. Public functions in libraries are `pub fn`; bare `fn` stays file-local.
+2. Library files contribute only their function bodies once `import`ed — any top-level code in the library is dropped. The entry-point file owns `main`. Public surface goes in `pub fn`; private helpers stay `priv fn` (still inlined, but conventionally not called from outside).
 
-These two rules together give you a clean module system: one unit per file, public surface via `pub fn`, private helpers as bare `fn`.
+These two rules together give you a clean module system: one unit per file, public surface via `pub fn`, private helpers as `priv fn`.
 
 ---
 
