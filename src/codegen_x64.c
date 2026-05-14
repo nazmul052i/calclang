@@ -602,6 +602,27 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"read_key",        "cl_builtin_read_key",        0},
     {"time_ms",         "cl_builtin_time_ms",         0},
 
+    /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
+       helpers built on top. */
+    {"gui_init",        "cl_builtin_gui_init",        3},
+    {"gui_close",       "cl_builtin_gui_close",       0},
+    {"gui_should_close","cl_builtin_gui_should_close",0},
+    {"gui_poll_events", "cl_builtin_gui_poll_events", 0},
+    {"gui_set_color",   "cl_builtin_gui_set_color",   3},
+    {"gui_clear",       "cl_builtin_gui_clear",       3},
+    {"gui_rect",        "cl_builtin_gui_rect",        4},
+    {"gui_rect_outline","cl_builtin_gui_rect_outline",4},
+    {"gui_line",        "cl_builtin_gui_line",        4},
+    {"gui_pixel",       "cl_builtin_gui_pixel",       2},
+    {"gui_present",     "cl_builtin_gui_present",     0},
+    {"gui_set_title",   "cl_builtin_gui_set_title",   1},
+    {"gui_key_down",    "cl_builtin_gui_key_down",    1},
+    {"gui_key_pressed", "cl_builtin_gui_key_pressed", 1},
+    {"gui_mouse_x",     "cl_builtin_gui_mouse_x",     0},
+    {"gui_mouse_y",     "cl_builtin_gui_mouse_y",     0},
+    {"gui_mouse_down",  "cl_builtin_gui_mouse_down",  1},
+    {"gui_mouse_clicked","cl_builtin_gui_mouse_clicked",1},
+
     /* Complex numbers. */
     {"complex",         "cl_builtin_complex",         2},
     {"real",            "cl_builtin_real",            1},

@@ -313,18 +313,21 @@ static void cl_gc(void) {
 }
 
 /* --- die ---------------------------------------------------------- */
-static void cl_die_rt(const char *msg) {
+/* Externally visible so addon runtime modules (e.g. runtime_gui_sdl2.c)
+   can use the same error-reporting + type-checking helpers without
+   duplicating them. */
+void cl_die_rt(const char *msg) {
     fprintf(stderr, "runtime error: %s\n", msg);
     exit(1);
 }
 
-static void require_num(Value v, const char *where) {
+void require_num(Value v, const char *where) {
     if (!cl_is_num(v)) {
         fprintf(stderr, "runtime error: %s expected num, got non-num\n", where);
         exit(1);
     }
 }
-static void require_str(Value v, const char *where) {
+void require_str(Value v, const char *where) {
     if (!cl_is_str(v)) {
         fprintf(stderr, "runtime error: %s expected str\n", where);
         exit(1);

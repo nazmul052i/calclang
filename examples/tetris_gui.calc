@@ -1,0 +1,399 @@
+// Tetris — SDL2-backed GUI version.
+//
+//   build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe
+//   build/tetris_gui.exe
+//
+// Controls:
+//   ← / →   move
+//   ↑       rotate clockwise
+//   ↓       soft drop (one step)
+//   space   hard drop (slam to bottom)
+//   esc     quit
+//
+// Score / lines / level are shown in the window's title bar (no
+// native text rendering in Stage 1 of the GUI runtime). The board and
+// pieces are drawn with gui_rect + gui_rect_outline.
+
+import "random";
+import "gui";
+
+// =====================================================================
+// Constants — board geometry + pixel sizing
+// =====================================================================
+
+fn cell_px() { return 28; }        // each board cell is 28×28 px
+fn board_pad() { return 20; }       // px from window edge to board edge
+
+// =====================================================================
+// Piece definitions
+// =====================================================================
+
+struct Piece {
+    color: any,            // Color record from lib/gui.calc
+    rotations: arr,        // 4 rotations × 4 cells; each cell = [dx, dy]
+}
+
+fn make_pieces() {
+    return [
+        // I — cyan
+        Piece(Color(80, 220, 230), [
+            [[0,1],[1,1],[2,1],[3,1]],
+            [[2,0],[2,1],[2,2],[2,3]],
+            [[0,2],[1,2],[2,2],[3,2]],
+            [[1,0],[1,1],[1,2],[1,3]],
+        ]),
+        // O — yellow
+        Piece(Color(230, 210, 70), [
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+        ]),
+        // T — magenta
+        Piece(Color(190, 80, 200), [
+            [[1,0],[0,1],[1,1],[2,1]],
+            [[1,0],[1,1],[2,1],[1,2]],
+            [[0,1],[1,1],[2,1],[1,2]],
+            [[1,0],[0,1],[1,1],[1,2]],
+        ]),
+        // S — green
+        Piece(Color(90, 200, 100), [
+            [[1,0],[2,0],[0,1],[1,1]],
+            [[1,0],[1,1],[2,1],[2,2]],
+            [[1,1],[2,1],[0,2],[1,2]],
+            [[0,0],[0,1],[1,1],[1,2]],
+        ]),
+        // Z — red
+        Piece(Color(220, 80, 100), [
+            [[0,0],[1,0],[1,1],[2,1]],
+            [[2,0],[1,1],[2,1],[1,2]],
+            [[0,1],[1,1],[1,2],[2,2]],
+            [[1,0],[0,1],[1,1],[0,2]],
+        ]),
+        // J — blue
+        Piece(Color(80, 130, 220), [
+            [[0,0],[0,1],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[1,2]],
+            [[0,1],[1,1],[2,1],[2,2]],
+            [[1,0],[1,1],[0,2],[1,2]],
+        ]),
+        // L — orange
+        Piece(Color(230, 150, 60), [
+            [[2,0],[0,1],[1,1],[2,1]],
+            [[1,0],[1,1],[1,2],[2,2]],
+            [[0,1],[1,1],[2,1],[0,2]],
+            [[0,0],[1,0],[1,1],[1,2]],
+        ]),
+    ];
+}
+
+struct Game {
+    board: arr,        // 20 rows × 10 cols, each cell = Color or 0 (empty)
+    pieces: arr,
+    piece_idx: num,
+    rot: num,
+    px: num,
+    py: num,
+    next_idx: num,
+    rng: any,
+    score: num,
+    lines: num,
+    level: num,
+    over: num,
+    last_drop: num,
+}
+
+fn empty_board() {
+    let b = [];
+    for r in 0..20 {
+        let row = [];
+        for c in 0..10 { push(row, 0); }
+        push(b, row);
+    }
+    return b;
+}
+
+fn drop_interval_ms(level) {
+    let v = 800 - 70 * level;
+    if (v < 80) { v = 80; }
+    return v;
+}
+
+fn random_piece_idx(rng) {
+    return floor(rng.uniform01() * 7);
+}
+
+// =====================================================================
+// Collision / placement (same shape as the terminal version)
+// =====================================================================
+
+fn piece_cells(g, piece_idx, rot, px, py) {
+    let cells = g.pieces[piece_idx].rotations[rot];
+    let out = [];
+    for cell in cells {
+        push(out, [px + cell[0], py + cell[1]]);
+    }
+    return out;
+}
+
+fn collides(g, piece_idx, rot, px, py) {
+    let cells = piece_cells(g, piece_idx, rot, px, py);
+    for cell in cells {
+        let x = cell[0];
+        let y = cell[1];
+        if (x < 0 || x >= 10 || y >= 20) { return 1; }
+        if (y >= 0 && g.board[y][x] != 0) { return 1; }
+    }
+    return 0;
+}
+
+fn lock_piece(g) {
+    let cells = piece_cells(g, g.piece_idx, g.rot, g.px, g.py);
+    let color = g.pieces[g.piece_idx].color;
+    for cell in cells {
+        let x = cell[0];
+        let y = cell[1];
+        if (y >= 0 && y < 20 && x >= 0 && x < 10) {
+            g.board[y][x] = color;
+        }
+    }
+}
+
+fn clear_full_lines(g) {
+    let cleared = 0;
+    let new_board = [];
+    for r in 0..20 {
+        let full = 1;
+        for c in 0..10 {
+            if (g.board[r][c] == 0) { full = 0; }
+        }
+        if (full) {
+            cleared = cleared + 1;
+        } else {
+            push(new_board, g.board[r]);
+        }
+    }
+    for i in 0..cleared {
+        let row = [];
+        for c in 0..10 { push(row, 0); }
+        new_board = array_concat([row], new_board);
+    }
+    g.board = new_board;
+    g.lines = g.lines + cleared;
+    if (cleared > 0) {
+        let bonus = [0, 100, 300, 500, 800];
+        g.score = g.score + bonus[cleared] * (g.level + 1);
+        g.level = floor(g.lines / 10);
+    }
+}
+
+fn spawn_next(g) {
+    g.piece_idx = g.next_idx;
+    g.next_idx = random_piece_idx(g.rng);
+    g.rot = 0;
+    g.px = 3;
+    g.py = -1;
+    if (collides(g, g.piece_idx, g.rot, g.px, g.py)) {
+        g.over = 1;
+    }
+}
+
+fn try_move(g, dx, dy) {
+    if (!collides(g, g.piece_idx, g.rot, g.px + dx, g.py + dy)) {
+        g.px = g.px + dx;
+        g.py = g.py + dy;
+        return 1;
+    }
+    return 0;
+}
+
+fn try_rotate(g) {
+    let new_rot = (g.rot + 1) % 4;
+    let kicks = [0, -1, 1, -2, 2];
+    for k in kicks {
+        if (!collides(g, g.piece_idx, new_rot, g.px + k, g.py)) {
+            g.rot = new_rot;
+            g.px = g.px + k;
+            return;
+        }
+    }
+}
+
+fn soft_drop(g) {
+    if (try_move(g, 0, 1)) {
+        g.score = g.score + 1;
+    } else {
+        lock_piece(g);
+        clear_full_lines(g);
+        spawn_next(g);
+    }
+}
+
+fn hard_drop(g) {
+    let dist = 0;
+    while (try_move(g, 0, 1)) { dist = dist + 1; }
+    g.score = g.score + 2 * dist;
+    lock_piece(g);
+    clear_full_lines(g);
+    spawn_next(g);
+}
+
+fn ghost_y(g) {
+    let y = g.py;
+    while (!collides(g, g.piece_idx, g.rot, g.px, y + 1)) {
+        y = y + 1;
+    }
+    return y;
+}
+
+// =====================================================================
+// Rendering (SDL2-backed)
+// =====================================================================
+
+fn draw_cell(col, row, color) {
+    let cs = cell_px();
+    let x = board_pad() + col * cs;
+    let y = board_pad() + row * cs;
+    // Bevel-style block: fill + outline.
+    gui_set_color(color.r, color.g, color.b);
+    gui_rect(x + 1, y + 1, cs - 2, cs - 2);
+    gui_set_color(min(color.r + 50, 255), min(color.g + 50, 255), min(color.b + 50, 255));
+    gui_rect_outline(x + 1, y + 1, cs - 3, cs - 3);
+}
+
+fn draw_ghost_cell(col, row) {
+    let cs = cell_px();
+    let x = board_pad() + col * cs;
+    let y = board_pad() + row * cs;
+    gui_set_color(80, 80, 100);
+    gui_rect_outline(x + 3, y + 3, cs - 7, cs - 7);
+}
+
+fn render(g) {
+    gui_clear(18, 20, 28);
+
+    let cs = cell_px();
+    let bw = 10 * cs;
+    let bh = 20 * cs;
+    let bx = board_pad();
+    let by = board_pad();
+
+    // Board background.
+    gui_set_color(28, 30, 42);
+    gui_rect(bx, by, bw, bh);
+    gui_set_color(60, 65, 85);
+    gui_rect_outline(bx, by, bw, bh);
+
+    // Subtle grid lines.
+    gui_set_color(34, 36, 50);
+    for r in 1..20 {
+        gui_line(bx, by + r * cs, bx + bw, by + r * cs);
+    }
+    for c in 1..10 {
+        gui_line(bx + c * cs, by, bx + c * cs, by + bh);
+    }
+
+    // Locked blocks.
+    for r in 0..20 {
+        for c in 0..10 {
+            if (g.board[r][c] != 0) {
+                draw_cell(c, r, g.board[r][c]);
+            }
+        }
+    }
+
+    // Ghost piece (where it would land).
+    let gy = ghost_y(g);
+    let gcells = piece_cells(g, g.piece_idx, g.rot, g.px, gy);
+    for cell in gcells {
+        if (cell[1] >= 0) {
+            draw_ghost_cell(cell[0], cell[1]);
+        }
+    }
+
+    // Active piece.
+    let pcells = piece_cells(g, g.piece_idx, g.rot, g.px, g.py);
+    let color = g.pieces[g.piece_idx].color;
+    for cell in pcells {
+        if (cell[1] >= 0) {
+            draw_cell(cell[0], cell[1], color);
+        }
+    }
+
+    // Next-piece preview to the right of the board.
+    let nx = bx + bw + 20;
+    let ny = by;
+    gui_set_color(40, 43, 60);
+    gui_rect(nx, ny, 4 * cs, 4 * cs);
+    gui_set_color(60, 65, 85);
+    gui_rect_outline(nx, ny, 4 * cs, 4 * cs);
+    let np_cells = g.pieces[g.next_idx].rotations[0];
+    let np_color = g.pieces[g.next_idx].color;
+    for cell in np_cells {
+        let nxx = nx + cell[0] * cs;
+        let nyy = ny + cell[1] * cs;
+        gui_set_color(np_color.r, np_color.g, np_color.b);
+        gui_rect(nxx + 1, nyy + 1, cs - 2, cs - 2);
+    }
+
+    // Score / level / lines in the window title — no native text yet.
+    let title = "Tetris   score " + g.score
+              + "   lines " + g.lines
+              + "   level " + g.level;
+    if (g.over) { title = title + "    GAME OVER (press esc to quit)"; }
+    gui_set_title(title);
+
+    gui_present();
+}
+
+// =====================================================================
+// Game loop
+// =====================================================================
+
+fn handle_input(g) {
+    if (gui_key_pressed("left"))  { try_move(g, -1, 0); }
+    if (gui_key_pressed("right")) { try_move(g,  1, 0); }
+    if (gui_key_pressed("up"))    { try_rotate(g); }
+    if (gui_key_pressed("down"))  { soft_drop(g); }
+    if (gui_key_pressed("space")) { hard_drop(g); }
+    if (gui_key_pressed("q"))     { g.over = 1; }
+}
+
+fn play() {
+    // Window: board (10 * 28 = 280) + pad*2 (40) + next preview (4 * 28 + 20) = ~432 px wide.
+    let cs = cell_px();
+    let pad = board_pad();
+    let win_w = pad + 10 * cs + 20 + 4 * cs + pad;
+    let win_h = pad + 20 * cs + pad;
+    gui_init(win_w, win_h, "Tetris (CalcLang + SDL2)");
+
+    let seed = floor(time_ms()) + floor(random() * 1000000);
+    let rng  = Rng(seed);
+    let pieces = make_pieces();
+    let g = Game(empty_board(), pieces, 0, 0, 3, -1,
+                 random_piece_idx(rng), rng,
+                 0, 0, 0, 0, time_ms());
+    spawn_next(g);
+    g.last_drop = time_ms();
+
+    while (!gui_should_close()) {
+        gui_poll_events();
+        if (!g.over) {
+            handle_input(g);
+            let now = time_ms();
+            if (now - g.last_drop >= drop_interval_ms(g.level)) {
+                soft_drop(g);
+                g.last_drop = now;
+            }
+        }
+        render(g);
+        sleep_ms(16);
+    }
+    gui_close();
+
+    print "Final score: " + g.score;
+    print "Lines:       " + g.lines;
+    print "Level:       " + g.level;
+}
+
+play();

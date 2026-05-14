@@ -47,5 +47,10 @@ Thumbs.db
 # Local-only design notes / scratch
 docs/riva_language_design_spec.md
 
+# Vendored third-party libraries (downloaded via tools/setup_sdl2.sh
+# etc.). Don't track binaries in the repo; the setup scripts re-fetch
+# them on demand.
+third_party/
+
 # Misc
 *.log

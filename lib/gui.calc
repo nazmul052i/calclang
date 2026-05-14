@@ -1,0 +1,156 @@
+// gui.calc — small immediate-mode widget kit on top of the gui_*
+// builtins. The widgets here aren't styled to match any OS theme —
+// they're a flat, dark-friendly look meant to be readable in any
+// terminal-like window setup. Customize colors via the helpers.
+
+// =====================================================================
+// Color packing
+// =====================================================================
+
+// A color is a struct of r/g/b — simpler than passing three nums
+// around. All fields are 0..255.
+pub struct Color { r: num, g: num, b: num }
+
+// Convenience: build a Color from three components.
+pub fn rgb(r, g, b) { return Color(r, g, b); }
+
+// A few presets that read nicely in code.
+pub fn col_dark()    { return Color(20, 22, 30); }
+pub fn col_panel()   { return Color(30, 33, 45); }
+pub fn col_text()    { return Color(220, 220, 220); }
+pub fn col_accent()  { return Color(80, 180, 220); }
+pub fn col_warn()    { return Color(220, 140, 50); }
+pub fn col_error()   { return Color(220, 60, 80); }
+pub fn col_ok()      { return Color(80, 200, 120); }
+
+// Set the current draw color from a Color record.
+pub fn gui_set(c) {
+    gui_set_color(c.r, c.g, c.b);
+}
+
+// Clear the window with a Color.
+pub fn gui_clear_c(c) {
+    gui_clear(c.r, c.g, c.b);
+}
+
+// =====================================================================
+// Filled / outlined rectangles using Color
+// =====================================================================
+
+pub fn gui_box(x, y, w, h, c) {
+    gui_set_color(c.r, c.g, c.b);
+    gui_rect(x, y, w, h);
+}
+
+pub fn gui_border(x, y, w, h, c) {
+    gui_set_color(c.r, c.g, c.b);
+    gui_rect_outline(x, y, w, h);
+}
+
+// Filled rect with a 1-px border on top — a "card" / panel look.
+pub fn gui_card(x, y, w, h, fill, border) {
+    gui_box(x, y, w, h, fill);
+    gui_border(x, y, w - 1, h - 1, border);
+}
+
+// =====================================================================
+// Immediate-mode button
+// =====================================================================
+//
+// Returns 1 if the user clicked the button this frame, 0 otherwise.
+// Highlights when hovered. The button has no internal state — the
+// caller redraws it every frame and checks the return value.
+//
+//   if (button(20, 60, 120, 30, "Click me")) {
+//       count = count + 1;
+//   }
+
+priv fn _in_rect(mx, my, x, y, w, h) {
+    return mx >= x && mx < x + w && my >= y && my < y + h;
+}
+
+pub fn button(x, y, w, h, label) {
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let hover = _in_rect(mx, my, x, y, w, h);
+    let held  = hover && gui_mouse_down(0);
+    let clicked = hover && gui_mouse_clicked(0);
+
+    // Background tone shifts on hover and press.
+    let bg = Color(50, 55, 70);
+    if (hover) { bg = Color(70, 80, 105); }
+    if (held)  { bg = Color(30, 35, 50); }
+    gui_box(x, y, w, h, bg);
+    gui_border(x, y, w - 1, h - 1, col_accent());
+
+    // Label rendering is left to the caller (we have no native text
+    // primitive yet). A common pattern: gui_set_title(label) for the
+    // most relevant button, or print the label via the system console.
+    // The `label` parameter is reserved for the future-proof signature;
+    // ignored for now.
+    let _ = label;
+
+    return clicked;
+}
+
+// =====================================================================
+// Checkbox — small toggle with visible state
+// =====================================================================
+
+// Pass current state in; the return value is the new state.
+pub fn checkbox(x, y, size, state) {
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let hover = _in_rect(mx, my, x, y, size, size);
+    let clicked = hover && gui_mouse_clicked(0);
+
+    let bg = Color(40, 44, 58);
+    if (hover) { bg = Color(60, 65, 85); }
+    gui_box(x, y, size, size, bg);
+    gui_border(x, y, size - 1, size - 1, col_accent());
+
+    let s = state;
+    if (clicked) {
+        s = 1 - state;
+    }
+    if (s) {
+        // A filled inner square indicates "on".
+        let pad = 4;
+        gui_box(x + pad, y + pad, size - 2 * pad, size - 2 * pad, col_accent());
+    }
+    return s;
+}
+
+// =====================================================================
+// Slider — drag horizontally to set a value
+// =====================================================================
+
+// Returns the new value (clamped to [lo, hi]).
+pub fn slider(x, y, w, h, lo, hi, value) {
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let hover = _in_rect(mx, my, x, y, w, h);
+    let held  = hover && gui_mouse_down(0);
+
+    let v = value;
+    if (held) {
+        // Linear map: mouse x within the slider rect -> [lo, hi].
+        let t = (mx - x) / w;
+        if (t < 0) { t = 0; }
+        if (t > 1) { t = 1; }
+        v = lo + t * (hi - lo);
+    }
+
+    // Track.
+    gui_box(x, y + h / 2 - 2, w, 4, Color(50, 54, 70));
+    // Filled portion.
+    let frac = (v - lo) / (hi - lo);
+    if (frac < 0) { frac = 0; }
+    if (frac > 1) { frac = 1; }
+    gui_box(x, y + h / 2 - 2, floor(w * frac), 4, col_accent());
+    // Knob.
+    let knob_x = x + floor(w * frac) - h / 2;
+    gui_box(knob_x, y, h, h, col_text());
+
+    return v;
+}

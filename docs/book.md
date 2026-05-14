@@ -2848,6 +2848,119 @@ build/tetris.exe
 
 Controls are arrow keys to move/rotate, space to hard-drop, `q` to quit. The "ghost" preview (where the piece would land), the next-piece panel, and the standard level-up speedup are all there.
 
+### Windowed GUI via SDL2
+
+For an actual *windowed* program — pixels, mouse, keyboard, smooth animation — CalcLang ships an SDL2-backed set of builtins. Same pattern as the terminal builtins: pure CalcLang code on top, a small C runtime module (`src/runtime_gui_sdl2.c`) that wraps SDL2's window/renderer/event API.
+
+#### One-time setup
+
+```bash
+tools/setup_sdl2.sh        # downloads + unpacks SDL2 into third_party/
+make                        # rebuild calcnat to pick up the GUI runtime path
+```
+
+The setup script fetches the official SDL2 mingw dev tarball (~13 MB) from `github.com/libsdl-org/SDL`, extracts to `third_party/SDL2-X.X.X/`, and that's it. The vendored tree is gitignored. After this, calcnat auto-detects SDL2 and links every GUI program against it (non-GUI programs aren't affected — the dead-code stripper drops the unused builtins).
+
+When you build a GUI program, calcnat copies `SDL2.dll` next to the output `.exe`, so the resulting executable runs anywhere — no PATH setup needed.
+
+#### Builtins
+
+The whole API is ~17 functions, all named `gui_*`:
+
+| Function                              | What it does                                  |
+|---------------------------------------|-----------------------------------------------|
+| `gui_init(w, h, title)`               | open the window; returns 1 on success         |
+| `gui_close()`                         | destroy window + clean up SDL                 |
+| `gui_should_close()`                  | 1 if user closed window or pressed Esc        |
+| `gui_poll_events()`                   | pump SDL events; call once per frame          |
+| `gui_set_color(r, g, b)`              | set current draw color (each 0..255)          |
+| `gui_clear(r, g, b)`                  | fill window with color                        |
+| `gui_rect(x, y, w, h)`                | filled rect, current color                    |
+| `gui_rect_outline(x, y, w, h)`        | outline rect, current color                   |
+| `gui_line(x1, y1, x2, y2)`            | line, current color                           |
+| `gui_pixel(x, y)`                     | single pixel, current color                   |
+| `gui_present()`                       | swap buffers (display what you drew)          |
+| `gui_set_title(s)`                    | change window title (e.g. for score display)  |
+| `gui_key_down(name)`                  | 1 if key currently held                       |
+| `gui_key_pressed(name)`               | 1 if pressed this frame (one-shot)            |
+| `gui_mouse_x() / gui_mouse_y()`       | mouse position in window                      |
+| `gui_mouse_down(idx)`                 | mouse button currently held? 0=L, 1=M, 2=R    |
+| `gui_mouse_clicked(idx)`              | clicked this frame? (one-shot)                |
+
+Key names for `gui_key_down` / `gui_key_pressed`: `"left"`, `"right"`, `"up"`, `"down"`, `"space"`, `"enter"`, `"esc"`, `"tab"`, `"shift"`, `"ctrl"`, `"alt"`, plus any single character (`"a"`, `" "`, `"7"`, ...).
+
+#### Standard game-loop shape
+
+```calc
+import "gui";
+
+gui_init(640, 480, "My program");
+let x = 100;
+
+while (!gui_should_close()) {
+    gui_poll_events();
+
+    // Update state.
+    if (gui_key_down("right")) { x = x + 5; }
+    if (gui_key_down("left"))  { x = x - 5; }
+
+    // Render this frame.
+    gui_clear(20, 25, 40);                   // dark background
+    gui_set_color(220, 80, 120);
+    gui_rect(x, 200, 50, 50);
+    gui_present();
+
+    sleep_ms(16);                            // ~60 fps cap
+}
+gui_close();
+```
+
+`gui_poll_events()` *must* be called every frame — without it the OS will mark the window unresponsive within a second or two.
+
+#### Widget kit
+
+`lib/gui.calc` builds an immediate-mode widget kit on top of the primitives — buttons, checkboxes, sliders, colored panels:
+
+```calc
+import "gui";
+
+gui_init(400, 300, "Widgets demo");
+let counter = 0;
+let dark = 0;
+let volume = 50;
+
+while (!gui_should_close()) {
+    gui_poll_events();
+    gui_clear_c(col_dark());
+
+    if (button(20, 20, 140, 32, "Click me")) {
+        counter = counter + 1;
+    }
+    dark = checkbox(20, 70, 24, dark);
+    volume = slider(60, 130, 200, 24, 0, 100, volume);
+
+    gui_set_title("clicks=" + counter + "  vol=" + floor(volume));
+    gui_present();
+    sleep_ms(16);
+}
+gui_close();
+```
+
+The kit is intentionally small — `button`, `checkbox`, `slider`, plus color helpers (`col_dark`, `col_panel`, `col_accent`, `rgb(r, g, b)`). Building more widgets on top is straightforward: each is just a function that checks `gui_mouse_*` against its hit rect and draws with `gui_rect`. Look at `lib/gui.calc` for the template.
+
+#### Worked example: GUI Tetris
+
+`examples/tetris_gui.calc` is the same Tetris game logic as `examples/tetris.calc`, but the render pass uses `gui_rect`/`gui_rect_outline` instead of ANSI block printing, and input comes from `gui_key_pressed` instead of `read_key`. Score / lines / level go in the window title bar — Stage 1 of the GUI runtime doesn't render text yet (a bitmap font is a future stage).
+
+```bash
+build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe
+build/tetris_gui.exe
+```
+
+#### Cross-platform note
+
+SDL2 itself is cross-platform — Windows, macOS, Linux, even mobile and the web (via Emscripten). What's currently Windows-only is the vendored mingw-built SDL2 tree under `third_party/`. To use the GUI on macOS or Linux, run `brew install sdl2` / `apt install libsdl2-dev`, then point `calcnat` at the system SDL2 by editing the `sdl_root` path in `src/calcnat.c` (or set `CALC_SDL2_ROOT`). A proper auto-detect path is a small future cleanup; the bones are in place.
+
 ### Complex numbers
 
 A first-class type: `complex(re, im)` builds one; arithmetic operators do the right thing.

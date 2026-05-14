@@ -140,10 +140,32 @@ int main(int argc, char **argv) {
     const char *include_dir = getenv("CALC_INCLUDE");
     if (!include_dir || !*include_dir) include_dir = "include";
 
-    char cmd[4096];
+    /* GUI support: if the vendored SDL2 tree exists, we always link
+       SDL2 + the GUI runtime module. The dead-code stripper drops the
+       GUI fns when the program doesn't use them, so non-GUI builds
+       carry no runtime cost beyond a slightly slower link. Set
+       CALC_NO_GUI=1 to opt out (useful if you've moved SDL2 or are
+       building without it). */
+    const char *no_gui = getenv("CALC_NO_GUI");
+    int gui_enabled = (!no_gui || !*no_gui);
+    const char *sdl_root = "third_party/SDL2-2.30.10/x86_64-w64-mingw32";
+    /* Existence check on libSDL2.dll.a — present when setup is done. */
+    char sdl_lib_probe[512];
+    snprintf(sdl_lib_probe, sizeof sdl_lib_probe,
+        "%s/lib/libSDL2.dll.a", sdl_root);
+    FILE *probe = fopen(sdl_lib_probe, "rb");
+    if (probe) fclose(probe);
+    else gui_enabled = 0;
+
+    char cmd[8192];
     int  off = 0;
     off += snprintf(cmd + off, sizeof(cmd) - off,
         "gcc -O0 -I%s \"%s\" \"%s\"", include_dir, asm_path, rt_dir);
+    if (gui_enabled) {
+        off += snprintf(cmd + off, sizeof(cmd) - off,
+            " src/runtime_gui_sdl2.c -I%s/include -L%s/lib -lmingw32 -lSDL2main -lSDL2",
+            sdl_root, sdl_root);
+    }
     for (int i = 0; i < extra_count; i++) {
         off += snprintf(cmd + off, sizeof(cmd) - off, " \"%s\"", extras[i]);
     }
@@ -153,6 +175,34 @@ int main(int argc, char **argv) {
     if (rc != 0) {
         fprintf(stderr, "calcnat: gcc failed (%d): %s\n", rc, cmd);
         exit(1);
+    }
+    /* Copy SDL2.dll next to the output .exe so GUI programs Just Run.
+       Done via plain C file I/O so we don't depend on `cp` (mingw) vs
+       `copy` (cmd.exe) shell-builtin availability. */
+    if (gui_enabled) {
+        char src_dll[600], dst_dll[700];
+        snprintf(src_dll, sizeof src_dll, "%s/bin/SDL2.dll", sdl_root);
+        /* Strip filename component from `out` to get the dest dir. */
+        char out_dir[600];
+        cl_strncpy_z(out_dir, out, sizeof out_dir);
+        char *s1 = strrchr(out_dir, '/');
+        char *s2 = strrchr(out_dir, '\\');
+        char *s  = s1 > s2 ? s1 : s2;
+        if (s) *s = '\0'; else cl_strncpy_z(out_dir, ".", sizeof out_dir);
+        snprintf(dst_dll, sizeof dst_dll, "%s/SDL2.dll", out_dir);
+        FILE *fi = fopen(src_dll, "rb");
+        if (fi) {
+            FILE *fo = fopen(dst_dll, "wb");
+            if (fo) {
+                char buf[16 * 1024];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof buf, fi)) > 0) {
+                    fwrite(buf, 1, n, fo);
+                }
+                fclose(fo);
+            }
+            fclose(fi);
+        }
     }
     return 0;
 }
