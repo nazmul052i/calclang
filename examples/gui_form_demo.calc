@@ -1,0 +1,80 @@
+// gui_form_demo.calc — exercise the widget kit: button, text_input,
+// dropdown, checkbox, slider. Build a tiny "settings" panel.
+//
+// One-time setup:    tools/setup_sdl2.sh
+// Build + run:       build/calcnat examples/gui_form_demo.calc -o build/gui_form_demo.exe
+//                    build/gui_form_demo.exe
+
+import "gui";
+
+let win_w = 520;
+let win_h = 380;
+gui_init(win_w, win_h, "CalcLang GUI form demo");
+
+let name      = "Alice";
+let api_key   = "";
+let backend   = 0;
+let backends  = ["native (calcnat)", "bytecode VM", "WebAssembly"];
+let dark_mode = 1;
+let volume    = 65;
+let last_click_count = 0;
+
+while (!gui_should_close()) {
+    gui_poll_events();
+
+    // Background — switch on the dark-mode toggle just to demo state.
+    if (dark_mode) {
+        gui_clear_c(col_dark());
+    } else {
+        gui_clear(245, 245, 250);
+    }
+
+    // Title.
+    gui_set(col_text());
+    if (!dark_mode) { gui_set_color(30, 30, 40); }
+    gui_set_text_scale(2);
+    gui_text(20, 20, "Settings");
+    gui_set_text_scale(1);
+    gui_text(20, 50, "Edit the form below. State is mutated in place.");
+
+    // Two labelled text fields.
+    label(20, 90, "Name:");
+    name = text_input(120, 84, 280, 28, "name", name);
+
+    label(20, 130, "API key:");
+    api_key = text_input(120, 124, 280, 28, "api_key", api_key);
+
+    // Dropdown for backend.
+    label(20, 170, "Backend:");
+    // The dropdown is drawn last in the file so its open list overlays
+    // anything below it — but we still want to call it here.
+
+    // Checkbox + slider.
+    label(20, 230, "Dark mode:");
+    dark_mode = checkbox(120, 224, 28, dark_mode);
+
+    label(20, 270, "Volume:");
+    volume = slider(120, 264, 280, 28, 0, 100, volume);
+
+    // Submit button.
+    if (button(20, 320, 140, 36, "Submit")) {
+        last_click_count = last_click_count + 1;
+    }
+    label_scaled(180, 332, "submits: " + last_click_count, 1);
+
+    // Render the dropdown last so its open-list panel covers anything
+    // beneath when expanded.
+    backend = dropdown(120, 164, 280, 28, "backend", backend, backends);
+
+    gui_present();
+    sleep_ms(16);
+}
+gui_close();
+
+print "----- form values -----";
+print "name:    " + name;
+print "api_key: " + api_key;
+print "backend: " + backends[backend];
+print "dark:    " + dark_mode;
+print "volume:  " + volume;
+print "submits: " + last_click_count;

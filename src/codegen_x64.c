@@ -626,6 +626,9 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"gui_mouse_y",     "cl_builtin_gui_mouse_y",     0},
     {"gui_mouse_down",  "cl_builtin_gui_mouse_down",  1},
     {"gui_mouse_clicked","cl_builtin_gui_mouse_clicked",1},
+    {"gui_text_typed",  "cl_builtin_gui_text_typed",  0},
+    {"gui_get_focus",   "cl_builtin_gui_get_focus",   0},
+    {"gui_set_focus",   "cl_builtin_gui_set_focus",   1},
 
     /* Complex numbers. */
     {"complex",         "cl_builtin_complex",         2},

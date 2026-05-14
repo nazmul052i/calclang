@@ -42,6 +42,18 @@ typedef struct {
     int           mouse_x, mouse_y;
     int           mouse_button_down[5];        /* SDL has up to ~5 buttons */
     int           mouse_button_clicked[5];     /* one-shot, cleared by poll */
+    /* Text input buffer. SDL_TEXTINPUT events accumulate here; the
+       gui_text_typed() builtin drains it. Capped at 1024 bytes per
+       frame — anything beyond is dropped silently (real typing rates
+       are nowhere near that). */
+    char          typed_buf[1024];
+    int           typed_len;
+    /* Currently-focused widget ID. A short string set by the widget
+       library (gui_set_focus) and read each frame (gui_get_focus).
+       Used by text_input/dropdown to know which one has the typing
+       cursor and which dropdown panel is open. */
+    char          focus_buf[128];
+    int           focus_len;
 } GuiState;
 
 static GuiState G;
@@ -50,6 +62,7 @@ static GuiState G;
 extern void cl_die_rt(const char *msg);
 extern void require_num(Value v, const char *where);
 extern void require_str(Value v, const char *where);
+extern Value cl_new_str(const char *bytes, uint64_t len);
 
 /* Helper: numeric-coerce a Value to int. */
 static int as_int(Value v, const char *where) {
@@ -124,6 +137,12 @@ Value cl_builtin_gui_init(Value w_v, Value h_v, Value title_v) {
     G.height = h;
     G.r = 255; G.g = 255; G.b = 255; G.a = 255;
     G.inited = 1;
+    /* Enable SDL's text-input mode so SDL_TEXTINPUT events fire for
+       typed characters. Without this, all we'd get is raw SDL_KEYDOWN
+       events that don't account for keyboard layout / Shift / dead
+       keys — fine for game-key polling, useless for typing into a
+       text field. */
+    SDL_StartTextInput();
     return cl_from_num(1.0);
 }
 
@@ -177,8 +196,48 @@ Value cl_builtin_gui_poll_events(void) {
                 if (b >= 0 && b < 5) G.mouse_button_down[b] = 0;
                 break;
             }
+            case SDL_TEXTINPUT: {
+                /* Append the typed bytes to the per-frame buffer. We
+                   keep it as raw bytes — non-ASCII multi-byte UTF-8
+                   passes through cleanly even though our 8x8 font
+                   only renders ASCII. */
+                const char *t = e.text.text;
+                int tl = (int)strlen(t);
+                if (G.typed_len + tl < (int)sizeof G.typed_buf) {
+                    memcpy(G.typed_buf + G.typed_len, t, (size_t)tl);
+                    G.typed_len += tl;
+                }
+                break;
+            }
         }
     }
+    return cl_from_num(0.0);
+}
+
+/* gui_text_typed() — returns and clears the per-frame typed-character
+   buffer. Returns an empty string when no text input fired. */
+Value cl_builtin_gui_text_typed(void) {
+    Value v = cl_new_str(G.typed_buf, (uint64_t)G.typed_len);
+    G.typed_len = 0;
+    return v;
+}
+
+/* gui_get_focus() — returns the current focused widget id, or "". */
+Value cl_builtin_gui_get_focus(void) {
+    return cl_new_str(G.focus_buf, (uint64_t)G.focus_len);
+}
+
+/* gui_set_focus(id) — record a string id as focused. The widget
+   library uses this to know which text input gets typed text and
+   which dropdown is open. Pass "" to clear focus. */
+Value cl_builtin_gui_set_focus(Value id_v) {
+    require_str(id_v, "gui_set_focus");
+    CalcStr *s = cl_as_str(id_v);
+    int n = (int)s->len;
+    if (n >= (int)sizeof G.focus_buf) n = (int)sizeof G.focus_buf - 1;
+    memcpy(G.focus_buf, s->data, (size_t)n);
+    G.focus_buf[n] = '\0';
+    G.focus_len = n;
     return cl_from_num(0.0);
 }
 

@@ -146,7 +146,179 @@ pub fn checkbox(x, y, size, state) {
 // Slider — drag horizontally to set a value
 // =====================================================================
 
-// Returns the new value (clamped to [lo, hi]).
+// =====================================================================
+// Text input — typing-editable single-line field
+// =====================================================================
+//
+// Immediate-mode: caller passes the current string, the widget returns
+// the (possibly mutated) string. Focus is tracked via gui_set_focus /
+// gui_get_focus so the user can have multiple text fields and only the
+// clicked-into one receives typed characters.
+//
+//   let name = "world";
+//   while (!gui_should_close()) {
+//       gui_poll_events();
+//       name = text_input(20, 60, 200, 30, "name", name);
+//       ...
+//   }
+//
+// The `id` argument is a string that uniquely identifies this widget
+// across the program. Used as the focus key — keep it stable per
+// widget, distinct between widgets.
+pub fn text_input(x, y, w, h, id, value) {
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let in_box  = _in_rect(mx, my, x, y, w, h);
+    let clicked = gui_mouse_clicked(0);
+
+    // Click-to-focus, click-elsewhere-to-blur.
+    if (clicked) {
+        if (in_box) {
+            gui_set_focus(id);
+        } else if (gui_get_focus() == id) {
+            gui_set_focus("");
+        }
+    }
+
+    let focused = (gui_get_focus() == id);
+    let new_value = value;
+    if (focused) {
+        // Backspace removes the last char.
+        if (gui_key_pressed("backspace") && len(new_value) > 0) {
+            new_value = str_slice(new_value, 0, len(new_value) - 1);
+        }
+        // Append whatever the user typed since the last frame.
+        let typed = gui_text_typed();
+        if (len(typed) > 0) {
+            new_value = new_value + typed;
+        }
+        // Enter / Esc blurs.
+        if (gui_key_pressed("enter") || gui_key_pressed("escape")) {
+            gui_set_focus("");
+        }
+    }
+
+    // Background + border (highlighted when focused).
+    let bg = Color(35, 40, 55);
+    if (focused) { bg = Color(45, 50, 70); }
+    gui_box(x, y, w, h, bg);
+    let bd = Color(60, 65, 85);
+    if (focused) { bd = col_accent(); }
+    gui_border(x, y, w - 1, h - 1, bd);
+
+    // Render the value with a small left pad. Auto-pick scale: tall
+    // boxes get bigger text, short ones get 1x.
+    let scale = 1;
+    if (h >= 32) { scale = 2; }
+    let pad = 6;
+    let glyph_w = 8 * scale;
+    let glyph_h = 8 * scale;
+    gui_set(col_text());
+    gui_set_text_scale(scale);
+    gui_text(x + pad, y + floor((h - glyph_h) / 2), new_value);
+
+    // Blinking caret at the end of the text.
+    if (focused) {
+        let phase = floor(time_ms() / 500) % 2;
+        if (phase == 0) {
+            let cx = x + pad + len(new_value) * glyph_w;
+            gui_box(cx, y + 4, 2, h - 8, col_text());
+        }
+    }
+    return new_value;
+}
+
+// =====================================================================
+// Dropdown — click to open, click an option to select
+// =====================================================================
+//
+//   let opts = ["alpha", "beta", "gamma"];
+//   choice = dropdown(20, 100, 200, 32, "choice", choice, opts);
+//
+// `current_idx` is the currently-selected index. Returns the new
+// selection (same idx if nothing changed). The open/closed state lives
+// in the focus registry — the dropdown is "open" iff gui_get_focus()
+// matches its id. Clicking anywhere outside the open list closes it.
+//
+// Z-order tip: call this *last* in your frame so the open list panel
+// draws on top of any other widgets it overlaps.
+pub fn dropdown(x, y, w, h, id, current_idx, options) {
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let clicked = gui_mouse_clicked(0);
+    let on_button = _in_rect(mx, my, x, y, w, h);
+
+    let opened = (gui_get_focus() == id);
+    let new_idx = current_idx;
+
+    if (clicked) {
+        if (on_button) {
+            // Toggle.
+            if (opened) { gui_set_focus(""); opened = 0; }
+            else        { gui_set_focus(id); opened = 1; }
+        } else if (opened) {
+            // Maybe clicked on an option?
+            let n = len(options);
+            let picked = -1;
+            for i in 0..n {
+                let oy = y + h + i * h;
+                if (_in_rect(mx, my, x, oy, w, h)) {
+                    picked = i;
+                }
+            }
+            if (picked >= 0) {
+                new_idx = picked;
+            }
+            // Click anywhere outside the button closes (whether or not
+            // we picked something).
+            gui_set_focus("");
+            opened = 0;
+        }
+    }
+
+    // Draw the closed-state button.
+    let bg = Color(50, 55, 70);
+    if (on_button) { bg = Color(70, 80, 105); }
+    gui_box(x, y, w, h, bg);
+    gui_border(x, y, w - 1, h - 1, col_accent());
+
+    // Selected label.
+    gui_set(col_text());
+    gui_set_text_scale(1);
+    gui_text(x + 8, y + floor((h - 8) / 2), options[current_idx]);
+
+    // Down-caret marker on the right.
+    let cy = y + floor(h / 2);
+    gui_set(col_accent());
+    gui_line(x + w - 16, cy - 3, x + w - 10, cy - 3);
+    gui_line(x + w - 16, cy - 3, x + w - 13, cy);
+    gui_line(x + w - 10, cy - 3, x + w - 13, cy);
+
+    // Open-state panel: a stacked list of options.
+    if (opened) {
+        let n = len(options);
+        let panel_h = n * h;
+        gui_box(x, y + h, w, panel_h, Color(40, 44, 58));
+        gui_border(x, y + h, w - 1, panel_h - 1, col_accent());
+        for i in 0..n {
+            let oy = y + h + i * h;
+            let hov = _in_rect(mx, my, x, oy, w, h);
+            if (hov) {
+                gui_box(x + 1, oy + 1, w - 2, h - 2, Color(70, 80, 105));
+            }
+            if (i == current_idx) {
+                gui_set(col_accent());
+            } else {
+                gui_set(col_text());
+            }
+            gui_text(x + 8, oy + floor((h - 8) / 2), options[i]);
+        }
+    }
+    return new_idx;
+}
+
+// Slider — drag horizontally to set a value. Returns the new value
+// (clamped to [lo, hi]).
 pub fn slider(x, y, w, h, lo, hi, value) {
     let mx = gui_mouse_x();
     let my = gui_mouse_y();

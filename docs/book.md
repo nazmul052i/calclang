@@ -2890,6 +2890,8 @@ The whole API is ~17 functions, all named `gui_*`:
 | `gui_mouse_x() / gui_mouse_y()`       | mouse position in window                      |
 | `gui_mouse_down(idx)`                 | mouse button currently held? 0=L, 1=M, 2=R    |
 | `gui_mouse_clicked(idx)`              | clicked this frame? (one-shot)                |
+| `gui_text_typed()`                    | typed characters since last call (drains)     |
+| `gui_get_focus() / gui_set_focus(id)` | currently-focused widget id; "" = none        |
 
 Key names for `gui_key_down` / `gui_key_pressed`: `"left"`, `"right"`, `"up"`, `"down"`, `"space"`, `"enter"`, `"esc"`, `"tab"`, `"shift"`, `"ctrl"`, `"alt"`, plus any single character (`"a"`, `" "`, `"7"`, ...).
 
@@ -2950,7 +2952,25 @@ while (!gui_should_close()) {
 gui_close();
 ```
 
-The kit is intentionally small — `button`, `checkbox`, `slider`, plus color helpers (`col_dark`, `col_panel`, `col_accent`, `rgb(r, g, b)`). Building more widgets on top is straightforward: each is just a function that checks `gui_mouse_*` against its hit rect and draws with `gui_rect`. Look at `lib/gui.calc` for the template.
+Widgets available in `lib/gui.calc`:
+
+- **`button(x, y, w, h, label)`** — returns `1` if clicked this frame.
+- **`checkbox(x, y, size, state)`** — returns the new state (toggles when clicked).
+- **`slider(x, y, w, h, lo, hi, value)`** — drag-to-set, returns the new value.
+- **`text_input(x, y, w, h, id, value)`** — typing-editable string field. Click to focus, Enter/Esc to blur. Returns the (possibly mutated) string.
+- **`dropdown(x, y, w, h, id, current_idx, options)`** — click to open, click an option to select. Returns the new index. Draw last in the frame so its open-list overlays cleanly.
+- **`label(x, y, str)`** / **`label_scaled(x, y, str, scale)`** — bare text.
+
+Plus color helpers: `Color(r, g, b)`, `rgb(r, g, b)`, `col_dark()`, `col_panel()`, `col_text()`, `col_accent()`, `col_warn()`, `col_error()`, `col_ok()`. Building more widgets on top is straightforward: each is just a function that checks `gui_mouse_*` against its hit rect and draws with `gui_rect`/`gui_text`. The `id` parameters on `text_input` and `dropdown` are used as keys into the shared focus registry — give each one a unique string per program.
+
+#### Worked example: a form
+
+`examples/gui_form_demo.calc` is a small settings panel: two text inputs (`name`, `api_key`), a dropdown (`backend`), a checkbox (`dark_mode`), and a slider (`volume`). The whole loop is ~30 lines of immediate-mode code on top of `lib/gui.calc`. When you close the window, the final values are printed to stdout.
+
+```bash
+build/calcnat examples/gui_form_demo.calc -o build/gui_form_demo.exe
+build/gui_form_demo.exe
+```
 
 #### Worked example: GUI Tetris
 
