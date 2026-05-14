@@ -203,7 +203,20 @@ typedef struct {
        emitted. Other compilation units' `main` becomes the program
        entry point. Set by the calcnat driver (`--lib`). */
     int    library_mode;
+
+    /* Lightweight xmm register-stack for binop intermediates.
+       binop_depth is the current depth of nested binop saves; at depth
+       d in [0, XMM_STACK_MAX) we save xmm0 into xmm<6+d> instead of
+       round-tripping via the stack. Above XMM_STACK_MAX we fall back
+       to the stack. xmm_used_mask tracks which of xmm6..xmm9 we
+       actually wrote to in the current function, so the function-emit
+       glue can save/restore exactly those (xmm6+ are nonvolatile in
+       MS x64). Both fields are reset at function entry. */
+    int          binop_depth;
+    unsigned int xmm_used_mask;
 } Cg;
+
+#define XMM_STACK_MAX 4   /* xmm6, xmm7, xmm8, xmm9 */
 
 static int fresh_label(Cg *cg) { return cg->next_label++; }
 
@@ -341,6 +354,48 @@ static void label(Cg *cg, int n) {
 static void push_xmm0(Cg *cg) {
     e(cg, "sub  rsp, 16");
     e(cg, "movsd [rsp], xmm0");
+}
+
+/* Save block size: 16 bytes per used xmm register. Used at function
+   stitch time to extend the locals frame; the save block lives at the
+   bottom of the frame (lowest rbp-relative offsets), addressed via
+   `[rbp - locals_frame - 16*(slot+1)]` so the epilogue can restore
+   even when invoked mid-expression by a `jmp .Lret_X` with an unknown
+   rsp. */
+static int xmm_save_bytes(Cg *cg) {
+    if (cg->xmm_used_mask == 0) return 0;
+    int n = 0;
+    for (int i = 0; i < XMM_STACK_MAX; i++) {
+        if (cg->xmm_used_mask & (1u << i)) n++;
+    }
+    return n * 16;
+}
+
+/* `locals_frame` is the prologue's `sub rsp, K` value (pure locals).
+   We've extended the frame by `xmm_save_bytes(cg)` more bytes, with
+   each saved xmm sitting at a fixed rbp-relative offset below the
+   locals. Call right after the prologue's frame allocation. */
+static void emit_xmm_save(Cg *cg, int locals_frame) {
+    int slot = 1;
+    for (int i = 0; i < XMM_STACK_MAX; i++) {
+        if (cg->xmm_used_mask & (1u << i)) {
+            sb_printf(&cg->out, "    movapd [rbp - %d], xmm%d\n",
+                locals_frame + 16 * slot, 6 + i);
+            slot++;
+        }
+    }
+}
+
+/* Call right before `mov rsp, rbp` in the epilogue. */
+static void emit_xmm_restore(Cg *cg, int locals_frame) {
+    int slot = 1;
+    for (int i = 0; i < XMM_STACK_MAX; i++) {
+        if (cg->xmm_used_mask & (1u << i)) {
+            sb_printf(&cg->out, "    movapd xmm%d, [rbp - %d]\n",
+                6 + i, locals_frame + 16 * slot);
+            slot++;
+        }
+    }
 }
 
 /* If the expression we just evaluated *might* be a NaN-boxed tagged
@@ -853,15 +908,31 @@ static void gen_binop(Cg *cg, AST *n) {
         }
     }
 
-    /* Eager binops: left in xmm0 -> push, right in xmm0 -> pop left
-       into xmm1, then op(xmm0, xmm1) with xmm0=left, xmm1=right. */
+    /* Eager binops: left in xmm0 -> save, right in xmm0 -> swap left
+       into xmm1, then op(xmm0, xmm1) with xmm0=left, xmm1=right.
+       Save uses a small register stack (xmm6..xmm9) before falling back
+       to a 16-byte stack slot, avoiding the load/store roundtrip on the
+       common 4-deep-or-shallower expression tree. */
     gen_expr(cg, n->as.binop.left);
-    push_xmm0(cg);
+    int slot = -1;
+    if (cg->binop_depth < XMM_STACK_MAX) {
+        slot = cg->binop_depth;
+        cg->xmm_used_mask |= (1u << slot);
+        ef(cg, "movapd xmm%d, xmm0", 6 + slot);
+    } else {
+        push_xmm0(cg);
+    }
+    cg->binop_depth++;
     gen_expr(cg, n->as.binop.right);
+    cg->binop_depth--;
     /* swap so xmm0 = left, xmm1 = right */
     e(cg, "movapd xmm1, xmm0");          /* xmm1 = right */
-    e(cg, "movsd  xmm0, [rsp]");
-    e(cg, "add    rsp, 16");             /* xmm0 = left */
+    if (slot >= 0) {
+        ef(cg, "movapd xmm0, xmm%d", 6 + slot);    /* xmm0 = left (from reg) */
+    } else {
+        e(cg, "movsd  xmm0, [rsp]");
+        e(cg, "add    rsp, 16");             /* xmm0 = left (from stack) */
+    }
 
     switch (n->as.binop.op) {
         case TOK_PLUS:  e(cg, "addsd xmm0, xmm1"); return;
@@ -2190,6 +2261,8 @@ static void emit_fn(Cg *cg, AST *fn) {
     cg->name_count   = 0;
     cg->scope_depth  = 0;
     cg->in_fn        = 1;
+    cg->binop_depth   = 0;
+    cg->xmm_used_mask = 0;
     cl_strncpy_z(cg->cur_fn_name, fn->as.fn_def.name, CL_MAX_TEXT);
 
     precompute_boxes(cg, fn);
@@ -2246,14 +2319,23 @@ static void emit_fn(Cg *cg, AST *fn) {
     /* Frame size: round max_locals up to 16. */
     int frame = (cg->max_locals + 15) & ~15;
 
-    /* Stitch: prologue + body + epilogue into cg->out. */
+    /* Stitch: prologue + body + epilogue into cg->out.
+       Frame layout: locals (size `frame`) followed by xmm-save area
+       (size `xmm_bytes`), all in one `sub rsp, total` of the prologue.
+       Saved xmm regs live at rbp-relative offsets so the epilogue can
+       restore them even when reached via `jmp .Lret_X` mid-expression
+       (rsp is unknown at that point). */
+    int xmm_bytes = xmm_save_bytes(cg);
+    int total     = frame + xmm_bytes;
     sb_printf(&cg->out, "\n.globl calc_%s\n", fn->as.fn_def.name);
     sb_printf(&cg->out, "calc_%s:\n", fn->as.fn_def.name);
     sb_add(&cg->out, "    push rbp\n");
     sb_add(&cg->out, "    mov  rbp, rsp\n");
-    if (frame > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", frame);
+    if (total > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", total);
+    emit_xmm_save(cg, frame);
     sb_add(&cg->out, cg->body.buf);
     sb_printf(&cg->out, ".Lret_%s:\n", fn->as.fn_def.name);
+    emit_xmm_restore(cg, frame);
     sb_add(&cg->out, "    mov  rsp, rbp\n");
     sb_add(&cg->out, "    pop  rbp\n");
     sb_add(&cg->out, "    ret\n");
@@ -2302,6 +2384,8 @@ static void emit_main(Cg *cg, const Program *prog) {
     cg->name_count   = 0;
     cg->scope_depth  = 0;
     cg->in_fn        = 1;
+    cg->binop_depth   = 0;
+    cg->xmm_used_mask = 0;
     cl_strncpy_z(cg->cur_fn_name, "_main", CL_MAX_TEXT);
 
     precompute_boxes_top_level(cg, prog);
@@ -2319,13 +2403,17 @@ static void emit_main(Cg *cg, const Program *prog) {
 
     int frame = (cg->max_locals + 15) & ~15;
 
+    int xmm_bytes = xmm_save_bytes(cg);
+    int total     = frame + xmm_bytes;
     sb_add(&cg->out, "\n.globl main\n");
     sb_add(&cg->out, "main:\n");
     sb_add(&cg->out, "    push rbp\n");
     sb_add(&cg->out, "    mov  rbp, rsp\n");
-    if (frame > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", frame);
+    if (total > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", total);
+    emit_xmm_save(cg, frame);
     sb_add(&cg->out, cg->body.buf);
     sb_add(&cg->out, ".Lret__main:\n");
+    emit_xmm_restore(cg, frame);
     sb_add(&cg->out, "    xor  eax, eax\n");
     sb_add(&cg->out, "    mov  rsp, rbp\n");
     sb_add(&cg->out, "    pop  rbp\n");
@@ -2349,6 +2437,8 @@ static void emit_closure_body(Cg *cg, CgClosure *cc) {
     cg->name_count   = 0;
     cg->scope_depth  = 0;
     cg->in_fn        = 1;
+    cg->binop_depth   = 0;
+    cg->xmm_used_mask = 0;
 
     char ret_name[CL_MAX_TEXT];
     snprintf(ret_name, CL_MAX_TEXT, "closure_%d", cc->label_id);
@@ -2401,12 +2491,16 @@ static void emit_closure_body(Cg *cg, CgClosure *cc) {
 
     int frame = (cg->max_locals + 15) & ~15;
 
+    int xmm_bytes = xmm_save_bytes(cg);
+    int total     = frame + xmm_bytes;
     sb_printf(&cg->out, "\n.Lclosure_%d:\n", cc->label_id);
     sb_add(&cg->out, "    push rbp\n");
     sb_add(&cg->out, "    mov  rbp, rsp\n");
-    if (frame > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", frame);
+    if (total > 0) sb_printf(&cg->out, "    sub  rsp, %d\n", total);
+    emit_xmm_save(cg, frame);
     sb_add(&cg->out, cg->body.buf);
     sb_printf(&cg->out, ".Lret_%s:\n", cg->cur_fn_name);
+    emit_xmm_restore(cg, frame);
     sb_add(&cg->out, "    mov  rsp, rbp\n");
     sb_add(&cg->out, "    pop  rbp\n");
     sb_add(&cg->out, "    ret\n");
