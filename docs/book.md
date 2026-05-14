@@ -4475,9 +4475,48 @@ After the AST is lowered to x86-64 assembly, a **peephole pass** scans the emitt
 
 The peephole is purely textual — it splits the emitted assembly into lines, pattern-matches, and stitches back. That keeps it about 200 lines of code. Production compilers do this on an IR with type and dataflow information; we get away with text because the codegen produces highly regular output.
 
+#### Register stack for binop intermediates
+
+When a binary operator's operands are statically proven `num` and the codegen takes the hardware-fast path, the natural pattern is:
+
+```
+evaluate left  -> xmm0
+save left somewhere
+evaluate right -> xmm0
+combine left and right
+```
+
+CalcLang's first cut used a stack slot for the "save left" step:
+
+```
+sub  rsp, 16
+movsd [rsp], xmm0
+<evaluate right>
+movapd xmm1, xmm0
+movsd xmm0, [rsp]
+add  rsp, 16
+addsd xmm0, xmm1
+```
+
+That's two memory operations (store + load) per binop. The optimizer replaces them with a small **xmm register stack**: the codegen tracks the current depth of nested binop saves, and at depths 0–3 it saves into `xmm6`, `xmm7`, `xmm8`, `xmm9` instead of memory. Above depth 3 (very rare in practice) it falls back to the stack slot.
+
+```
+movapd xmm6, xmm0
+<evaluate right>
+movapd xmm1, xmm0
+movapd xmm0, xmm6
+addsd xmm0, xmm1
+```
+
+Two register-register moves instead of memory traffic. On numeric inner loops this saves roughly one instruction per binop and a load-store dependency chain.
+
+`xmm6`–`xmm9` are nonvolatile in the Microsoft x64 ABI, so the runtime helpers (`cl_op_plus` etc.) preserve them across calls — they survive even when an inner expression dispatches through the polymorphic path. The function prologue saves the registers actually used (tracked via `cg->xmm_used_mask`) into the locals frame at known rbp-relative offsets; the epilogue restores them. **rbp-relative addressing** is important because `return` statements jump to the epilogue mid-expression when `rsp` is in an unknown state.
+
+This is only the first piece of register allocation — a real graph-coloring or linear-scan allocator would do more (keeping loop induction variables in registers across iterations, eliminating redundant loads from local slots, etc.). The simple register stack is what we have today; the asymptotic complexity stays linear in code size.
+
 #### What's NOT here yet
 
-A real production optimizer also does **register allocation** (currently CalcLang shuttles every value through `xmm0` via a stack slot — the biggest available speedup), **common-subexpression elimination**, **loop-invariant code motion**, and **inlining**. Each of those is its own substantial project. The current pair (constant fold + peephole) is the high-value low-complexity starting point.
+A real production optimizer also does **common-subexpression elimination**, **loop-invariant code motion**, **inlining**, and a proper register allocator (graph-coloring or linear-scan). Each of those is its own substantial project. The current passes (constant fold + algebraic + dead branch + peephole + simple register stack) are the high-value low-complexity starting points.
 
 ### Bytecode codegen and VM
 
