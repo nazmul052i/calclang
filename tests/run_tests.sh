@@ -30,10 +30,9 @@ check "arithmetic" '20
 30
 10' "$out"
 
-echo "[test] import — bulk-extern of lib/math.calc"
-# Build the math library, then build the test against it via `import`.
-build/calcnat --lib lib/math.calc -o build/calclib/math.s
-build/calcnat tests/import.calc build/calclib/math.s -o build/d_import.exe
+echo "[test] import — self-contained, no --lib step"
+# import "math" should resolve to lib/math.calc and inline bodies.
+build/calcnat tests/import.calc -o build/d_import.exe
 nat_out=$(build/d_import.exe | strip_cr)
 check "import" '49
 64

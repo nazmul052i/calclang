@@ -2264,67 +2264,96 @@ build/calcnat main.calc lib.s -o app.exe
 - A `.calc` file built with `--lib` must not have top-level statements other than `let`s used to define module-level constants. Top-level code in a library is silently ignored — keep it pure.
 - The first non-library file on the `calcnat` command line is the entry point. Its top-level code becomes the program's main.
 
-### `import` — bulk-extern with signature inheritance
+### `import` — single-command library use
 
-Writing `extern fn ...;` for each function gets repetitive when you depend on a 20-function library. The `import "path";` statement reads the named file at parse time, picks up every `pub fn` (and `pub class`) signature, and injects equivalent `extern fn` declarations into the current Program. The link step is unchanged — you still need to link against the library's compiled `.s`.
+The simplest model: one command builds your program, libraries and all. No separate build step, no `.s` files on the link line.
 
 ```calc
-// Before — one extern per import:
-extern fn sq(x: num): num;
-extern fn cube(x: num): num;
-extern fn power_int(b: num, n: num): num;
-extern fn nth_root(x: num, n: num): num;
-// ... 14 more
-print sq(7);
+// my_prog.calc
+import "math";
+import "stats";
 
-// After — one line covers all of math.calc:
-import "lib/math.calc";
-print sq(7);
+let xs = [1, 4, 9, 16, 25];
+print mean(xs);                   // 11
+print fmt("sqrt(2) = {:.6f}", [hypot(1, 1)]);
 ```
-
-Path resolution rules:
-
-| Form                 | Resolved as                                            |
-|----------------------|--------------------------------------------------------|
-| `"/abs/path.calc"`   | absolute — used as given                               |
-| `"./foo.calc"` or `"../foo.calc"` | relative to the importing file's directory  |
-| `"lib/foo.calc"`     | tried as cwd-relative first, then importer-relative   |
-
-The cwd-fallback covers the common case of `make` (or any project-root build) where the engineering library lives at `lib/...` from the repo root. The `./` form forces locality for genuinely co-located helper files.
-
-The build still needs the linked `.s` of the library:
 
 ```bash
-build/calcnat --lib lib/math.calc -o build/calclib/math.s
-build/calcnat my_prog.calc build/calclib/math.s -o my_prog.exe
+build/calcnat my_prog.calc
+./my_prog.exe
 ```
 
-Only the *imports* changed in `my_prog.calc`. The link command is the same.
+That's it. No `make libs`, no `--lib`, no extra files on the command line.
 
-#### `import` vs. `extern fn` side by side
+#### How it works
+
+When the parser sees `import "name";`, it:
+
+1. **Resolves the path** (table below).
+2. **Reads and parses the named file** in a fresh sub-parser.
+3. **Inlines every `pub fn` (and `pub class`)** — body and all — into the current program's AST.
+4. **Recursively processes imports** inside that file too, with cycle detection.
+
+Then the regular codegen compiles everything together as one program. The library's functions get the same `calc_<name>` symbols they'd have as a standalone build; they just happen to live in the consumer's binary.
+
+#### Path resolution
+
+| Form                  | Resolved as                                            |
+|-----------------------|--------------------------------------------------------|
+| `"math"`              | bare name → `lib/math.calc` (the standard library)     |
+| `"nr/poly"`           | has a slash → tried as `nr/poly` then importer-relative |
+| `"./helper.calc"`     | importer-relative (force-local)                        |
+| `"/abs/path.calc"`    | absolute — used as given                               |
+| `"lib/math.calc"`     | tried as cwd-relative first, then importer-relative    |
+
+The bare-name rule catches the most common case: `import "math"` works from anywhere as long as `lib/math.calc` exists next to the project's working directory. Add a slash or extension when you need anything else.
+
+#### Cycle detection
+
+Each canonical file path is imported at most once. If `a.calc` imports `b.calc`, and both import `math`, the math module is included once and shared.
 
 ```calc
-// Either works in identical scenarios; pick whichever reads more
-// clearly for your use case.
-
-// Explicit form — full control over each declaration, useful when
-// you want to import only a subset of a library's API.
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-
-// Bulk form — pulls in everything pub from stats.calc, signatures
-// stay in sync with the library automatically.
-import "lib/stats.calc";
+// a.calc
+import "math";       // -> lib/math.calc (first time)
+import "stats";       // -> lib/stats.calc (which itself imports "math")
+                      // The recursive import of "math" is skipped silently.
 ```
 
-Both expand to the same AST under the hood. `import` is sugar; it's never strictly necessary, and the underlying `extern fn` mechanism remains the canonical form.
+Direct circular imports (`a` imports `b` imports `a`) are also handled — the second occurrence of `a` finds itself already in the import set and stops.
 
-#### Limitations
+#### `import` vs. `extern fn`
 
-- **No circular imports.** If A imports B and B imports A, the parser will recurse forever. The compiler doesn't currently track which files it has imported.
-- **Imports happen at parse time, not link time.** If you change the library, you only need to rebuild the imported `.s` (no recompile of the importer is needed for code that doesn't reference renamed symbols). But the importer DOES read the library's source to extract signatures, so the source file must be on disk at compile time.
-- **No selective import** like Python's `from X import Y, Z`. Everything `pub` comes in.
-- **No name aliasing**. If two imports both export a `mean` function, the linker will report duplicate symbols.
+`import` is the simple path. `extern fn` is the explicit one — useful when you want to:
+
+- **Subset a library's API** (only import what you name).
+- **Use a pre-compiled `.s`** (e.g. a closed-source library shipped as assembly).
+- **Forward-declare across multiple files** that you link separately.
+
+```calc
+// Explicit per-function declarations + manual --lib step:
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+// ... and pass build/stats.s on the command line
+
+// Or just:
+import "stats";
+```
+
+Both produce the same calls to `mean` / `stddev`. With `import`, the lib's body is inlined into your binary. With `extern fn`, it stays in a separate object file.
+
+#### When to use which
+
+- **Default**: `import "math";`. Simplest, works.
+- **Library author shipping precompiled `.s`**: clients use `extern fn`.
+- **Many programs sharing one library binary** (codesize concern): clients use `extern fn` so they link against one shared object instead of inlining the lib N times.
+- **Subset import**: `extern fn` (the only way to be selective).
+
+#### Limitations (current)
+
+- **No selective import** like Python's `from X import Y, Z`. Everything `pub` from the imported file comes in.
+- **No name aliasing**. If two imports both export `mean`, the codegen will detect duplicate functions and fail at link time.
+- **No package system**. `import "math"` resolves to `lib/math.calc` relative to cwd; there's no install-able package registry. Add one when there's a clear need.
+- **Library code is inlined per consumer**. If 10 programs all `import "math"`, each binary contains its own copy. This is cheap (math.calc is small) but matters for very large libraries — use `extern fn` + `--lib` to share.
 
 ### Putting multiple libraries together
 
