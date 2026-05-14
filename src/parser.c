@@ -154,6 +154,10 @@ static AST *parse_unary(Parser *p) {
         next(p);
         return ast_unop(TOK_BANG, parse_unary(p));
     }
+    if (p->current.type == TOK_TILDE) {
+        next(p);
+        return ast_unop(TOK_TILDE, parse_unary(p));
+    }
     return parse_postfix(p);
 }
 
@@ -179,13 +183,24 @@ static AST *parse_additive(Parser *p) {
     return n;
 }
 
-static AST *parse_comparison(Parser *p) {
+/* Bitwise shifts: bind tighter than comparison, looser than +/-. */
+static AST *parse_shift(Parser *p) {
     AST *n = parse_additive(p);
+    while (p->current.type == TOK_LSHIFT || p->current.type == TOK_RSHIFT) {
+        TokenType op = p->current.type;
+        next(p);
+        n = ast_binop(op, n, parse_additive(p));
+    }
+    return n;
+}
+
+static AST *parse_comparison(Parser *p) {
+    AST *n = parse_shift(p);
     while (p->current.type == TOK_LT || p->current.type == TOK_LE ||
            p->current.type == TOK_GT || p->current.type == TOK_GE) {
         TokenType op = p->current.type;
         next(p);
-        n = ast_binop(op, n, parse_additive(p));
+        n = ast_binop(op, n, parse_shift(p));
     }
     return n;
 }
@@ -200,11 +215,39 @@ static AST *parse_equality(Parser *p) {
     return n;
 }
 
-static AST *parse_logical_and(Parser *p) {
+/* C-style precedence: equality < bit-and < bit-xor < bit-or < logical-and < logical-or. */
+static AST *parse_bitwise_and(Parser *p) {
     AST *n = parse_equality(p);
+    while (p->current.type == TOK_AMP) {
+        next(p);
+        n = ast_binop(TOK_AMP, n, parse_equality(p));
+    }
+    return n;
+}
+
+static AST *parse_bitwise_xor(Parser *p) {
+    AST *n = parse_bitwise_and(p);
+    while (p->current.type == TOK_CARET) {
+        next(p);
+        n = ast_binop(TOK_CARET, n, parse_bitwise_and(p));
+    }
+    return n;
+}
+
+static AST *parse_bitwise_or(Parser *p) {
+    AST *n = parse_bitwise_xor(p);
+    while (p->current.type == TOK_PIPE) {
+        next(p);
+        n = ast_binop(TOK_PIPE, n, parse_bitwise_xor(p));
+    }
+    return n;
+}
+
+static AST *parse_logical_and(Parser *p) {
+    AST *n = parse_bitwise_or(p);
     while (p->current.type == TOK_AND) {
         next(p);
-        n = ast_binop(TOK_AND, n, parse_equality(p));
+        n = ast_binop(TOK_AND, n, parse_bitwise_or(p));
     }
     return n;
 }
@@ -270,9 +313,14 @@ static AST *parse_assignment_after_ident(Parser *p, Token name) {
         case TOK_STAR_EQ:    binop = TOK_STAR;    break;
         case TOK_SLASH_EQ:   binop = TOK_SLASH;   break;
         case TOK_PERCENT_EQ: binop = TOK_PERCENT; break;
+        case TOK_AMP_EQ:     binop = TOK_AMP;     break;
+        case TOK_PIPE_EQ:    binop = TOK_PIPE;    break;
+        case TOK_CARET_EQ:   binop = TOK_CARET;   break;
+        case TOK_LSHIFT_EQ:  binop = TOK_LSHIFT;  break;
+        case TOK_RSHIFT_EQ:  binop = TOK_RSHIFT;  break;
         default:
             fprintf(stderr,
-                "parse error at %d:%d: expected '=', '+=', '-=', '*=', '/=', '%%=', '++', or '--' after identifier '%s'\n",
+                "parse error at %d:%d: expected an assignment operator after identifier '%s'\n",
                 p->current.line, p->current.col, name.text);
             exit(1);
     }
@@ -547,8 +595,13 @@ static AST *parse_stmt(Parser *p) {
                 case TOK_STAR_EQ:    bop = TOK_STAR;    break;
                 case TOK_SLASH_EQ:   bop = TOK_SLASH;   break;
                 case TOK_PERCENT_EQ: bop = TOK_PERCENT; break;
+                case TOK_AMP_EQ:     bop = TOK_AMP;     break;
+                case TOK_PIPE_EQ:    bop = TOK_PIPE;    break;
+                case TOK_CARET_EQ:   bop = TOK_CARET;   break;
+                case TOK_LSHIFT_EQ:  bop = TOK_LSHIFT;  break;
+                case TOK_RSHIFT_EQ:  bop = TOK_RSHIFT;  break;
                 default:
-                    fprintf(stderr, "parse error at %d:%d: array index expression as a statement requires `=`, `+=`, `-=`, `*=`, `/=`, `%%=`, `++`, or `--`\n",
+                    fprintf(stderr, "parse error at %d:%d: array index expression as a statement requires an assignment operator\n",
                         p->current.line, p->current.col);
                     exit(1);
             }

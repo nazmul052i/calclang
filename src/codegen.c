@@ -551,8 +551,9 @@ static void gen_expr(AST *n, SymbolTable *st, StrBuf *out) {
         case NODE_UNOP:
             gen_expr(n->as.unop.operand, st, out);
             switch (n->as.unop.op) {
-                case TOK_MINUS: sb_add(out, "NEG\n"); break;
-                case TOK_BANG:  sb_add(out, "NOT\n"); break;
+                case TOK_MINUS: sb_add(out, "NEG\n");  break;
+                case TOK_BANG:  sb_add(out, "NOT\n");  break;
+                case TOK_TILDE: sb_add(out, "BNOT\n"); break;
                 default:        cl_die("unknown unary op");
             }
             break;
@@ -560,19 +561,24 @@ static void gen_expr(AST *n, SymbolTable *st, StrBuf *out) {
             gen_expr(n->as.binop.left,  st, out);
             gen_expr(n->as.binop.right, st, out);
             switch (n->as.binop.op) {
-                case TOK_PLUS:    sb_add(out, "ADD\n"); break;
-                case TOK_MINUS:   sb_add(out, "SUB\n"); break;
-                case TOK_STAR:    sb_add(out, "MUL\n"); break;
-                case TOK_SLASH:   sb_add(out, "DIV\n"); break;
-                case TOK_PERCENT: sb_add(out, "MOD\n"); break;
-                case TOK_LT:      sb_add(out, "LT\n");  break;
-                case TOK_LE:      sb_add(out, "LE\n");  break;
-                case TOK_GT:      sb_add(out, "GT\n");  break;
-                case TOK_GE:      sb_add(out, "GE\n");  break;
-                case TOK_EQEQ:    sb_add(out, "EQ\n");  break;
-                case TOK_NEQ:     sb_add(out, "NEQ\n"); break;
-                case TOK_AND:     sb_add(out, "AND\n"); break;
-                case TOK_OR:      sb_add(out, "OR\n");  break;
+                case TOK_PLUS:    sb_add(out, "ADD\n");  break;
+                case TOK_MINUS:   sb_add(out, "SUB\n");  break;
+                case TOK_STAR:    sb_add(out, "MUL\n");  break;
+                case TOK_SLASH:   sb_add(out, "DIV\n");  break;
+                case TOK_PERCENT: sb_add(out, "MOD\n");  break;
+                case TOK_LT:      sb_add(out, "LT\n");   break;
+                case TOK_LE:      sb_add(out, "LE\n");   break;
+                case TOK_GT:      sb_add(out, "GT\n");   break;
+                case TOK_GE:      sb_add(out, "GE\n");   break;
+                case TOK_EQEQ:    sb_add(out, "EQ\n");   break;
+                case TOK_NEQ:     sb_add(out, "NEQ\n");  break;
+                case TOK_AND:     sb_add(out, "AND\n");  break;
+                case TOK_OR:      sb_add(out, "OR\n");   break;
+                case TOK_AMP:     sb_add(out, "BAND\n"); break;
+                case TOK_PIPE:    sb_add(out, "BOR\n");  break;
+                case TOK_CARET:   sb_add(out, "BXOR\n"); break;
+                case TOK_LSHIFT:  sb_add(out, "SHL\n");  break;
+                case TOK_RSHIFT:  sb_add(out, "SHR\n");  break;
                 default:          cl_die("unknown binary op");
             }
             break;
@@ -874,11 +880,16 @@ static void gen_stmt(AST *n, SymbolTable *st, StrBuf *out) {
             sb_add(out, "INDEX_GET\n");
             gen_expr(n->as.index_opassign.value, st, out);
             switch (n->as.index_opassign.op) {
-                case TOK_PLUS:    sb_add(out, "ADD\n"); break;
-                case TOK_MINUS:   sb_add(out, "SUB\n"); break;
-                case TOK_STAR:    sb_add(out, "MUL\n"); break;
-                case TOK_SLASH:   sb_add(out, "DIV\n"); break;
-                case TOK_PERCENT: sb_add(out, "MOD\n"); break;
+                case TOK_PLUS:    sb_add(out, "ADD\n");  break;
+                case TOK_MINUS:   sb_add(out, "SUB\n");  break;
+                case TOK_STAR:    sb_add(out, "MUL\n");  break;
+                case TOK_SLASH:   sb_add(out, "DIV\n");  break;
+                case TOK_PERCENT: sb_add(out, "MOD\n");  break;
+                case TOK_AMP:     sb_add(out, "BAND\n"); break;
+                case TOK_PIPE:    sb_add(out, "BOR\n");  break;
+                case TOK_CARET:   sb_add(out, "BXOR\n"); break;
+                case TOK_LSHIFT:  sb_add(out, "SHL\n");  break;
+                case TOK_RSHIFT:  sb_add(out, "SHR\n");  break;
                 default:          cl_die("unknown compound op");
             }
             sb_add(out, "INDEX_SET\n");

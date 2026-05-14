@@ -113,7 +113,17 @@ typedef enum {
     OP_MAKE_CLOSURE  = 41,
 
     /* Read from the current closure's captured array. iarg = index. */
-    OP_LOAD_UPVAL    = 42
+    OP_LOAD_UPVAL    = 42,
+
+    /* Bitwise. Both operands are coerced to int64 internally; result
+       is a regular num. Non-num operands abort the VM with a clear
+       error. >> is arithmetic (sign-extending), matching C semantics. */
+    OP_BAND          = 43,
+    OP_BOR           = 44,
+    OP_BXOR          = 45,
+    OP_SHL           = 46,
+    OP_SHR           = 47,
+    OP_BNOT          = 48
 } OpCode;
 
 typedef struct {

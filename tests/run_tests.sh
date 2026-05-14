@@ -30,6 +30,37 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] bitwise ops + hex/binary literals"
+out=$(run bitwise)
+check "bitwise" '1
+7
+6
+-6
+16
+64
+-4
+255
+255
+3405691582
+10
+240
+48
+53
+49
+196
+98
+24
+1
+31
+255
+8
+40
+1
+32
+0
+8
+4' "$out"
+
 echo "[test] reassignment via ="
 out=$(run redeclare)
 check "redeclare" '10' "$out"

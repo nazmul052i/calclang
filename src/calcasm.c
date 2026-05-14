@@ -77,6 +77,12 @@ static int op_from_name(const char *s) {
     if (!strcmp(s, "DUP2"))          return OP_DUP2;
     if (!strcmp(s, "MAKE_CLOSURE"))   return OP_MAKE_CLOSURE;
     if (!strcmp(s, "LOAD_UPVAL"))     return OP_LOAD_UPVAL;
+    if (!strcmp(s, "BAND"))           return OP_BAND;
+    if (!strcmp(s, "BOR"))            return OP_BOR;
+    if (!strcmp(s, "BXOR"))           return OP_BXOR;
+    if (!strcmp(s, "SHL"))            return OP_SHL;
+    if (!strcmp(s, "SHR"))            return OP_SHR;
+    if (!strcmp(s, "BNOT"))           return OP_BNOT;
     return 0;
 }
 
