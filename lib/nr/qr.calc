@@ -8,10 +8,12 @@
 // reflection zeroes out a column below the diagonal in one O(mn) sweep.
 //
 // API:
-//   qr_decompose(A)    -> {"Q": Q (m x m), "R": R (m x n)}
+//   qr_decompose(A)    -> QR record (.Q is m x m, .R is m x n)
 //   qr_solve(qr, b)    -> least-squares solution x to A x = b
 //                         (works for square or overdetermined)
 //   qr_apply_QT(qr, b) -> Q^T b (handy when re-solving without forming Q)
+
+pub struct QR { Q: arr, R: arr }
 
 priv fn _qr_mat_zero(rows, cols) {
     let m = [];
@@ -86,13 +88,13 @@ pub fn qr_decompose(A_in) {
             }
         }
     }
-    return {"Q": Q, "R": R};
+    return QR(Q, R);
 }
 
 // Compute Q^T b without forming Q explicitly (well — we have Q, so just
 // use it). Cheap convenience for the solve path.
 pub fn qr_apply_QT(qr, b) {
-    let Q = qr["Q"];
+    let Q = qr.Q;
     let m = len(Q);
     let out = [];
     for j in 0..m {
@@ -106,7 +108,7 @@ pub fn qr_apply_QT(qr, b) {
 // Solve A x = b in least-squares sense via the QR factorization. For
 // m == n this is an exact solve; for m > n it returns the LS solution.
 pub fn qr_solve(qr, b) {
-    let R = qr["R"];
+    let R = qr.R;
     let m = len(R);
     let n = len(R[0]);
     let QTb = qr_apply_QT(qr, b);

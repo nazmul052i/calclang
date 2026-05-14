@@ -34,15 +34,15 @@ print "y:  mean=" + mean(ys) + " stddev=" + stddev(ys) + " range=[" + min_of(ys)
 
 let fit = linreg(xs, ys);
 print "linear fit:";
-print "  y = " + fit["slope"] + " * x + " + fit["intercept"];
-print "  R^2 = " + fit["r2"];
+print "  y = " + fit.slope + " * x + " + fit.intercept;
+print "  R^2 = " + fit.r2;
 print "(true model: y = 1.7 * x + 4.2)";
 
 let ys_fit = [];
 for i in 0..n {
-    push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
+    push(ys_fit, fit.slope * xs[i] + fit.intercept);
 }
 
 plot_data_with_fit("build/regression.svg", xs, ys, ys_fit,
-    "Linear regression: y = " + fit["slope"] + " x + " + fit["intercept"]);
+    "Linear regression: y = " + fit.slope + " x + " + fit.intercept);
 print "wrote build/regression.svg";

@@ -87,9 +87,17 @@ pub fn correlate(xs, ys) {
     return num / denom;
 }
 
+// Result of `linreg`. A typed record — access fields with dot syntax:
+//   let fit = linreg(xs, ys);
+//   print fit.slope;     fit.intercept;     fit.r2;
+pub struct LinReg {
+    slope: num,
+    intercept: num,
+    r2: num,
+}
+
 // Simple least-squares linear regression: y = slope * x + intercept.
-// Returns a map with "slope", "intercept", and "r2" (coefficient of
-// determination, between 0 and 1; 1 = perfect fit).
+// `r2` is the coefficient of determination (between 0 and 1; 1 = perfect fit).
 pub fn linreg(xs, ys) {
     if (len(xs) != len(ys)) { throw "linreg: length mismatch"; }
     if (len(xs) < 2) { throw "linreg: need at least 2 points"; }
@@ -117,7 +125,7 @@ pub fn linreg(xs, ys) {
     }
     let r2 = 0;
     if (ss_tot != 0) { r2 = 1 - ss_res / ss_tot; }
-    return {"slope": slope, "intercept": intercept, "r2": r2};
+    return LinReg(slope, intercept, r2);
 }
 
 // Histogram: count values falling into n_bins equal-width bins

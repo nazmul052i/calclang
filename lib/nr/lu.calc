@@ -4,16 +4,22 @@
 //
 // Reference: Numerical Recipes 2.3 (Doolittle algorithm).
 //
-//   lu = lu_decompose(A);
-//   //   lu["L"]  unit lower-triangular,
-//   //   lu["U"]  upper-triangular,
-//   //   lu["P"]  permutation as an index array (P[i] = original row
-//   //            now at position i), and
-//   //   lu["sign"] is +1 or -1 for the parity of row swaps (used by
-//   //            lu_det).
+//   let lu = lu_decompose(A);
+//   //   lu.L     unit lower-triangular,
+//   //   lu.U     upper-triangular,
+//   //   lu.P     permutation as an index array (P[i] = original row
+//   //           now at position i), and
+//   //   lu.sign  +1 or -1 for the parity of row swaps (used by lu_det).
 //
 //   let x = lu_solve(lu, b);
 //   let d = lu_det(lu);
+
+pub struct LU {
+    L: arr,
+    U: arr,
+    P: arr,
+    sign: num,
+}
 
 priv fn _zeros(rows, cols) {
     let m = [];
@@ -72,14 +78,14 @@ pub fn lu_decompose(A) {
         for j in 0..i { L[i][j] = M[i][j]; }
         for j in i..n { U[i][j] = M[i][j]; }
     }
-    return {"L": L, "U": U, "P": P, "sign": sign};
+    return LU(L, U, P, sign);
 }
 
 // Solve A x = b using a precomputed LU factorization.
 pub fn lu_solve(lu, b) {
-    let L = lu["L"];
-    let U = lu["U"];
-    let P = lu["P"];
+    let L = lu.L;
+    let U = lu.U;
+    let P = lu.P;
     let n = len(L);
     if (len(b) != n) { throw "lu_solve: b length doesn't match LU"; }
     // Apply the permutation to b.
@@ -106,8 +112,8 @@ pub fn lu_solve(lu, b) {
 
 // det(A) = sign * product of U's diagonal.
 pub fn lu_det(lu) {
-    let U = lu["U"];
-    let d = lu["sign"];
+    let U = lu.U;
+    let d = lu.sign;
     let n = len(U);
     for i in 0..n { d = d * U[i][i]; }
     return d;

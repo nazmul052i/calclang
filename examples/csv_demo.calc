@@ -38,14 +38,14 @@ print "y: mean=" + mean(ys) + "  stddev=" + stddev(ys);
 
 let fit = linreg(xs, ys);
 print "";
-print "linear fit: y = " + fit["slope"] + " x + " + fit["intercept"];
-print "R^2 = " + fit["r2"];
+print "linear fit: y = " + fit.slope + " x + " + fit.intercept;
+print "R^2 = " + fit.r2;
 print "(true model was y = 3.2 x + 1.5)";
 
 // Plot data + fit to SVG.
 let ys_fit = [];
 for i in 0..len(xs) {
-    push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
+    push(ys_fit, fit.slope * xs[i] + fit.intercept);
 }
 plot_data_with_fit("build/measurements.svg", xs, ys, ys_fit,
     "Loaded from " + path);
