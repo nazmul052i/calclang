@@ -323,25 +323,58 @@ fn render(g) {
     // Next-piece preview to the right of the board.
     let nx = bx + bw + 20;
     let ny = by;
+    gui_set_color(220, 220, 220);
+    gui_set_text_scale(2);
+    gui_text(nx, ny - 6, "NEXT");
     gui_set_color(40, 43, 60);
-    gui_rect(nx, ny, 4 * cs, 4 * cs);
+    gui_rect(nx, ny + 20, 4 * cs, 4 * cs);
     gui_set_color(60, 65, 85);
-    gui_rect_outline(nx, ny, 4 * cs, 4 * cs);
+    gui_rect_outline(nx, ny + 20, 4 * cs, 4 * cs);
     let np_cells = g.pieces[g.next_idx].rotations[0];
     let np_color = g.pieces[g.next_idx].color;
     for cell in np_cells {
         let nxx = nx + cell[0] * cs;
-        let nyy = ny + cell[1] * cs;
+        let nyy = ny + 20 + cell[1] * cs;
         gui_set_color(np_color.r, np_color.g, np_color.b);
         gui_rect(nxx + 1, nyy + 1, cs - 2, cs - 2);
     }
 
-    // Score / level / lines in the window title — no native text yet.
-    let title = "Tetris   score " + g.score
-              + "   lines " + g.lines
-              + "   level " + g.level;
-    if (g.over) { title = title + "    GAME OVER (press esc to quit)"; }
-    gui_set_title(title);
+    // Score / lines / level rendered with the bitmap font.
+    let panel_y = ny + 4 * cs + 50;
+    gui_set_color(200, 200, 200);
+    gui_set_text_scale(1);
+    gui_text(nx, panel_y, "SCORE");
+    gui_set_color(255, 255, 255);
+    gui_set_text_scale(3);
+    gui_text(nx, panel_y + 12, "" + g.score);
+
+    gui_set_color(200, 200, 200);
+    gui_set_text_scale(1);
+    gui_text(nx, panel_y + 60, "LINES");
+    gui_set_color(255, 255, 255);
+    gui_set_text_scale(3);
+    gui_text(nx, panel_y + 72, "" + g.lines);
+
+    gui_set_color(200, 200, 200);
+    gui_set_text_scale(1);
+    gui_text(nx, panel_y + 120, "LEVEL");
+    gui_set_color(255, 255, 255);
+    gui_set_text_scale(3);
+    gui_text(nx, panel_y + 132, "" + g.level);
+
+    // Game-over overlay.
+    if (g.over) {
+        gui_set_color(220, 60, 80);
+        gui_set_text_scale(3);
+        let msg = "GAME OVER";
+        let tw = len(msg) * 8 * 3;
+        gui_text(bx + floor((bw - tw) / 2), by + floor(bh / 2) - 20, msg);
+        gui_set_color(220, 220, 220);
+        gui_set_text_scale(1);
+        let m2 = "press ESC to quit";
+        let tw2 = len(m2) * 8;
+        gui_text(bx + floor((bw - tw2) / 2), by + floor(bh / 2) + 20, m2);
+    }
 
     gui_present();
 }

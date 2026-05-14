@@ -2879,8 +2879,12 @@ The whole API is ~17 functions, all named `gui_*`:
 | `gui_rect_outline(x, y, w, h)`        | outline rect, current color                   |
 | `gui_line(x1, y1, x2, y2)`            | line, current color                           |
 | `gui_pixel(x, y)`                     | single pixel, current color                   |
+| `gui_circle(x, y, r)`                 | filled circle (Bresenham)                     |
+| `gui_circle_outline(x, y, r)`         | outline circle                                |
+| `gui_text(x, y, str)`                 | bitmap text — embedded 8×8 font, multi-line `\n` |
+| `gui_set_text_scale(n)`               | character scale (n×8 px); default 1           |
 | `gui_present()`                       | swap buffers (display what you drew)          |
-| `gui_set_title(s)`                    | change window title (e.g. for score display)  |
+| `gui_set_title(s)`                    | change window title (e.g. for status display) |
 | `gui_key_down(name)`                  | 1 if key currently held                       |
 | `gui_key_pressed(name)`               | 1 if pressed this frame (one-shot)            |
 | `gui_mouse_x() / gui_mouse_y()`       | mouse position in window                      |
@@ -2950,7 +2954,7 @@ The kit is intentionally small — `button`, `checkbox`, `slider`, plus color he
 
 #### Worked example: GUI Tetris
 
-`examples/tetris_gui.calc` is the same Tetris game logic as `examples/tetris.calc`, but the render pass uses `gui_rect`/`gui_rect_outline` instead of ANSI block printing, and input comes from `gui_key_pressed` instead of `read_key`. Score / lines / level go in the window title bar — Stage 1 of the GUI runtime doesn't render text yet (a bitmap font is a future stage).
+`examples/tetris_gui.calc` is the same Tetris game logic as `examples/tetris.calc`, but the render pass uses `gui_rect`/`gui_rect_outline` instead of ANSI block printing, and input comes from `gui_key_pressed` instead of `read_key`. Score / lines / level / next-piece preview are rendered in the side panel using the embedded bitmap font (`gui_text` at scale 3 for the big numbers).
 
 ```bash
 build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe

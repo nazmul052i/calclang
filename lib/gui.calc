@@ -83,14 +83,35 @@ pub fn button(x, y, w, h, label) {
     gui_box(x, y, w, h, bg);
     gui_border(x, y, w - 1, h - 1, col_accent());
 
-    // Label rendering is left to the caller (we have no native text
-    // primitive yet). A common pattern: gui_set_title(label) for the
-    // most relevant button, or print the label via the system console.
-    // The `label` parameter is reserved for the future-proof signature;
-    // ignored for now.
-    let _ = label;
-
+    // Center the label inside the button using the 8px-per-char metric
+    // at scale 1. We pick the largest scale that still fits with some
+    // padding, so a small button gets size-1 text and a tall one gets
+    // bigger text automatically.
+    let scale = 1;
+    if (h >= 32) { scale = 2; }
+    if (h >= 56) { scale = 3; }
+    let cw = 8 * scale;
+    let ch = 8 * scale;
+    let text_w = len(label) * cw;
+    let tx = x + floor((w - text_w) / 2);
+    let ty = y + floor((h - ch) / 2);
+    gui_set(col_text());
+    gui_set_text_scale(scale);
+    gui_text(tx, ty, label);
     return clicked;
+}
+
+// Plain label (text on its own — no background or border).
+pub fn label(x, y, str) {
+    gui_set(col_text());
+    gui_set_text_scale(1);
+    gui_text(x, y, str);
+}
+
+pub fn label_scaled(x, y, str, scale) {
+    gui_set(col_text());
+    gui_set_text_scale(scale);
+    gui_text(x, y, str);
 }
 
 // =====================================================================
