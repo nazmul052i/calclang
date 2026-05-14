@@ -757,6 +757,19 @@ after all' "$nat_out"
     build/calcnat --lib lib/json.calc    -o build/calclib/json.s
     build/calcnat --lib lib/ode.calc     -o build/calclib/ode.s
     build/calcnat --lib lib/fft.calc     -o build/calclib/fft.s
+    build/calcnat --lib lib/math.calc    -o build/calclib/math.s
+
+    echo "[test] demo — math_demo (sq, cube, power_int, hypot, hyperbolics, lerp)"
+    build/calcnat examples/math_demo.calc build/calclib/math.s -o build/d_math.exe
+    nat_out=$(build/d_math.exe | strip_cr)
+    # Spot-check a few invariants.
+    echo "$nat_out" | grep -q "sq(7)         = 49"              || { echo "FAIL: math — sq"; exit 1; }
+    echo "$nat_out" | grep -q "cube(4)       = 64"              || { echo "FAIL: math — cube"; exit 1; }
+    echo "$nat_out" | grep -q "power_int(3, 5)   = 243"         || { echo "FAIL: math — power_int"; exit 1; }
+    echo "$nat_out" | grep -q "cbrt(-8)          = -2"          || { echo "FAIL: math — cbrt(-8)"; exit 1; }
+    echo "$nat_out" | grep -q "hypot(3, 4)       = 5"           || { echo "FAIL: math — hypot"; exit 1; }
+    echo "$nat_out" | grep -q "log2(1024)        = 10"          || { echo "FAIL: math — log2"; exit 1; }
+    echo "$nat_out" | grep -q "remap(5, 0, 10, 100, 200) = 150" || { echo "FAIL: math — remap"; exit 1; }
 
     echo "[test] demo — linsys (mat_solve, mat_det, transpose, identity)"
     build/calcnat examples/linsys.calc build/calclib/linalg.s -o build/d_linsys.exe

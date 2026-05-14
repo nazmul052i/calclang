@@ -53,6 +53,7 @@ CALCLIB := $(BUILD)/calclib
 
 libs: all
 	mkdir -p $(CALCLIB)
+	$(BUILD)/calcnat --lib lib/math.calc    -o $(CALCLIB)/math.s
 	$(BUILD)/calcnat --lib lib/linalg.calc  -o $(CALCLIB)/linalg.s
 	$(BUILD)/calcnat --lib lib/stats.calc   -o $(CALCLIB)/stats.s
 	$(BUILD)/calcnat --lib lib/plot.calc    -o $(CALCLIB)/plot.s
@@ -145,6 +146,10 @@ fft_demo: libs
 	$(BUILD)/calcnat examples/fft_demo.calc $(CALCLIB)/fft.s $(CALCLIB)/random.s $(CALCLIB)/plot.s -o $(BUILD)/fft_demo
 	$(BUILD)/fft_demo
 
+math_demo: libs
+	$(BUILD)/calcnat examples/math_demo.calc $(CALCLIB)/math.s -o $(BUILD)/math_demo
+	$(BUILD)/math_demo
+
 nr_demo: nr_libs
 	$(BUILD)/calcnat examples/nr_demo.calc \
 	    $(CALCLIB)/nr_brent.s $(CALCLIB)/nr_spline.s \
@@ -213,7 +218,7 @@ nr_demo10: nr_libs libs
 	    -o $(BUILD)/nr_demo10
 	$(BUILD)/nr_demo10
 
-demos: sine_plot regression linsys numerical monte_carlo csv_demo \
+demos: math_demo sine_plot regression linsys numerical monte_carlo csv_demo \
        multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5 nr_demo6 nr_demo7 nr_demo8 nr_demo9 nr_demo10
 
 test: all

@@ -1,0 +1,150 @@
+// math.calc — convenience math functions built on top of the calclib builtins.
+//
+// CalcLang ships with the standard math operators and `pow(b, e)`,
+// `sqrt(x)`, `exp(x)`, `log(x)`, etc. This module adds the small
+// helpers that come up over and over in numerical code: integer
+// powers via repeated squaring, nth roots, hyperbolics, degree /
+// radian conversion, sign, hypot, log to an arbitrary base.
+//
+// Build:
+//   build/calcnat --lib lib/math.calc -o build/calclib/math.s
+
+// ===== Powers =====
+
+// Square / cube: faster (and clearer) than pow(x, 2) / pow(x, 3).
+pub fn sq(x: num): num   { return x * x; }
+pub fn cube(x: num): num { return x * x * x; }
+
+// Generic real exponent. Forwards to the builtin; provided as a named
+// alias so `power(b, e)` reads naturally alongside the other helpers.
+pub fn power(b: num, e: num): num { return pow(b, e); }
+
+// Fast integer power via repeated squaring (exponentiation by squaring).
+// O(log |n|) multiplies, no libc pow() call, exact for integer-valued b.
+// Handles negative exponents by inverting the result.
+pub fn power_int(b: num, n: num): num {
+    if (n == 0) { return 1; }
+    let exp = n;
+    let neg = 0;
+    if (exp < 0) { neg = 1; exp = -exp; }
+    let result = 1;
+    let base = b;
+    while (exp > 0) {
+        if (exp % 2 == 1) { result = result * base; }
+        base = base * base;
+        exp  = floor(exp / 2);
+    }
+    if (neg == 1) { return 1 / result; }
+    return result;
+}
+
+// ===== Roots =====
+
+// nth root of x. n=2 is sqrt, n=3 is cube root, etc. Handles negative
+// x correctly for odd integer n.
+pub fn nth_root(x: num, n: num): num {
+    if (n == 0) { throw "nth_root: n must be nonzero"; }
+    if (x < 0) {
+        // Real-valued root only exists for odd integer n.
+        let rounded = floor(n + 0.5);
+        if (n != rounded || (rounded % 2 == 0)) {
+            throw "nth_root: negative x with even or non-integer n";
+        }
+        return -pow(-x, 1 / n);
+    }
+    return pow(x, 1 / n);
+}
+
+pub fn cbrt(x: num): num { return nth_root(x, 3); }
+
+// Hypotenuse — sqrt(x^2 + y^2), but rescaled to avoid overflow when
+// |x| or |y| is huge (e.g. > 1e150). The naive sqrt(x*x + y*y) would
+// overflow even though the answer is finite.
+pub fn hypot(x: num, y: num): num {
+    let ax = abs(x);
+    let ay = abs(y);
+    if (ax == 0 && ay == 0) { return 0; }
+    let big = ax;  let small = ay;
+    if (ay > ax) { big = ay; small = ax; }
+    let r = small / big;
+    return big * sqrt(1 + r * r);
+}
+
+// ===== Sign and rounding =====
+
+pub fn sign(x: num): num {
+    if (x > 0) { return 1; }
+    if (x < 0) { return -1; }
+    return 0;
+}
+
+// "Half-away-from-zero" rounding, in case you prefer it to the calclib
+// `round` (which uses banker's rounding via the C runtime).
+pub fn round_half_up(x: num): num {
+    if (x >= 0) { return floor(x + 0.5); }
+    return -floor(-x + 0.5);
+}
+
+// ===== Hyperbolic functions =====
+
+pub fn sinh(x: num): num { return (exp(x) - exp(-x)) / 2; }
+pub fn cosh(x: num): num { return (exp(x) + exp(-x)) / 2; }
+pub fn tanh(x: num): num {
+    // Stable for large |x| via the e^(2x) form.
+    if (x >= 0) {
+        let u = exp(-2 * x);
+        return (1 - u) / (1 + u);
+    }
+    let u = exp(2 * x);
+    return (u - 1) / (u + 1);
+}
+
+pub fn asinh(x: num): num { return log(x + sqrt(x * x + 1)); }
+pub fn acosh(x: num): num {
+    if (x < 1) { throw "acosh: x must be >= 1"; }
+    return log(x + sqrt(x * x - 1));
+}
+pub fn atanh(x: num): num {
+    if (x <= -1 || x >= 1) { throw "atanh: x must be in (-1, 1)"; }
+    return 0.5 * log((1 + x) / (1 - x));
+}
+
+// ===== Angle conversion =====
+
+pub fn deg_to_rad(d: num): num { return d * pi() / 180; }
+pub fn rad_to_deg(r: num): num { return r * 180 / pi(); }
+
+// ===== Logarithms =====
+
+// log base b of x. log(x)/log(b) when b > 0 and b != 1.
+pub fn log_base(x: num, b: num): num {
+    if (b <= 0 || b == 1) { throw "log_base: b must be positive and != 1"; }
+    return log(x) / log(b);
+}
+
+pub fn log2(x: num): num { return log(x) / log(2); }
+
+// ===== Clamping and lerp =====
+
+pub fn clamp(x: num, lo: num, hi: num): num {
+    if (x < lo) { return lo; }
+    if (x > hi) { return hi; }
+    return x;
+}
+
+// Linear interpolation between a and b. t in [0, 1] gives values on
+// the segment; outside that range it extrapolates.
+pub fn lerp(a: num, b: num, t: num): num {
+    return a + (b - a) * t;
+}
+
+// Inverse lerp: where does x lie within [a, b]? 0 means a, 1 means b.
+pub fn inv_lerp(a: num, b: num, x: num): num {
+    if (a == b) { throw "inv_lerp: a == b"; }
+    return (x - a) / (b - a);
+}
+
+// Remap x from one interval to another.
+pub fn remap(x: num, a1: num, b1: num, a2: num, b2: num): num {
+    return lerp(a2, b2, inv_lerp(a1, b1, x));
+}

@@ -60,6 +60,7 @@ Language features:
 
 **Engineering libraries** under [lib/](lib/) — all written in CalcLang on top of the language and the native runtime:
 
+- **`math.calc`** — convenience math helpers: `sq`, `cube`, `power`, `power_int` (fast integer power), `nth_root`, `cbrt`, `hypot`, `sign`, hyperbolics, degree/radian, `log_base`, `log2`, `clamp`, `lerp`, `remap`.
 - **`linalg.calc`** — matrices, `mat_solve`/`mat_det`/`mat_inv`, vector and matrix norms.
 - **`stats.calc`** — mean, stddev, median, Pearson correlation, linear regression, histogram.
 - **`numeric.calc`** — root finding (bisect / Newton / secant), integration (trapezoidal / Simpson / adaptive), polynomial eval and derivative, linear interpolation.

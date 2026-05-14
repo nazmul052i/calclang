@@ -1,0 +1,89 @@
+// math_demo.calc — exercise lib/math.calc.
+//
+// Build:
+//   build/calcnat --lib lib/math.calc -o build/calclib/math.s
+//   build/calcnat examples/math_demo.calc build/calclib/math.s -o build/math_demo.exe
+
+extern fn sq(x: num): num;
+extern fn cube(x: num): num;
+extern fn power(b: num, e: num): num;
+extern fn power_int(b: num, n: num): num;
+extern fn nth_root(x: num, n: num): num;
+extern fn cbrt(x: num): num;
+extern fn hypot(x: num, y: num): num;
+extern fn sign(x: num): num;
+extern fn round_half_up(x: num): num;
+extern fn sinh(x: num): num;
+extern fn cosh(x: num): num;
+extern fn tanh(x: num): num;
+extern fn asinh(x: num): num;
+extern fn acosh(x: num): num;
+extern fn atanh(x: num): num;
+extern fn deg_to_rad(d: num): num;
+extern fn rad_to_deg(r: num): num;
+extern fn log_base(x: num, b: num): num;
+extern fn log2(x: num): num;
+extern fn clamp(x: num, lo: num, hi: num): num;
+extern fn lerp(a: num, b: num, t: num): num;
+extern fn inv_lerp(a: num, b: num, x: num): num;
+extern fn remap(x: num, a1: num, b1: num, a2: num, b2: num): num;
+
+print "===== Powers =====";
+print "sq(7)         = " + sq(7);                    // 49
+print "cube(4)       = " + cube(4);                  // 64
+print "power(2, 10)  = " + power(2, 10);             // 1024
+print "power_int(3, 5)   = " + power_int(3, 5);      // 243
+print "power_int(2, -3)  = " + power_int(2, -3);     // 0.125
+print "power_int(5, 0)   = " + power_int(5, 0);      // 1
+
+print "";
+print "===== Roots =====";
+print "nth_root(27, 3)   = " + nth_root(27, 3);      // 3
+print "cbrt(125)         = " + cbrt(125);            // 5
+print "cbrt(-8)          = " + cbrt(-8);             // -2
+print "nth_root(81, 4)   = " + nth_root(81, 4);      // 3
+
+print "";
+print "===== hypot (overflow-safe) =====";
+print "hypot(3, 4)       = " + hypot(3, 4);          // 5
+print "hypot(1e150, 1e150) = " + hypot(1e150, 1e150);// ~1.414e150 (won't overflow)
+print "  (sqrt(x*x + y*y) would have overflowed at x=1e155)";
+
+print "";
+print "===== Sign and rounding =====";
+print "sign(-3.7)        = " + sign(-3.7);           // -1
+print "sign(0)           = " + sign(0);              // 0
+print "sign(42)          = " + sign(42);             // 1
+print "round_half_up(2.5)  = " + round_half_up(2.5); // 3
+print "round_half_up(-2.5) = " + round_half_up(-2.5);// -3
+print "round_half_up(0.5)  = " + round_half_up(0.5); // 1
+
+print "";
+print "===== Hyperbolics =====";
+print "sinh(1)   = " + sinh(1) + "   (~1.1752)";
+print "cosh(0)   = " + cosh(0) + "   (== 1)";
+print "tanh(1)   = " + tanh(1) + "   (~0.7616)";
+print "tanh(20)  = " + tanh(20) + "   (~1)";
+print "asinh(sinh(1))    = " + asinh(sinh(1));        // 1
+print "acosh(cosh(2))    = " + acosh(cosh(2));        // 2
+print "atanh(tanh(0.5))  = " + atanh(tanh(0.5));      // 0.5
+
+print "";
+print "===== Angle conversion =====";
+print "deg_to_rad(180)   = " + deg_to_rad(180) + "   (== pi = " + pi() + ")";
+print "rad_to_deg(pi())  = " + rad_to_deg(pi());      // 180
+print "deg_to_rad(90)    = " + deg_to_rad(90);        // pi/2
+
+print "";
+print "===== Logarithms =====";
+print "log2(1024)        = " + log2(1024);            // 10
+print "log_base(1000, 10)  = " + log_base(1000, 10);  // 3
+print "log_base(81, 3)     = " + log_base(81, 3);     // 4
+
+print "";
+print "===== Clamp, lerp, remap =====";
+print "clamp(15, 0, 10)        = " + clamp(15, 0, 10);     // 10
+print "clamp(-3, 0, 10)        = " + clamp(-3, 0, 10);     // 0
+print "lerp(10, 20, 0.25)      = " + lerp(10, 20, 0.25);   // 12.5
+print "inv_lerp(10, 20, 17.5)  = " + inv_lerp(10, 20, 17.5); // 0.75
+print "remap(5, 0, 10, 100, 200) = " + remap(5, 0, 10, 100, 200); // 150
