@@ -548,14 +548,12 @@ This keeps the dangling-else question from ever coming up.
 
 #### Common conditional patterns
 
-**Min/max in line.** No ternary operator; use a temp variable:
+**Min/max in line.** Use a ternary expression or the calclib helper:
 
 ```calc
-let m = a;
-if (b < a) { m = b; }              // min(a, b) manually
+let m = a < b ? a : b;             // ternary
+let m2 = min(a, b);                // calclib (also handles arrays in lib/stats)
 ```
-
-Or use the calclib `min` / `max`:
 
 ```calc
 let m = min(a, b);
@@ -599,7 +597,7 @@ while (i <= 10) {
 print sum;         // 55
 ```
 
-CalcLang has no `do…while`, but you can simulate one with `while (1)` and a tail `break`:
+For a loop that must run the body at least once, `do { … } while (cond);` is the natural choice (see below). The `while (1) { … if (done) break; }` idiom also works when the exit condition is awkward to express up front:
 
 ```calc
 let line = "";
@@ -2265,6 +2263,68 @@ build/calcnat main.calc lib.s -o app.exe
 - `extern fn` declares a function from another file. Annotations on extern declarations let the caller's compiler type-check the call. They aren't enforced against the actual signature in the other file — keep them consistent yourself.
 - A `.calc` file built with `--lib` must not have top-level statements other than `let`s used to define module-level constants. Top-level code in a library is silently ignored — keep it pure.
 - The first non-library file on the `calcnat` command line is the entry point. Its top-level code becomes the program's main.
+
+### `import` — bulk-extern with signature inheritance
+
+Writing `extern fn ...;` for each function gets repetitive when you depend on a 20-function library. The `import "path";` statement reads the named file at parse time, picks up every `pub fn` (and `pub class`) signature, and injects equivalent `extern fn` declarations into the current Program. The link step is unchanged — you still need to link against the library's compiled `.s`.
+
+```calc
+// Before — one extern per import:
+extern fn sq(x: num): num;
+extern fn cube(x: num): num;
+extern fn power_int(b: num, n: num): num;
+extern fn nth_root(x: num, n: num): num;
+// ... 14 more
+print sq(7);
+
+// After — one line covers all of math.calc:
+import "lib/math.calc";
+print sq(7);
+```
+
+Path resolution rules:
+
+| Form                 | Resolved as                                            |
+|----------------------|--------------------------------------------------------|
+| `"/abs/path.calc"`   | absolute — used as given                               |
+| `"./foo.calc"` or `"../foo.calc"` | relative to the importing file's directory  |
+| `"lib/foo.calc"`     | tried as cwd-relative first, then importer-relative   |
+
+The cwd-fallback covers the common case of `make` (or any project-root build) where the engineering library lives at `lib/...` from the repo root. The `./` form forces locality for genuinely co-located helper files.
+
+The build still needs the linked `.s` of the library:
+
+```bash
+build/calcnat --lib lib/math.calc -o build/calclib/math.s
+build/calcnat my_prog.calc build/calclib/math.s -o my_prog.exe
+```
+
+Only the *imports* changed in `my_prog.calc`. The link command is the same.
+
+#### `import` vs. `extern fn` side by side
+
+```calc
+// Either works in identical scenarios; pick whichever reads more
+// clearly for your use case.
+
+// Explicit form — full control over each declaration, useful when
+// you want to import only a subset of a library's API.
+extern fn mean(xs: arr): num;
+extern fn stddev(xs: arr): num;
+
+// Bulk form — pulls in everything pub from stats.calc, signatures
+// stay in sync with the library automatically.
+import "lib/stats.calc";
+```
+
+Both expand to the same AST under the hood. `import` is sugar; it's never strictly necessary, and the underlying `extern fn` mechanism remains the canonical form.
+
+#### Limitations
+
+- **No circular imports.** If A imports B and B imports A, the parser will recurse forever. The compiler doesn't currently track which files it has imported.
+- **Imports happen at parse time, not link time.** If you change the library, you only need to rebuild the imported `.s` (no recompile of the importer is needed for code that doesn't reference renamed symbols). But the importer DOES read the library's source to extract signatures, so the source file must be on disk at compile time.
+- **No selective import** like Python's `from X import Y, Z`. Everything `pub` comes in.
+- **No name aliasing**. If two imports both export a `mean` function, the linker will report duplicate symbols.
 
 ### Putting multiple libraries together
 
