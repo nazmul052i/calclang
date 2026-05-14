@@ -33,6 +33,11 @@ typedef enum {
     TOK_CASE,
     TOK_DEFAULT,
     TOK_DO,
+    TOK_IN,
+
+    /* range */
+    TOK_DOTDOT,     /* ..  — exclusive range, used in `for x in 0..n` */
+    TOK_DOTDOTEQ,   /* ..= — inclusive range */
 
     /* arithmetic */
     TOK_PLUS,

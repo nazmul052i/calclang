@@ -1,0 +1,51 @@
+// for-in / range loops
+
+// Array iteration — Rust-style, no parens.
+for x in [10, 20, 30] {
+    print x;
+}
+
+// Exclusive range.
+for i in 0..5 { print i; }
+
+// Inclusive range.
+for i in 1..=3 { print i; }
+
+// String iteration — one character per step.
+for ch in "abc" { print ch; }
+
+// Map keys: explicit via keys(m).
+let m = {"a": 1, "b": 2};
+for k in keys(m) {
+    print k;
+    print m[k];
+}
+
+// Computed range bounds.
+let lo = 2; let hi = 5;
+for i in lo..hi { print i; }
+
+// Nested.
+for i in 0..2 {
+    for j in 0..2 {
+        print i * 10 + j;
+    }
+}
+
+// break and continue.
+for i in 0..10 {
+    if (i == 5) { break; }
+    if (i % 2 == 0) { continue; }
+    print i;
+}
+
+// Iterable from a function call.
+fn make_xs() { return [7, 8, 9]; }
+for x in make_xs() { print x; }
+
+// Parens form, with `let` and without.
+for (k in [100, 200]) { print k; }
+for (let v in [300]) { print v; }
+
+// Classic C-style still works.
+for (let i = 0; i < 3; i = i + 1) { print i * 100; }

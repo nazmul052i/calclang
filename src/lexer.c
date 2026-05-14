@@ -213,8 +213,13 @@ Token lexer_next(Lexer *lx) {
             return tok(TOK_NUMBER, b, line, col);
         }
         while (isdigit((unsigned char)cur(lx)) || cur(lx) == '.') {
-            if (cur(lx) == '.') dots++;
-            if (dots > 1) cl_die_at(line, col, "invalid number with multiple decimal points");
+            if (cur(lx) == '.') {
+                /* A `..` (range operator) terminates the number — `0..5`
+                   is two tokens, not a malformed double. */
+                if (peek(lx) == '.') break;
+                dots++;
+                if (dots > 1) cl_die_at(line, col, "invalid number with multiple decimal points");
+            }
             if (i >= CL_MAX_TEXT - 1) cl_die_at(line, col, "number too long");
             b[i++] = cur(lx);
             adv(lx);
@@ -287,6 +292,7 @@ Token lexer_next(Lexer *lx) {
         if (strcmp(b, "case")     == 0) return tok(TOK_CASE,     b, line, col);
         if (strcmp(b, "default")  == 0) return tok(TOK_DEFAULT,  b, line, col);
         if (strcmp(b, "do")       == 0) return tok(TOK_DO,       b, line, col);
+        if (strcmp(b, "in")       == 0) return tok(TOK_IN,       b, line, col);
         return tok(TOK_IDENTIFIER, b, line, col);
     }
 
@@ -318,6 +324,12 @@ Token lexer_next(Lexer *lx) {
         adv(lx); adv(lx);
         if (cur(lx) == '=') { adv(lx); return tok(TOK_RSHIFT_EQ, ">>=", line, col); }
         return tok(TOK_RSHIFT, ">>", line, col);
+    }
+    /* Range operators .. and ..= (must precede the single-char '.' case). */
+    if (c == '.' && peek(lx) == '.') {
+        adv(lx); adv(lx);
+        if (cur(lx) == '=') { adv(lx); return tok(TOK_DOTDOTEQ, "..=", line, col); }
+        return tok(TOK_DOTDOT, "..", line, col);
     }
     if (c == '&' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_AMP_EQ,    "&=", line, col); }
     if (c == '|' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_PIPE_EQ,   "|=", line, col); }
