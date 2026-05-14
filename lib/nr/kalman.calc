@@ -1,0 +1,192 @@
+// kalman.calc — discrete-time Kalman filter.
+//
+// State-space model:
+//   x_k   = F x_{k-1} + B u_{k-1} + w,   w ~ N(0, Q)   (process noise)
+//   z_k   = H x_k + v,                    v ~ N(0, R)   (measurement noise)
+//
+// Steps per time tick:
+//   Predict:
+//     x_pred = F x + B u
+//     P_pred = F P F^T + Q
+//   Update with measurement z:
+//     y = z - H x_pred                    (innovation)
+//     S = H P_pred H^T + R
+//     K = P_pred H^T S^-1                 (Kalman gain)
+//     x_new = x_pred + K y
+//     P_new = (I - K H) P_pred
+//
+// API:
+//   kf_new(x0, P0, F, B, H, Q, R)         -> filter state (a map)
+//   kf_predict(kf, u)                     -> mutates kf; returns kf
+//   kf_update(kf, z)                      -> mutates kf; returns kf
+//   kf_step(kf, u, z)                     -> predict then update
+//
+// Inputs are matrices (arrays of row-arrays) and column-vectors (plain
+// arrays of length n). B may be the zero matrix if there's no control
+// input (just pass an n x p zero matrix and u = zeros(p)). For a
+// vanilla 1-D random-walk smoother, F=H=[[1]] and B=[[0]] works.
+//
+// Reference: classical Kalman / NR §15.7 ("optimal Wiener filtering"
+// generalises this).
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+
+priv fn _kf_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+priv fn _kf_eye(n) {
+    let I = _kf_zero(n, n);
+    for (let i = 0; i < n; i = i + 1) { I[i][i] = 1; }
+    return I;
+}
+
+priv fn _kf_matmul(A, B) {
+    let m = len(A);
+    let k = len(B);
+    let n = len(B[0]);
+    let C = _kf_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            let s = 0;
+            for (let p = 0; p < k; p = p + 1) { s = s + A[i][p] * B[p][j]; }
+            C[i][j] = s;
+        }
+    }
+    return C;
+}
+
+priv fn _kf_transpose(A) {
+    let m = len(A);
+    let n = len(A[0]);
+    let T = _kf_zero(n, m);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { T[j][i] = A[i][j]; }
+    }
+    return T;
+}
+
+priv fn _kf_matvec(A, x) {
+    let m = len(A);
+    let n = len(x);
+    let y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let s = 0;
+        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        push(y, s);
+    }
+    return y;
+}
+
+priv fn _kf_vadd(a, b) {
+    let out = [];
+    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] + b[i]); }
+    return out;
+}
+
+priv fn _kf_vsub(a, b) {
+    let out = [];
+    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] - b[i]); }
+    return out;
+}
+
+priv fn _kf_madd(A, B) {
+    let m = len(A);
+    let n = len(A[0]);
+    let C = _kf_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { C[i][j] = A[i][j] + B[i][j]; }
+    }
+    return C;
+}
+
+priv fn _kf_msub(A, B) {
+    let m = len(A);
+    let n = len(A[0]);
+    let C = _kf_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { C[i][j] = A[i][j] - B[i][j]; }
+    }
+    return C;
+}
+
+pub fn kf_new(x0, P0, F, B, H, Q, R) {
+    return {
+        "x": x0, "P": P0,
+        "F": F,  "B": B,
+        "H": H,
+        "Q": Q,  "R": R
+    };
+}
+
+pub fn kf_predict(kf, u) {
+    let x_pred = _kf_vadd(_kf_matvec(kf["F"], kf["x"]),
+                          _kf_matvec(kf["B"], u));
+    let FP   = _kf_matmul(kf["F"], kf["P"]);
+    let FPFT = _kf_matmul(FP, _kf_transpose(kf["F"]));
+    let P_pred = _kf_madd(FPFT, kf["Q"]);
+    kf["x"] = x_pred;
+    kf["P"] = P_pred;
+    return kf;
+}
+
+pub fn kf_update(kf, z) {
+    // y = z - H x
+    let Hx = _kf_matvec(kf["H"], kf["x"]);
+    let y  = _kf_vsub(z, Hx);
+    // S = H P H^T + R
+    let HP   = _kf_matmul(kf["H"], kf["P"]);
+    let HPHT = _kf_matmul(HP, _kf_transpose(kf["H"]));
+    let S    = _kf_madd(HPHT, kf["R"]);
+    // K = P H^T S^-1 — compute column by column via LU.
+    let PHT = _kf_matmul(kf["P"], _kf_transpose(kf["H"]));
+    let lu  = lu_decompose(S);
+    // PHT is n x m, S is m x m. K = PHT * S^-1, also n x m.
+    // We compute K^T = (S^-T) * PHT^T = solve S^T col-by-col... but S is
+    // symmetric so S^T = S. For each row of K (i.e. each column j of K^T):
+    //   K[:][j] = solve S, PHT[:][j].
+    let n_state = len(kf["P"]);
+    let m_meas  = len(kf["R"]);
+    let K = _kf_zero(n_state, m_meas);
+    for (let j = 0; j < m_meas; j = j + 1) {
+        // Build the j-th column of PHT.
+        let rhs = [];
+        for (let i = 0; i < n_state; i = i + 1) { push(rhs, PHT[i][j]); }
+        let col = lu_solve(lu, rhs);   // S^-1 * (col j of PHT) — wrong order!
+        // Actually we need (PHT . S^-1)[:, j] = PHT . e_j' where e_j' = S^-1 . e_j.
+        // So: solve S . v = e_j, then K[:][j] = PHT . v.
+        // Let's redo: build e_j, solve, multiply.
+        let e = [];
+        for (let i = 0; i < m_meas; i = i + 1) {
+            if (i == j) { push(e, 1); } else { push(e, 0); }
+        }
+        let v = lu_solve(lu, e);
+        for (let i = 0; i < n_state; i = i + 1) {
+            let s = 0;
+            for (let k = 0; k < m_meas; k = k + 1) { s = s + PHT[i][k] * v[k]; }
+            K[i][j] = s;
+        }
+    }
+    // x_new = x + K y
+    let Ky = _kf_matvec(K, y);
+    let x_new = _kf_vadd(kf["x"], Ky);
+    // P_new = (I - K H) P
+    let KH = _kf_matmul(K, kf["H"]);
+    let IKH = _kf_msub(_kf_eye(n_state), KH);
+    let P_new = _kf_matmul(IKH, kf["P"]);
+    kf["x"] = x_new;
+    kf["P"] = P_new;
+    return kf;
+}
+
+pub fn kf_step(kf, u, z) {
+    kf_predict(kf, u);
+    return kf_update(kf, z);
+}

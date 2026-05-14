@@ -90,6 +90,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/svd.calc`** — singular value decomposition (via A^T A + Jacobi); pseudo-inverse and rank-revealing LS solve.
 - **`nr/polyroots.calc`** — all roots of a real or complex polynomial via Laguerre's method with synthetic-division deflation and a polish pass.
 - **`nr/conv.calc`** — direct and FFT-based linear convolution and cross-correlation.
+- **`nr/cheb.calc`** — Chebyshev approximation of a function on [a, b] with Clenshaw evaluation and exact coefficient-level differentiation / integration.
+- **`nr/savgol.calc`** — Savitzky-Golay filter coefficients and apply (smoothing or derivatives) — preserves peaks far better than a moving average.
+- **`nr/kalman.calc`** — discrete-time Kalman filter (predict + update) for arbitrary linear Gaussian state-space models.
+- **`nr/pde.calc`** — Crank-Nicolson scheme for the 1-D heat equation, unconditionally stable, second-order accurate.
 
 ## Hello world
 

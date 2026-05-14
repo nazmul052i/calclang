@@ -1515,6 +1515,53 @@ extern fn correlate_fft(a: arr, b: arr): arr;
 
 Direct is O(nm); use it for short signals or short kernels. FFT-backed variants run in O((n+m) log(n+m)) — zero-pad to the next power of two, transform both, multiply (or multiply by the conjugate, for correlation), and inverse-transform. Built on `lib/fft.calc`. NR §13.1–13.2.
 
+#### `lib/nr/cheb.calc` — Chebyshev approximation
+
+`cheb_fit(f, a, b, n)` returns a map with the `n` Chebyshev coefficients for f on [a, b]. `cheb_eval` does the Clenshaw recurrence in O(n) without ever building the individual T_k. `cheb_deriv` / `cheb_integral` produce the coefficient table of f' / ∫f exactly — useful for adaptive quadrature pipelines where you want both. NR §5.8–5.9.
+
+```calc
+extern fn cheb_fit(f: fn, a: num, b: num, n: num): map;
+extern fn cheb_eval(cm: map, x: num): num;
+extern fn cheb_deriv(cm: map): map;
+
+let cm = cheb_fit(fn(x) { return exp(-x) * cos(x); }, 0, 5, 16);
+print cheb_eval(cm, 1.0);                 // 0.198766...  matches exp(-1) cos(1)
+print cheb_eval(cheb_deriv(cm), 1.0);     // -0.508326... = f'(1)
+```
+
+For smooth f, 8–16 coefficients usually reach machine precision.
+
+#### `lib/nr/savgol.calc` — Savitzky-Golay smoothing / differentiation
+
+```calc
+extern fn savgol_coeffs(nl: num, nr: num, m: num, ld: num): arr;
+extern fn savgol_apply(xs: arr, nl: num, nr: num, m: num, ld: num): arr;
+```
+
+A Savitzky-Golay filter fits a low-order polynomial to a sliding window and reads off its value (or derivative) at the center. It preserves spectral peaks far better than a moving average for the same noise reduction, and produces clean derivative estimates for free. NR §14.8.
+
+`nl`/`nr` are points to the left / right of the window center. `m` is the polynomial order. `ld` is the derivative order (0 = smoothing). Window length is `nl + nr + 1`.
+
+#### `lib/nr/kalman.calc` — discrete-time Kalman filter
+
+```calc
+extern fn kf_new(x0: arr, P0: arr, F: arr, B: arr, H: arr, Q: arr, R: arr): map;
+extern fn kf_step(kf: map, u: arr, z: arr): map;
+```
+
+Generic linear-Gaussian state-space estimator. Each step does predict (`x' = F x + B u`, `P' = F P F^T + Q`) and update with measurement z (`K = P H^T (H P H^T + R)^{-1}`, etc.). For a stationary scalar value with sensor variance R and small process variance Q, the steady-state Kalman gain settles around √(Q/R) and the filter dramatically out-performs the raw measurement.
+
+#### `lib/nr/pde.calc` — Crank-Nicolson 1-D diffusion
+
+```calc
+extern fn heat_1d(u0: arr, alpha: num, dx: num, dt: num,
+                  n_steps: num, bcL: num, bcR: num): map;
+```
+
+Solves `du/dt = α d²u/dx²` on `[0, L]` with Dirichlet boundary conditions. Crank-Nicolson averages an explicit and an implicit step: unconditionally stable AND second-order in both space and time, much better than either Euler scheme alone. Each step is a tridiagonal Thomas solve in the interior. NR §19.2.
+
+Returns `{"u_final", "history"}`, where `history` is the full per-step state — drop it in your caller if you only need the final field.
+
 #### Building the NR libraries
 
 ```bash
@@ -1524,6 +1571,7 @@ make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
 make nr_demo3         # tier 3: minimization + sort/select
 make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
 make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
+make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 ```
 
 ### Building demos
@@ -1547,6 +1595,7 @@ make nr_demo2                            # LU + Romberg + RK45 + polynomial fami
 make nr_demo3                            # 1-D / N-D minimization + sort/select
 make nr_demo4                            # Ridders' + distributions + Newton + LM fit
 make nr_demo5                            # QR + SVD + Laguerre polyroots + convolution
+make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make demos                               # all of the above
 ```
 

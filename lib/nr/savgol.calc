@@ -1,0 +1,103 @@
+// savgol.calc — Savitzky-Golay smoothing / differentiation filters.
+//
+// A Savitzky-Golay filter convolves the data with a fixed kernel that
+// effectively fits a low-order polynomial to a sliding window, then
+// reads off the polynomial's value (or derivative) at the window
+// center. It preserves spectral peaks much better than a moving
+// average for the same noise reduction, and gives exact polynomial
+// derivatives essentially for free.
+//
+// API:
+//   savgol_coeffs(nl, nr, m, ld)  -> 1-D kernel of length nl + nr + 1
+//                                     - nl, nr : points left/right of center
+//                                     - m       : polynomial order (must be > ld)
+//                                     - ld      : derivative order (0 = smooth)
+//   savgol_apply(xs, nl, nr, m, ld) -> filtered signal (same length as xs;
+//                                       edges zero-padded if you want a
+//                                       different convention, do it yourself)
+//
+// Reference: Numerical Recipes §14.8. The coefficients are the first column
+// of the Moore-Penrose pseudo-inverse of the Vandermonde-style design
+// matrix.
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+
+priv fn _sg_mat_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+pub fn savgol_coeffs(nl, nr, m, ld) {
+    if (nl < 0 || nr < 0) { throw "savgol_coeffs: nl, nr must be >= 0"; }
+    if (m < 0)            { throw "savgol_coeffs: m must be >= 0"; }
+    if (ld > m)           { throw "savgol_coeffs: ld must be <= m"; }
+    if (nl + nr < m)      { throw "savgol_coeffs: window too small for order m"; }
+    let np = nl + nr + 1;
+    let mp = m + 1;
+    // Build the (m+1) x (m+1) normal equations: A[i][j] = sum_{k=-nl..nr} k^(i+j).
+    let A = _sg_mat_zero(mp, mp);
+    for (let i = 0; i < mp; i = i + 1) {
+        for (let j = 0; j < mp; j = j + 1) {
+            let s = 0;
+            for (let k = -nl; k <= nr; k = k + 1) {
+                s = s + pow(k, i + j);
+            }
+            A[i][j] = s;
+        }
+    }
+    // RHS: unit vector with 1 at row ld (the derivative we want).
+    let b = [];
+    for (let i = 0; i < mp; i = i + 1) {
+        if (i == ld) { push(b, 1); } else { push(b, 0); }
+    }
+    // Solve. The result a[0..mp-1] are the polynomial coefficients of
+    // the impulse response in `k`. The convolution weight at offset k
+    // is sum_j a[j] * k^j.
+    let lu = lu_decompose(A);
+    let a  = lu_solve(lu, b);
+    // For derivative order ld, the kernel value at offset k is
+    //   ld! * sum_j a[j] * k^j evaluated at j = ld only — but the general
+    // recipe: weights[i] = sum_j a[j] * k^j where k = i - nl. The factor
+    // ld! is folded into the unit-vector RHS by convention here.
+    let fact = 1;
+    for (let i = 2; i <= ld; i = i + 1) { fact = fact * i; }
+    let coef = [];
+    for (let i = 0; i < np; i = i + 1) {
+        let k = i - nl;
+        let s = 0;
+        for (let j = 0; j < mp; j = j + 1) {
+            s = s + a[j] * pow(k, j);
+        }
+        push(coef, fact * s);
+    }
+    return coef;
+}
+
+// Apply a Savitzky-Golay filter to a 1-D signal. Edges are handled by
+// reflection (so the filtered series is the same length as the input).
+pub fn savgol_apply(xs, nl, nr, m, ld) {
+    let coef = savgol_coeffs(nl, nr, m, ld);
+    let np = nl + nr + 1;
+    let n = len(xs);
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let s = 0;
+        for (let j = 0; j < np; j = j + 1) {
+            let idx = i + (j - nl);
+            // Reflect at the edges.
+            if (idx < 0)  { idx = -idx; }
+            if (idx >= n) { idx = 2 * (n - 1) - idx; }
+            if (idx < 0)  { idx = 0; }
+            if (idx >= n) { idx = n - 1; }
+            s = s + coef[j] * xs[idx];
+        }
+        push(out, s);
+    }
+    return out;
+}

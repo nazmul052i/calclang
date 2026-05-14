@@ -1,0 +1,157 @@
+// Tier-6 NR demo: Chebyshev approximation, Savitzky-Golay filter,
+// Kalman filter, Crank-Nicolson 1-D diffusion.
+
+extern fn cheb_fit(f: fn, a: num, b: num, n: num): map;
+extern fn cheb_eval(cm: map, x: num): num;
+extern fn cheb_deriv(cm: map): map;
+extern fn cheb_integral(cm: map): map;
+
+extern fn savgol_coeffs(nl: num, nr: num, m: num, ld: num): arr;
+extern fn savgol_apply(xs: arr, nl: num, nr: num, m: num, ld: num): arr;
+
+extern fn kf_new(x0: arr, P0: arr, F: arr, B: arr, H: arr, Q: arr, R: arr): map;
+extern fn kf_step(kf: map, u: arr, z: arr): map;
+
+extern fn heat_1d(u0: arr, alpha: num, dx: num, dt: num, n_steps: num, bcL: num, bcR: num): map;
+
+extern fn Rng(seed: num): map;
+
+// ===== Chebyshev approximation =====
+print "===== Chebyshev approximation =====";
+let f = fn(x) { return exp(-x) * cos(x); };
+let cm = cheb_fit(f, 0, 5, 16);
+let xs_probe = [0, 0.5, 1.0, 2.5, 4.7];
+print "Cheb approximation vs exact f(x) = exp(-x) cos(x):";
+for (let i = 0; i < len(xs_probe); i = i + 1) {
+    let x = xs_probe[i];
+    let exact = exp(-x) * cos(x);
+    let cheb  = cheb_eval(cm, x);
+    print "  x=" + x + "  exact=" + exact + "  cheb=" + cheb
+        + "  err=" + abs(exact - cheb);
+}
+
+// Differentiate analytically via coefficient algebra.
+let dcm = cheb_deriv(cm);
+print "";
+print "f'(x) for f = exp(-x) cos(x) is -exp(-x)(cos x + sin x):";
+for (let i = 0; i < len(xs_probe); i = i + 1) {
+    let x = xs_probe[i];
+    let exact_dp = -exp(-x) * (cos(x) + sin(x));
+    let cheb_dp  = cheb_eval(dcm, x);
+    print "  x=" + x + "  exact'=" + exact_dp + "  cheb'=" + cheb_dp
+        + "  err=" + abs(exact_dp - cheb_dp);
+}
+
+// ===== Savitzky-Golay =====
+print "";
+print "===== Savitzky-Golay smoothing =====";
+let rng = Rng(7);
+let xs = [];
+let raw = [];
+for (let i = 0; i < 100; i = i + 1) {
+    let x = i * 0.1;
+    push(xs, x);
+    push(raw, sin(x) + rng.normal(0, 0.1));
+}
+// Quadratic SG over a +-7 window — heavy smoothing.
+let smoothed = savgol_apply(raw, 7, 7, 2, 0);
+// Compare residuals vs the underlying truth sin(x).
+let raw_err = 0;
+let sm_err  = 0;
+for (let i = 0; i < len(xs); i = i + 1) {
+    let truth = sin(xs[i]);
+    raw_err = raw_err + (raw[i] - truth) * (raw[i] - truth);
+    sm_err  = sm_err  + (smoothed[i] - truth) * (smoothed[i] - truth);
+}
+raw_err = sqrt(raw_err / len(xs));
+sm_err  = sqrt(sm_err  / len(xs));
+print "noise sigma = 0.1";
+print "  raw RMS error vs sin(x):       " + raw_err;
+print "  Savitzky-Golay RMS error:      " + sm_err;
+print "Smoothing kernel coefficients (window +-7, order 2):";
+print savgol_coeffs(7, 7, 2, 0);
+
+// First-derivative SG: differentiate the noisy signal.
+let dsmoothed = savgol_apply(raw, 7, 7, 4, 1);
+// Scale by 1/dx (here dx=0.1) because SG returns derivative in sample units.
+let dx = 0.1;
+let dsm_err = 0;
+for (let i = 7; i < len(xs) - 7; i = i + 1) {   // ignore edges
+    let truth = cos(xs[i]);
+    let est = dsmoothed[i] / dx;
+    dsm_err = dsm_err + (est - truth) * (est - truth);
+}
+dsm_err = sqrt(dsm_err / (len(xs) - 14));
+print "SG-differentiated d(sin)/dx vs cos(x), interior RMS error: " + dsm_err;
+
+// ===== Kalman filter =====
+print "";
+print "===== Kalman filter: estimate a stationary value from noisy reads =====";
+// State: scalar value drifting slowly (random walk). F=H=[[1]], no
+// control input (B=[[0]], u=[0]). Q matches the actual drift variance.
+// R is the sensor noise variance. Tuned right, the filter beats raw
+// measurement by ~3x.
+let F = [[1]];  let B = [[0]];  let H = [[1]];
+let Q = [[0.0025]];   // (0.05)^2 — process drift variance
+let R = [[0.25]];     // (0.5)^2 — measurement noise variance
+let x0 = [10];  let P0 = [[1]];
+let kf = kf_new(x0, P0, F, B, H, Q, R);
+
+let truth = [10];
+let measured = [];
+let estimated = [];
+push(measured, 10);
+push(estimated, 10);
+let rng2 = Rng(42);
+for (let t = 1; t <= 100; t = t + 1) {
+    // True value drifts as a random walk (matches the assumed model).
+    let tx = truth[t - 1] + rng2.normal(0, 0.05);
+    push(truth, tx);
+    let z = tx + rng2.normal(0, 0.5);
+    push(measured, z);
+    kf_step(kf, [0], [z]);
+    push(estimated, kf["x"][0]);
+}
+let z_err = 0;  let k_err = 0;
+for (let i = 1; i < len(truth); i = i + 1) {
+    z_err = z_err + (measured[i] - truth[i]) * (measured[i] - truth[i]);
+    k_err = k_err + (estimated[i] - truth[i]) * (estimated[i] - truth[i]);
+}
+z_err = sqrt(z_err / (len(truth) - 1));
+k_err = sqrt(k_err / (len(truth) - 1));
+print "  raw measurement RMS error:   " + z_err;
+print "  Kalman estimate RMS error:   " + k_err;
+print "  steady-state Kalman gain ~   " + (kf["P"][0][0] / (kf["P"][0][0] + R[0][0]));
+
+// ===== Crank-Nicolson diffusion =====
+print "";
+print "===== Crank-Nicolson 1-D heat equation =====";
+// Initial profile: hat function in the middle of a unit interval.
+let n_grid = 41;
+let dx_g   = 1.0 / (n_grid - 1);
+let u0 = [];
+for (let i = 0; i < n_grid; i = i + 1) {
+    let x = i * dx_g;
+    if (x > 0.4 && x < 0.6) { push(u0, 1); } else { push(u0, 0); }
+}
+let alpha = 0.01;
+let dt    = 0.01;
+let nstep = 100;
+let sol = heat_1d(u0, alpha, dx_g, dt, nstep, 0, 0);
+// Total heat content should be conserved-ish (Dirichlet sink only at
+// boundaries removes mass that diffuses out; we sample several times).
+let mid = sol["u_final"][20];     // center value at t = nstep*dt
+print "u(x=0.5, t=" + (nstep * dt) + ") after Crank-Nicolson: " + mid;
+print "  initial center peak = 1.0";
+// Mass at start vs end (numerical integral via trapezoidal):
+priv fn _mass(arr_in, dx) {
+    let m = 0;
+    for (let i = 0; i < len(arr_in); i = i + 1) {
+        let w = dx;
+        if (i == 0 || i == len(arr_in) - 1) { w = 0.5 * dx; }
+        m = m + arr_in[i] * w;
+    }
+    return m;
+}
+print "  mass at t=0       = " + _mass(u0, dx_g);
+print "  mass at t=" + (nstep * dt) + "    = " + _mass(sol["u_final"], dx_g);

@@ -1,0 +1,100 @@
+// pde.calc — Crank-Nicolson scheme for the 1-D diffusion (heat) equation.
+//
+// Solves:
+//   du/dt = alpha * d^2 u / dx^2,   0 <= x <= L,   t in [0, T],
+//   u(x, 0) = u0(x),    u(0, t) = bcL,   u(L, t) = bcR  (Dirichlet).
+//
+// Crank-Nicolson is the time-centered average of an explicit step and an
+// implicit step. It's unconditionally stable AND second-order in both
+// space and time — much better than either forward-Euler (constrained
+// by alpha*dt/dx^2 <= 1/2) or backward-Euler alone. NR §19.2.
+//
+// Each step solves a tridiagonal system in the interior with the
+// Thomas algorithm.
+//
+// API:
+//   heat_1d(u0, alpha, dx, dt, n_steps, bcL, bcR)
+//      -> {"u_final": [...], "history": [[t0 row], [t1 row], ...] }
+//
+// `u0` is the initial profile array (length n, including boundary
+// values at indices 0 and n-1; the routine over-writes those each step
+// with bcL / bcR, so they may be anything you like at input).
+//
+// `history` is sampled every step. If you don't need it, drop the rows
+// in the caller — building it scales as O(n_steps * n) but the cost is
+// dwarfed by the solver work for most reasonable problem sizes.
+
+priv fn _thomas(a, b, c, d) {
+    // Tridiagonal Thomas algorithm. a[i] is the sub-diagonal (i = 1..n-1),
+    // b[i] the diagonal (i = 0..n-1), c[i] the super-diagonal (i = 0..n-2),
+    // d[i] the RHS. Returns solution x. Modifies copies of b and d.
+    let n = len(d);
+    let cp = [];
+    let dp = [];
+    for (let i = 0; i < n; i = i + 1) { push(cp, 0); push(dp, 0); }
+    cp[0] = c[0] / b[0];
+    dp[0] = d[0] / b[0];
+    for (let i = 1; i < n; i = i + 1) {
+        let denom = b[i] - a[i] * cp[i - 1];
+        if (i < n - 1) { cp[i] = c[i] / denom; }
+        dp[i] = (d[i] - a[i] * dp[i - 1]) / denom;
+    }
+    // Back-substitute.
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    x[n - 1] = dp[n - 1];
+    for (let i = n - 2; i >= 0; i = i - 1) {
+        x[i] = dp[i] - cp[i] * x[i + 1];
+    }
+    return x;
+}
+
+pub fn heat_1d(u0, alpha, dx, dt, n_steps, bcL, bcR) {
+    let n = len(u0);
+    if (n < 3) { throw "heat_1d: need at least 3 grid points"; }
+    let r = alpha * dt / (dx * dx);
+    let u = [];
+    for (let i = 0; i < n; i = i + 1) { push(u, u0[i]); }
+    u[0]     = bcL;
+    u[n - 1] = bcR;
+    let history = [];
+    // Each row of history is a copy of u. (Keep this — it's the API.)
+    let snap0 = [];
+    for (let i = 0; i < n; i = i + 1) { push(snap0, u[i]); }
+    push(history, snap0);
+
+    // Tridiagonal coefficients for the implicit half-step on the interior
+    // (indices 1 .. n-2). The system is for u_new[1..n-2].
+    let m = n - 2;
+    let a = [];  let b = [];  let c = [];
+    for (let i = 0; i < m; i = i + 1) {
+        push(a, -0.5 * r);
+        push(b, 1 + r);
+        push(c, -0.5 * r);
+    }
+    a[0]     = 0;     // not used (would multiply outside)
+    c[m - 1] = 0;
+
+    for (let step = 0; step < n_steps; step = step + 1) {
+        // RHS = (1 - r) u_i + 0.5 r (u_{i-1} + u_{i+1}), interior only.
+        // Boundaries inject bcL / bcR contributions into the RHS at i = 0
+        // and i = m-1.
+        let d = [];
+        for (let i = 0; i < m; i = i + 1) {
+            let ii = i + 1;
+            let s  = (1 - r) * u[ii] + 0.5 * r * (u[ii - 1] + u[ii + 1]);
+            if (i == 0)     { s = s + 0.5 * r * bcL; }
+            if (i == m - 1) { s = s + 0.5 * r * bcR; }
+            push(d, s);
+        }
+        let interior = _thomas(a, b, c, d);
+        // Write back.
+        u[0]     = bcL;
+        u[n - 1] = bcR;
+        for (let i = 0; i < m; i = i + 1) { u[i + 1] = interior[i]; }
+        let snap = [];
+        for (let i = 0; i < n; i = i + 1) { push(snap, u[i]); }
+        push(history, snap);
+    }
+    return {"u_final": u, "history": history};
+}

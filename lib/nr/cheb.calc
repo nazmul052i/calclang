@@ -1,0 +1,103 @@
+// cheb.calc — Chebyshev approximation of a real function on [a, b].
+//
+// Given f and an interval, returns the coefficients c_0, ..., c_{n-1}
+// of the truncated Chebyshev series
+//
+//   f(x) ≈ sum_{k=0}^{n-1} c_k T_k(y) - c_0/2,   where y = (2x - a - b)/(b - a).
+//
+// Evaluating f at the n Chebyshev nodes is the discrete projection that
+// the recursion is built on. Coefficients decay rapidly for smooth f,
+// so 8-16 are usually enough for machine precision. NR §5.8.
+//
+// API:
+//   cheb_fit(f, a, b, n)        -> {"a", "b", "n", "c"}  (the coefficients)
+//   cheb_eval(coef_map, x)      -> Clenshaw-recurrence evaluation at x
+//   cheb_deriv(coef_map)        -> coefficients of f'(x) on the same interval
+//   cheb_integral(coef_map)     -> coefficients of int f(x) dx (zero constant)
+//
+// The derivative and integral are exact algebraic operations on the
+// coefficient table — useful for adaptive quadrature and ODE work.
+
+pub fn cheb_fit(f, a, b, n) {
+    if (n <= 0) { throw "cheb_fit: n must be >= 1"; }
+    let bma = 0.5 * (b - a);
+    let bpa = 0.5 * (b + a);
+    // Sample f at the n Chebyshev nodes (in y-space).
+    let fs = [];
+    for (let k = 0; k < n; k = k + 1) {
+        let y = cos(pi() * (k + 0.5) / n);
+        push(fs, f(y * bma + bpa));
+    }
+    let fac = 2.0 / n;
+    let c = [];
+    for (let j = 0; j < n; j = j + 1) {
+        let s = 0;
+        for (let k = 0; k < n; k = k + 1) {
+            s = s + fs[k] * cos(pi() * j * (k + 0.5) / n);
+        }
+        push(c, fac * s);
+    }
+    return {"a": a, "b": b, "n": n, "c": c};
+}
+
+// Clenshaw's recurrence: evaluates sum c_k T_k(y) - c_0/2 in O(n)
+// without ever computing the individual T_k.
+pub fn cheb_eval(cm, x) {
+    let a = cm["a"];  let b = cm["b"];
+    if (x < a || x > b) { throw "cheb_eval: x out of [a, b]"; }
+    let n = cm["n"];  let c = cm["c"];
+    let y  = (2 * x - a - b) / (b - a);
+    let y2 = 2 * y;
+    let d  = 0;
+    let dd = 0;
+    for (let j = n - 1; j >= 1; j = j - 1) {
+        let sv = d;
+        d  = y2 * d - dd + c[j];
+        dd = sv;
+    }
+    return y * d - dd + 0.5 * c[0];
+}
+
+// Coefficients of f'(x) on [a, b]. The recurrence:
+//   c'_{n-1} = 0
+//   c'_{n-2} = 2 (n - 1) c_{n - 1}
+//   c'_{k - 1} = c'_{k + 1} + 2 k c_k     for k = n - 2, ..., 1.
+// Then scale by 2 / (b - a) for the chain rule (y -> x).
+pub fn cheb_deriv(cm) {
+    let n = cm["n"];  let c = cm["c"];
+    let a = cm["a"];  let b = cm["b"];
+    if (n < 2) { throw "cheb_deriv: need at least 2 coefficients"; }
+    let cd = [];
+    for (let i = 0; i < n; i = i + 1) { push(cd, 0); }
+    cd[n - 1] = 0;
+    cd[n - 2] = 2 * (n - 1) * c[n - 1];
+    for (let j = n - 2; j >= 1; j = j - 1) {
+        cd[j - 1] = cd[j + 1] + 2 * j * c[j];
+    }
+    let scale = 2 / (b - a);
+    for (let i = 0; i < n; i = i + 1) { cd[i] = cd[i] * scale; }
+    return {"a": a, "b": b, "n": n, "c": cd};
+}
+
+// Coefficients of an antiderivative of f on [a, b]. The constant of
+// integration is chosen so the antiderivative is 0 at the midpoint
+// (caller can add an offset if a specific value at a known point is
+// desired). NR §5.9.
+pub fn cheb_integral(cm) {
+    let n = cm["n"];  let c = cm["c"];
+    let a = cm["a"];  let b = cm["b"];
+    let con  = 0.25 * (b - a);
+    let ci = [];
+    for (let i = 0; i < n; i = i + 1) { push(ci, 0); }
+    let sum  = 0;
+    let sign = 1;
+    for (let j = 1; j < n - 1; j = j + 1) {
+        ci[j] = con * (c[j - 1] - c[j + 1]) / j;
+        sum = sum + sign * ci[j];
+        sign = -sign;
+    }
+    ci[n - 1] = con * c[n - 2] / (n - 1);
+    sum = sum + sign * ci[n - 1];
+    ci[0] = 2 * sum;
+    return {"a": a, "b": b, "n": n, "c": ci};
+}

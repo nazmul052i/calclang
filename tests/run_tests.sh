@@ -1019,6 +1019,38 @@ A * I3 == A?  1' "$nat_out"
     echo "$nat_out" | grep -q "\[1, 3, 6, 5, 3\]" \
         || { echo "FAIL: nr5 — conv result wrong"; echo "$nat_out"; exit 1; }
 
+    echo "[test] demo — nr_demo6 (Chebyshev + Sav-Gol + Kalman + Crank-Nicolson)"
+    build/calcnat --lib lib/nr/cheb.calc   -o build/calclib/nr_cheb.s
+    build/calcnat --lib lib/nr/savgol.calc -o build/calclib/nr_savgol.s
+    build/calcnat --lib lib/nr/kalman.calc -o build/calclib/nr_kalman.s
+    build/calcnat --lib lib/nr/pde.calc    -o build/calclib/nr_pde.s
+    build/calcnat examples/nr_demo6.calc \
+        build/calclib/nr_cheb.s build/calclib/nr_savgol.s \
+        build/calclib/nr_kalman.s build/calclib/nr_pde.s \
+        build/calclib/nr_lu.s build/calclib/random.s \
+        -o build/d_nr6.exe
+    nat_out=$(build/d_nr6.exe | strip_cr)
+    # Chebyshev: error at x=0 must be below 1e-9.
+    cheb_err_line=$(echo "$nat_out" | grep -E "^  x=0  exact=1  cheb=")
+    if ! echo "$cheb_err_line" | grep -qE "err=[0-9]+(\.[0-9]+)?e-(09|1[0-9])"; then
+        echo "FAIL: nr6 — Chebyshev error too large"; echo "$cheb_err_line"; exit 1
+    fi
+    # Savitzky-Golay: smoothed RMS must be at least 2x smaller than raw.
+    raw_rms=$(echo "$nat_out" | grep "raw RMS error" | awk '{print $NF}')
+    sm_rms=$(echo  "$nat_out" | grep "Savitzky-Golay RMS" | awk '{print $NF}')
+    awk -v r="$raw_rms" -v s="$sm_rms" 'BEGIN { exit !(r > 2*s) }' \
+        || { echo "FAIL: nr6 — SG didn't reduce RMS by 2x"; echo "raw=$raw_rms sm=$sm_rms"; exit 1; }
+    # Kalman: filter must beat raw measurement by >2x RMS.
+    k_raw=$(echo "$nat_out" | grep "raw measurement RMS error" | awk '{print $NF}')
+    k_est=$(echo "$nat_out" | grep "Kalman estimate RMS error" | awk '{print $NF}')
+    awk -v r="$k_raw" -v e="$k_est" 'BEGIN { exit !(r > 2*e) }' \
+        || { echo "FAIL: nr6 — Kalman didn't beat raw 2x"; echo "raw=$k_raw est=$k_est"; exit 1; }
+    # Crank-Nicolson: heat must dissipate from peak 1.0 to ~0.4-0.5 at center.
+    cn_line=$(echo "$nat_out" | grep "after Crank-Nicolson:")
+    if ! echo "$cn_line" | grep -qE ": 0\.[34][0-9]+"; then
+        echo "FAIL: nr6 — Crank-Nicolson dissipation"; echo "$cn_line"; exit 1
+    fi
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

@@ -6,13 +6,14 @@ Reverse-chronological. Tracks language- and library-level changes. Bug-fix-only 
 
 ### Numerical-Recipes library (branch `numerical-library`)
 
-Five tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo5` exercise each.
+Six tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo6` exercise each.
 
 - Tier 1: `brent` (root finder), `spline` (natural cubic), `special` (gamma/erf), `eigen` (Jacobi).
 - Tier 2: `lu` (Doolittle + partial pivoting), `romberg` (Richardson extrapolation), `rk45` (Cash-Karp adaptive), `poly` (Chebyshev/Legendre/Hermite/Laguerre/Bessel).
 - Tier 3: `minimize` (golden section, Brent 1-D, Nelder-Mead), `sort` (heapsort, quickselect, median).
 - Tier 4: `diff` (Ridders'), `random_dist` (gamma/chi²/beta/t/Cauchy/binomial), `newton` (NR for nonlinear systems), `fitnl` (Levenberg-Marquardt).
 - Tier 5: `qr` (Householder), `svd` (Jacobi-based + pseudo-inverse), `polyroots` (Laguerre + deflation), `conv` (direct & FFT convolution / correlation).
+- Tier 6: `cheb` (Chebyshev approximation + exact coefficient calculus), `savgol` (Savitzky-Golay smoothing / derivative filters), `kalman` (discrete linear Kalman filter), `pde` (Crank-Nicolson 1-D diffusion via Thomas solver).
 
 ### Bug fix: complex arithmetic type inference
 
