@@ -1375,4 +1375,39 @@ else
     echo "[skip] native x86-64 backend (gcc not on PATH)"
 fi
 
+# WebAssembly backend — Stage 1 (numeric subset). Skipped unless
+# python + the `wasmtime` package + build/calcwasm are all present.
+if [ -x build/calcwasm ] \
+   && python -c "import wasmtime" 2>/dev/null; then
+    echo "[test] calcwasm Stage 1 (numeric subset, run via Python wasmtime host)"
+    build/calcwasm tests/wasm_basic.calc -o build/wasm_basic.wat >/dev/null
+    out=$(python tools/wasm_host.py build/wasm_basic.wat | strip_cr)
+    check "wasm_basic" '7
+55
+1.414213562
+1
+3
+-2
+5
+3
+8
+1
+8
+14
+6
+32
+8
+1
+0
+1
+1
+1
+100
+55
+23
+3' "$out"
+else
+    echo "[skip] calcwasm (build/calcwasm missing or python wasmtime not installed)"
+fi
+
 echo "all tests passed"

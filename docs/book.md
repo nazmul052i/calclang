@@ -4818,6 +4818,103 @@ A `return f(args)` where `f` is the current function compiles to:
 
 That's it — no new stack frame, no `call` / `ret`. The result is a flat-stack iterative loop. The codegen recognises only the self-recursive pattern; mutual and indirect tail calls fall back to the normal call path.
 
+### WebAssembly backend *(Stage 1: numeric subset)*
+
+`codegen_wasm.c` is the third backend, alongside the bytecode codegen and the x86-64 native codegen. It walks the same AST and emits **WebAssembly text format** (`.wat`) — the same language the browser, Node.js, wasmtime, wasmer, and every other Wasm runtime understands. One output file, every CPU and OS.
+
+```
+foo.calc  ──calcwasm──>  foo.wat  ──wasm runtime──>  output
+                                       ↓
+                            wasmtime / wasmer / node / browser
+                            (Windows x86, macOS ARM, Linux ARM, Raspberry Pi, ...)
+```
+
+#### What Stage 1 covers
+
+Numeric subset: number literals, arithmetic, comparison, logical, bitwise operators, variable declarations + assignment, `if`/`else`, `while`, `do-while`, `for` (classic + for-in over ranges), `break`/`continue`, function definitions with `f64` params + `f64` return, direct recursion, the standard math intrinsics (`sqrt`, `sin`, `cos`, `pow`, `sqrt`, etc.), and `print` (for numbers).
+
+What's **not** in Stage 1 (reserved for later stages): strings, arrays, maps, classes, structs, closures, the `import` system, FFI, `read_key`/`sleep_ms`/`time_ms`. Wasm needs a linear-memory + allocator setup for the heap-backed types; that's Stage 2's job.
+
+#### Wasm is a stack machine
+
+Where the x86-64 backend pushes operands into `xmm` registers and emits register-to-register ops, the Wasm backend pushes operands onto an implicit operand stack:
+
+```calc
+let x = a + b * 2;
+```
+
+compiles to:
+
+```wat
+local.get $a
+local.get $b
+f64.const 2
+f64.mul
+f64.add
+local.set $x
+```
+
+Each instruction consumes operands from the top of the stack and pushes its result back. That's much closer to how a JVM bytecode looks than to x86 — and easier to emit, because we never have to allocate registers.
+
+#### Imports and the host
+
+A `.wat` module declares the runtime functions it expects from the host, under named import slots. The host (browser JS, wasmtime, etc.) supplies the implementations. CalcLang's Stage 1 module starts with:
+
+```wat
+(module
+  (import "env" "print_num" (func $print_num (param f64)))
+  (import "env" "sin"  (func $sin  (param f64) (result f64)))
+  (import "env" "cos"  (func $cos  (param f64) (result f64)))
+  ;; ... pow, log, exp, atan2, pi, e, random, ...
+```
+
+The reference host is `tools/wasm_host.py` — a 100-line Python script using the `wasmtime` library:
+
+```bash
+pip install wasmtime
+build/calcwasm tests/wasm_basic.calc -o build/wasm_basic.wat
+python tools/wasm_host.py build/wasm_basic.wat
+```
+
+The host fulfills each `(import "env" …)` declaration with a Python function (`math.sin` for `sin`, `print` for `print_num`, etc.) and invokes the module's `_start` export.
+
+#### Control flow translation
+
+Wasm has **structured control flow** — no arbitrary jumps. The constructs are `block`, `loop`, and `if`, with `br` / `br_if` jumping to a labeled enclosing block. CalcLang's `while (cond) { body }` becomes:
+
+```wat
+(block $brk
+  (loop $cont
+    ;; eval cond, jump to $brk if false
+    <cond>
+    f64.const 0
+    f64.ne
+    i32.eqz
+    br_if $brk
+    ;; body
+    <body>
+    br $cont
+  )
+)
+```
+
+`break` is `br $brk`; `continue` is `br $cont`. Nested loops push/pop labels on a small codegen-side stack.
+
+#### Why not native code on every CPU?
+
+The alternative to one Wasm backend is multiple native backends: x86-64 (done), ARM64, RISC-V, ... — each ~700 lines of CPU-specific assembly. Wasm replaces the matrix with a single backend (Wasm) plus a single runtime (any Wasm engine). The runtime is what knows your CPU; we don't need to.
+
+The price is a thin layer of interpretation/JIT between us and the metal. For numeric kernels that lands around 20–40% slower than hand-tuned native; for everything else it's a wash. That's a great trade for portability.
+
+#### Roadmap
+
+This is **Stage 1 of 4**:
+
+- **Stage 1** (done) — numeric subset, runs in any Wasm engine.
+- **Stage 2** — strings + arrays + maps via a Wasm-side linear-memory allocator (compile `runtime_x64.c`'s small-object allocator to Wasm).
+- **Stage 3** — WASI bindings so `print`, `read_line`, `file_*`, `time_ms` work under `wasmtime --invoke _start`.
+- **Stage 4** — browser harness: an HTML page + JS glue that loads the `.wasm` and wires keyboard + a canvas. Tetris in a browser tab.
+
 ### GC
 
 The native runtime uses a **mark-and-sweep collector** with conservative stack scanning, defined in `runtime_x64.c`. The protocol:
@@ -4841,8 +4938,8 @@ This is simpler than the table-driven exception unwinding C++ uses, at the cost 
 
 The whole thing is supposed to be readable. Concretely:
 
-- 6000 lines of C across the front-end + two back-ends.
-- ~700 lines for the native codegen, ~600 for the runtime.
+- ~6500 lines of C across the front-end + three back-ends (VM, native, Wasm).
+- ~700 lines for the native codegen, ~600 for the runtime, ~500 for the Wasm codegen.
 - Building the entire toolchain takes about three seconds on a laptop.
 
 If you want to add a feature — say, a new builtin, a new statement, or a new optimization — the path is:

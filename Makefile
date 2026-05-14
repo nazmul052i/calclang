@@ -9,7 +9,7 @@ COMMON_FRONTEND := $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/symbol_tab
 
 .PHONY: all clean example test
 
-all: $(BUILD)/calcc $(BUILD)/calcasm $(BUILD)/calcld $(BUILD)/calcvm $(BUILD)/calcnat
+all: $(BUILD)/calcc $(BUILD)/calcasm $(BUILD)/calcld $(BUILD)/calcvm $(BUILD)/calcnat $(BUILD)/calcwasm
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -28,6 +28,11 @@ $(BUILD)/calcvm: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/calcvm.c include/common.h 
 
 $(BUILD)/calcnat: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcnat.c include/*.h
 	$(CC) $(CFLAGS) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcnat.c -o $@
+
+# WebAssembly backend (Stage 1, numeric subset). Output is .wat text.
+# Run with `python tools/wasm_host.py foo.wat` (needs `pip install wasmtime`).
+$(BUILD)/calcwasm: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/symbol_table.c $(SRC)/codegen_wasm.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcwasm.c include/*.h
+	$(CC) $(CFLAGS) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/symbol_table.c $(SRC)/codegen_wasm.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcwasm.c -o $@
 
 example: all
 	$(BUILD)/calcc examples/demo.calc $(BUILD)/demo.casm

@@ -1,0 +1,60 @@
+// Smoke test for the Stage-1 Wasm backend. Numeric subset only.
+
+// Direct calls + recursion.
+fn add(a, b) { return a + b; }
+fn fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+print add(3, 4);                  // 7
+print fib(10);                    // 55
+
+// Math intrinsics — half are Wasm-native (sqrt/abs/floor/ceil/min/max),
+// half are host imports.
+print sqrt(2);                    // 1.414213562
+print sin(pi() / 2);              // 1
+print floor(3.7);                 // 3
+print ceil(-2.3);                 // -2
+print abs(-5);                    // 5
+print min(3, 8);                  // 3
+print max(3, 8);                  // 8
+
+// Arithmetic + modulo + bitwise.
+print 7 % 3;                      // 1
+print 12 & 10;                    // 8
+print 12 | 10;                    // 14
+print 12 ^ 10;                    // 6
+print 1 << 5;                     // 32
+print 32 >> 2;                    // 8
+
+// Comparisons + short-circuit logical.
+print 3 < 5;                      // 1
+print 3 > 5;                      // 0
+print 1 && 1;                     // 1
+print 0 || 1;                     // 1
+print !0;                         // 1
+
+// Ternary.
+let s = 1 ? 100 : 200;
+print s;                          // 100
+
+// for-in over an exclusive range.
+let total = 0;
+for i in 1..=5 { total = total + i * i; }
+print total;                      // 55
+
+// while + break + continue.
+let n = 0;
+let acc = 0;
+while (n < 10) {
+    n = n + 1;
+    if (n == 5) { continue; }
+    if (n == 8) { break; }
+    acc = acc + n;
+}
+print acc;                        // 1+2+3+4+6+7 = 23
+
+// do/while.
+let k = 0;
+do { k = k + 1; } while (k < 3);
+print k;                          // 3
