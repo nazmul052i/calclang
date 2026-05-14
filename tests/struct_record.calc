@@ -1,0 +1,54 @@
+// Typed-record (struct) tests.
+
+// Basic positional constructor + field access.
+struct Point { x: num, y: num }
+let p = Point(3, 4);
+print p.x;
+print p.y;
+
+// Field mutation.
+p.x = 10;
+p.y = 20;
+print p.x;
+print p.y;
+
+// Struct of structs.
+struct Line { a: any, b: any }
+let line = Line(Point(0, 0), Point(5, 12));
+print line.a.x;
+print line.b.y;
+
+// No type annotations (default any).
+struct Bag { label, value }
+let bag = Bag("answer", 42);
+print bag.label;
+print bag.value;
+
+// Trailing comma allowed.
+struct Triple {
+    a: num,
+    b: num,
+    c: num,
+}
+let t = Triple(1, 2, 3);
+print t.a + t.b + t.c;
+
+// Reassign whole field.
+t.a = 100;
+print t.a;
+
+// Struct passed to and returned from a function.
+fn shift(p: any, dx: num, dy: num) {
+    return Point(p.x + dx, p.y + dy);
+}
+let q = shift(Point(1, 1), 9, 99);
+print q.x;
+print q.y;
+
+// Compound-assign on a struct field.
+let v = Point(0, 0);
+v.x += 5;
+v.x += 10;
+v.y -= 3;
+print v.x;
+print v.y;

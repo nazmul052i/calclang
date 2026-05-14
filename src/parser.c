@@ -1067,6 +1067,84 @@ static AST *parse_class_def(Parser *p) {
     return ctor;
 }
 
+/* Parse a struct definition: a typed record with fields, an
+   auto-generated positional constructor, and no methods.
+
+       struct Point { x: num, y: num }   ->   roughly...
+       pub fn Point(x: num, y: num): map {
+           let this = {};
+           this.x = x;
+           this.y = y;
+           return this;
+       }
+
+   This is Stage 1 of the typed-records project: the runtime is still
+   the same map-with-string-keys we use for classes, so a struct is
+   only different from a class with all-public fields in *syntax*
+   (declarative — no `fn init` boilerplate) and *intent* (a record,
+   not an object with methods). Later stages will lower structs to a
+   fixed flat layout in memory and unboxed numeric fields. Until then,
+   getting the surface syntax right is the prerequisite. */
+static AST *parse_struct_def(Parser *p) {
+    expect(p, TOK_STRUCT);
+    Token name = expect(p, TOK_IDENTIFIER);
+    expect(p, TOK_LBRACE);
+
+    char fnames[CL_MAX_PARAMS][CL_MAX_TEXT];
+    TypeAnnot ftypes[CL_MAX_PARAMS];
+    int field_count = 0;
+
+    while (p->current.type != TOK_RBRACE && p->current.type != TOK_EOF) {
+        if (field_count >= CL_MAX_PARAMS) {
+            fprintf(stderr, "parse error at %d:%d: struct '%s' has too many fields (max %d)\n",
+                p->current.line, p->current.col, name.text, CL_MAX_PARAMS);
+            exit(1);
+        }
+        Token fname = expect(p, TOK_IDENTIFIER);
+        cl_strncpy_z(fnames[field_count], fname.text, CL_MAX_TEXT);
+
+        /* Field type annotation: `name: type` is the canonical form;
+           bare `name` is also accepted (defaults to any). */
+        TypeAnnot ft = TYPE_ANY;
+        if (p->current.type == TOK_COLON) {
+            next(p);
+            ft = parse_type(p);
+        }
+        ftypes[field_count] = ft;
+        field_count++;
+
+        /* Comma between fields; the last one may omit it. */
+        if (p->current.type == TOK_COMMA) {
+            next(p);
+        } else if (p->current.type != TOK_RBRACE) {
+            fprintf(stderr, "parse error at %d:%d: expected ',' or '}' after struct field, got '%s'\n",
+                p->current.line, p->current.col, p->current.text);
+            exit(1);
+        }
+    }
+    expect(p, TOK_RBRACE);
+
+    /* Build the constructor function. It takes the fields as positional
+       parameters and returns a map populated with them. */
+    AST *ctor = ast_fn(name.text);
+    for (int i = 0; i < field_count; i++) {
+        ast_fn_add_param(ctor, fnames[i], ftypes[i]);
+    }
+
+    AST *body = ast_block();
+    ast_block_add(body, ast_let("this", TYPE_ANY, ast_map_lit()));
+    for (int i = 0; i < field_count; i++) {
+        /* this.<field> = <field-param> */
+        ast_block_add(body,
+            ast_index_assign(ast_var("this"),
+                             ast_string(fnames[i]),
+                             ast_var(fnames[i])));
+    }
+    ast_block_add(body, ast_return(ast_var("this")));
+    ast_fn_set_body(ctor, body);
+    return ctor;
+}
+
 /* Cycle-detection set for imports. A static array is fine — the
    compiler runs once per invocation, and CalcLang programs don't
    import hundreds of files. Reset only at process exit. Both the
@@ -1208,13 +1286,19 @@ Program parser_parse_program(Parser *p) {
                 AST *cls = parse_class_def(p);
                 ast_fn_set_public(cls, 1);
                 prog.items[prog.count++] = cls;
+            } else if (p->current.type == TOK_STRUCT) {
+                AST *st = parse_struct_def(p);
+                ast_fn_set_public(st, 1);
+                prog.items[prog.count++] = st;
             } else {
-                fprintf(stderr, "parse error at %d:%d: 'pub' must be followed by 'fn' or 'class'\n",
+                fprintf(stderr, "parse error at %d:%d: 'pub' must be followed by 'fn', 'class', or 'struct'\n",
                     p->current.line, p->current.col);
                 exit(1);
             }
         } else if (p->current.type == TOK_CLASS) {
             prog.items[prog.count++] = parse_class_def(p);
+        } else if (p->current.type == TOK_STRUCT) {
+            prog.items[prog.count++] = parse_struct_def(p);
         } else if (p->current.type == TOK_PRIV) {
             /* `priv` is explicit private — same effect as bare `fn`,
                but lets the visibility be stated for clarity. */

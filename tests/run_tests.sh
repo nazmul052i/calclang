@@ -118,6 +118,24 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] struct (typed records — fields, positional ctor, mutation, nesting)"
+build/calcnat tests/struct_record.calc -o build/d_struct.exe
+out=$(build/d_struct.exe | strip_cr)
+check "struct_record" '3
+4
+10
+20
+0
+12
+answer
+42
+6
+100
+10
+100
+15
+-3' "$out"
+
 echo "[test] for-in / range (arr, str, range exclusive/inclusive, parens, classic)"
 # This one runs through the native pipeline too, since most for-in
 # iteration uses calls like len() / index that already get exercised

@@ -2226,6 +2226,72 @@ CalcLang's class feature is intentionally minimal:
 
 If any of these matter, build the equivalent on top of the closure pattern in Chapter 6 — that's what `class` does anyway.
 
+### `struct` — typed records without methods
+
+When you want a typed record — a fixed shape, named fields, no methods — `struct` is the dedicated form. It's a class with all-public fields, an auto-generated positional constructor, and no `init` boilerplate:
+
+```calc
+struct Point {
+    x: num,
+    y: num,
+}
+
+let p = Point(3, 4);       // positional ctor in declaration order
+print p.x;                  // 3
+print p.y;                  // 4
+
+p.x = 10;                   // fields are mutable
+print p.x;                  // 10
+```
+
+Field type annotations are optional — omit them and the field defaults to `any`:
+
+```calc
+struct Bag { label, value }       // label: any, value: any
+let b = Bag("answer", 42);
+print b.label + " = " + b.value;  // answer = 42
+```
+
+Structs work just like classes in terms of value passing: an instance is a (boxed) map at the moment, so passing it to a function shares the same instance — mutations in the callee are visible to the caller. Future stages of the typed-record project will lower structs to a flat unboxed memory layout; the surface syntax won't change.
+
+#### When to use `struct` vs. `class`
+
+- **`struct`** when you want a *record*: data with named fields and no behavior. Library result types (`LU`, `QR`, `LinReg`), small composite values (`Point`, `Range`, `Sample`), DTO-ish wrappers around a few numbers.
+- **`class`** when you want behavior — methods, `this`-state-with-operations, anything constructor-heavy. `Rng`, `Vec2` with `add`/`dot`/`norm`, polynomial classes.
+
+You can mostly tell which fits by asking: "do I write `fn methodname()` here?" If yes, class. If no, struct.
+
+#### Returning structs from library functions
+
+CalcLang's standard library uses structs for multi-field results so callers can write `fit.slope` instead of `fit["slope"]`. From `lib/stats.calc`:
+
+```calc
+pub struct LinReg { slope: num, intercept: num, r2: num }
+
+pub fn linreg(xs, ys) {
+    // ... compute slope, intercept, r2 ...
+    return LinReg(slope, intercept, r2);
+}
+```
+
+And the caller:
+
+```calc
+import "stats";
+
+let fit = linreg(xs, ys);
+print "y = " + fit.slope + " x + " + fit.intercept;
+print "R^2 = " + fit.r2;
+```
+
+A struct's underlying storage is currently a map, so legacy `fit["slope"]` still works if you have older code — but `.slope` is the documented form.
+
+#### Looking ahead: unboxed structs
+
+This is **Stage 1** of CalcLang's typed-records story. Today, every struct field is a boxed CalcLang Value (a NaN-tagged 64-bit slot) in a map keyed by field name. That's good for ergonomics but bad for tight numerical kernels — a `Point { x: num, y: num }` ought to be 16 bytes of contiguous doubles, not a map header plus two hashed entries.
+
+Stage 2+ will lower struct declarations to a fixed flat layout: each field gets a known byte offset, `p.x` compiles to a `movsd` from `[base + 0]`, and a numeric struct is cache-friendly and SIMD-vectorizable. The same `struct` declaration syntax you write today will produce that layout automatically — you don't have to rewrite anything when the codegen catches up.
+
 ---
 
 ## Chapter 8 — Multi-file programs

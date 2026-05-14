@@ -26,6 +26,7 @@ typedef enum {
     TOK_EXTERN,
     TOK_IMPORT,
     TOK_CLASS,
+    TOK_STRUCT,
     TOK_TRY,
     TOK_CATCH,
     TOK_THROW,
