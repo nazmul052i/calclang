@@ -27,9 +27,9 @@ print "A x = b for b=[1,1,1] -> x = ";  print x;
 
 // Verify: A x = b within ~1e-13.
 let resid = 0;
-for (let i = 0; i < 3; i = i + 1) {
+for i in 0..3 {
     let s = 0;
-    for (let j = 0; j < 3; j = j + 1) { s = s + A[i][j] * x[j]; }
+    for j in 0..3 { s = s + A[i][j] * x[j]; }
     resid = resid + (s - b[i]) * (s - b[i]);
 }
 print "||A x - b|| = " + sqrt(resid);
@@ -38,10 +38,10 @@ print "log det(A)  = " + chol_logdet(L) + "   (exact: log(36) = " + log(36) + ")
 // Inverse round-trip: ||A * A^-1 - I||
 let Ainv = chol_inverse(L);
 let err_inv = 0;
-for (let i = 0; i < 3; i = i + 1) {
-    for (let j = 0; j < 3; j = j + 1) {
+for i in 0..3 {
+    for j in 0..3 {
         let s = 0;
-        for (let k = 0; k < 3; k = k + 1) { s = s + A[i][k] * Ainv[k][j]; }
+        for k in 0..3 { s = s + A[i][k] * Ainv[k][j]; }
         let target = 0;  if (i == j) { target = 1; }
         err_inv = err_inv + (s - target) * (s - target);
     }
@@ -54,9 +54,9 @@ print "===== Conjugate gradient on a 100 x 100 SPD system =====";
 // Build a tridiagonal 2-Laplacian: [-1, 2, -1] stencil — SPD, well-conditioned.
 let n = 100;
 let At = [];
-for (let i = 0; i < n; i = i + 1) {
+for i in 0..n {
     let row = [];
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         if (i == j) { push(row, 2); }
         else {
             if (j == i - 1 || j == i + 1) { push(row, -1); }
@@ -65,8 +65,8 @@ for (let i = 0; i < n; i = i + 1) {
     }
     push(At, row);
 }
-let bt = [];  for (let i = 0; i < n; i = i + 1) { push(bt, 1); }
-let x0 = [];  for (let i = 0; i < n; i = i + 1) { push(x0, 0); }
+let bt = [];  for i in 0..n { push(bt, 1); }
+let x0 = [];  for i in 0..n { push(x0, 0); }
 let r = cg_solve(At, bt, x0, 1e-10, 500);
 print "CG converged = " + r["converged"]
     + ", iters = " + r["iters"]
@@ -77,7 +77,7 @@ print "x[0] = " + r["x"][0] + ",  x[49] = " + r["x"][49] + ",  x[99] = " + r["x"
 // Preconditioned CG with diagonal (Jacobi) preconditioner.
 let apply_Minv = fn(rv) {
     let out = [];
-    for (let i = 0; i < len(rv); i = i + 1) { push(out, rv[i] / 2); }   // M = diag(2)
+    for i in 0..len(rv) { push(out, rv[i] / 2); }   // M = diag(2)
     return out;
 };
 let rp = pcg_solve(At, bt, x0, apply_Minv, 1e-10, 500);
@@ -114,7 +114,7 @@ print "accept rate    = " + mc["accept_rate"];
 // Empirical mean of x^2 (should be near 4 for the bimodal target).
 let sumsq = 0;
 let pos = 0;  let neg = 0;
-for (let i = 0; i < len(mc["samples"]); i = i + 1) {
+for i in 0..len(mc["samples"]) {
     let s = mc["samples"][i][0];
     sumsq = sumsq + s * s;
     if (s > 0) { pos = pos + 1; } else { neg = neg + 1; }

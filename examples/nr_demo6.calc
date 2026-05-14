@@ -16,7 +16,7 @@ let f = fn(x) { return exp(-x) * cos(x); };
 let cm = cheb_fit(f, 0, 5, 16);
 let xs_probe = [0, 0.5, 1.0, 2.5, 4.7];
 print "Cheb approximation vs exact f(x) = exp(-x) cos(x):";
-for (let i = 0; i < len(xs_probe); i = i + 1) {
+for i in 0..len(xs_probe) {
     let x = xs_probe[i];
     let exact = exp(-x) * cos(x);
     let cheb  = cheb_eval(cm, x);
@@ -28,7 +28,7 @@ for (let i = 0; i < len(xs_probe); i = i + 1) {
 let dcm = cheb_deriv(cm);
 print "";
 print "f'(x) for f = exp(-x) cos(x) is -exp(-x)(cos x + sin x):";
-for (let i = 0; i < len(xs_probe); i = i + 1) {
+for i in 0..len(xs_probe) {
     let x = xs_probe[i];
     let exact_dp = -exp(-x) * (cos(x) + sin(x));
     let cheb_dp  = cheb_eval(dcm, x);
@@ -42,7 +42,7 @@ print "===== Savitzky-Golay smoothing =====";
 let rng = Rng(7);
 let xs = [];
 let raw = [];
-for (let i = 0; i < 100; i = i + 1) {
+for i in 0..100 {
     let x = i * 0.1;
     push(xs, x);
     push(raw, sin(x) + rng.normal(0, 0.1));
@@ -52,7 +52,7 @@ let smoothed = savgol_apply(raw, 7, 7, 2, 0);
 // Compare residuals vs the underlying truth sin(x).
 let raw_err = 0;
 let sm_err  = 0;
-for (let i = 0; i < len(xs); i = i + 1) {
+for i in 0..len(xs) {
     let truth = sin(xs[i]);
     raw_err = raw_err + (raw[i] - truth) * (raw[i] - truth);
     sm_err  = sm_err  + (smoothed[i] - truth) * (smoothed[i] - truth);
@@ -70,7 +70,7 @@ let dsmoothed = savgol_apply(raw, 7, 7, 4, 1);
 // Scale by 1/dx (here dx=0.1) because SG returns derivative in sample units.
 let dx = 0.1;
 let dsm_err = 0;
-for (let i = 7; i < len(xs) - 7; i = i + 1) {   // ignore edges
+for i in 7..len(xs) - 7 {   // ignore edges
     let truth = cos(xs[i]);
     let est = dsmoothed[i] / dx;
     dsm_err = dsm_err + (est - truth) * (est - truth);
@@ -97,7 +97,7 @@ let estimated = [];
 push(measured, 10);
 push(estimated, 10);
 let rng2 = Rng(42);
-for (let t = 1; t <= 100; t = t + 1) {
+for t in 1..=100 {
     // True value drifts as a random walk (matches the assumed model).
     let tx = truth[t - 1] + rng2.normal(0, 0.05);
     push(truth, tx);
@@ -107,7 +107,7 @@ for (let t = 1; t <= 100; t = t + 1) {
     push(estimated, kf["x"][0]);
 }
 let z_err = 0;  let k_err = 0;
-for (let i = 1; i < len(truth); i = i + 1) {
+for i in 1..len(truth) {
     z_err = z_err + (measured[i] - truth[i]) * (measured[i] - truth[i]);
     k_err = k_err + (estimated[i] - truth[i]) * (estimated[i] - truth[i]);
 }
@@ -124,7 +124,7 @@ print "===== Crank-Nicolson 1-D heat equation =====";
 let n_grid = 41;
 let dx_g   = 1.0 / (n_grid - 1);
 let u0 = [];
-for (let i = 0; i < n_grid; i = i + 1) {
+for i in 0..n_grid {
     let x = i * dx_g;
     if (x > 0.4 && x < 0.6) { push(u0, 1); } else { push(u0, 0); }
 }
@@ -140,7 +140,7 @@ print "  initial center peak = 1.0";
 // Mass at start vs end (numerical integral via trapezoidal):
 priv fn _mass(arr_in, dx) {
     let m = 0;
-    for (let i = 0; i < len(arr_in); i = i + 1) {
+    for i in 0..len(arr_in) {
         let w = dx;
         if (i == 0 || i == len(arr_in) - 1) { w = 0.5 * dx; }
         m = m + arr_in[i] * w;

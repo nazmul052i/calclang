@@ -30,7 +30,7 @@ pub fn anneal_solve(f, x0, propose, t_start, t_end, cooling, steps_per_T, rng) {
     let history = [];
     let total_iter = 0;
     while (T > t_end) {
-        for (let i = 0; i < steps_per_T; i = i + 1) {
+        for i in 0..steps_per_T {
             let xn = propose(x, T, rng);
             let fn_ = f(xn);
             let dF = fn_ - fx;
@@ -59,7 +59,7 @@ pub fn anneal_continuous(f, x0, step, t_start, t_end, cooling, steps_per_T, rng)
     let propose = fn(x, T, rng_) {
         let scale = step * sqrt(T / t_start);
         let out = [];
-        for (let i = 0; i < len(x); i = i + 1) {
+        for i in 0..len(x) {
             push(out, x[i] + rng_.normal(0, scale));
         }
         return out;

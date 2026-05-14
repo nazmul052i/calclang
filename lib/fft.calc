@@ -35,8 +35,8 @@ pub fn fft(x) {
     // Combine using twiddle factor exp(-2πi k / N).
     let half = n / 2;
     let result = [];
-    for (let i = 0; i < n; i = i + 1) { push(result, 0); }
-    for (let k = 0; k < half; k = k + 1) {
+    for i in 0..n { push(result, 0); }
+    for k in 0..half {
         let theta = -2 * pi() * k / n;
         let w = complex(cos(theta), sin(theta));
         let t = w * O[k];
@@ -52,7 +52,7 @@ pub fn fft(x) {
 // implementation.
 priv fn _conjugate_all(x) {
     let out = [];
-    for (let i = 0; i < len(x); i = i + 1) {
+    for i in 0..len(x) {
         push(out, conj(x[i]));
     }
     return out;
@@ -65,7 +65,7 @@ pub fn ifft(X) {
     let conj_X = _conjugate_all(X);
     let y      = fft(conj_X);
     let out = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         // y[i] is cpx; divide by n and conjugate.
         let c = conj(y[i]);
         push(out, complex(real(c) / n, imag(c) / n));
@@ -76,7 +76,7 @@ pub fn ifft(X) {
 // Magnitude array: |X[k]| for each k. Useful for plotting spectra.
 pub fn fft_magnitude(X) {
     let out = [];
-    for (let i = 0; i < len(X); i = i + 1) {
+    for i in 0..len(X) {
         push(out, abs(X[i]));     // abs is overloaded: cpx -> magnitude
     }
     return out;
@@ -85,7 +85,7 @@ pub fn fft_magnitude(X) {
 // Phase array: arg(X[k]) for each k.
 pub fn fft_phase(X) {
     let out = [];
-    for (let i = 0; i < len(X); i = i + 1) {
+    for i in 0..len(X) {
         push(out, arg(X[i]));
     }
     return out;
@@ -96,7 +96,7 @@ pub fn fft_phase(X) {
 // are aliases of negative frequencies).
 pub fn fft_freqs(n, fs) {
     let out = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         push(out, k * fs / n);
     }
     return out;

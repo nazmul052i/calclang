@@ -28,9 +28,9 @@ import "nr.lu";
 
 priv fn _mat_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -38,7 +38,7 @@ priv fn _mat_zero(rows, cols) {
 
 priv fn _vec_copy(v) {
     let out = [];
-    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    for i in 0..len(v) { push(out, v[i]); }
     return out;
 }
 
@@ -50,25 +50,25 @@ priv fn _mrqcof(model, xs, ys, a, lambda) {
     let m = len(a);
     let alpha = _mat_zero(m, m);
     let beta  = [];
-    for (let j = 0; j < m; j = j + 1) { push(beta, 0); }
+    for j in 0..m { push(beta, 0); }
     let chisq = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let pred = model(xs[i], a);
         let yh   = pred["y"];
         let dyda = pred["dyda"];
         let r    = ys[i] - yh;
         chisq    = chisq + r * r;
-        for (let j = 0; j < m; j = j + 1) {
+        for j in 0..m {
             let wt = dyda[j];
-            for (let k = 0; k <= j; k = k + 1) {
+            for k in 0..=j {
                 alpha[j][k] = alpha[j][k] + wt * dyda[k];
             }
             beta[j] = beta[j] + r * wt;
         }
     }
     // Symmetrize and apply lambda boost to the diagonal.
-    for (let j = 0; j < m; j = j + 1) {
-        for (let k = j + 1; k < m; k = k + 1) {
+    for j in 0..m {
+        for k in j + 1..m {
             alpha[j][k] = alpha[k][j];
         }
         alpha[j][j] = alpha[j][j] * (1 + lambda);
@@ -82,13 +82,13 @@ priv fn _mat_inverse(A) {
     let n = len(A);
     let lu = lu_decompose(A);
     let inv = _mat_zero(n, n);
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let e = [];
-        for (let i = 0; i < n; i = i + 1) {
+        for i in 0..n {
             if (i == j) { push(e, 1); } else { push(e, 0); }
         }
         let col = lu_solve(lu, e);
-        for (let i = 0; i < n; i = i + 1) { inv[i][j] = col[i]; }
+        for i in 0..n { inv[i][j] = col[i]; }
     }
     return inv;
 }
@@ -122,7 +122,7 @@ pub fn lm_fit(model, xs, ys, a0, tol, max_iter) {
         if (solve_ok == 1) {
             // Tentatively update.
             let a_new = [];
-            for (let j = 0; j < len(a); j = j + 1) {
+            for j in 0..len(a) {
                 push(a_new, a[j] + try_da[j]);
             }
             let new_state = _mrqcof(model, xs, ys, a_new, lambda);

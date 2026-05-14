@@ -36,7 +36,7 @@ pub fn bisect(f, a, b, tol) {
 // supplies max_iter as an escape hatch.
 pub fn newton(f, df, x0, tol, max_iter) {
     let x = x0;
-    for (let i = 0; i < max_iter; i = i + 1) {
+    for i in 0..max_iter {
         let fx = f(x);
         if (abs(fx) < tol) { return x; }
         let dfx = df(x);
@@ -55,7 +55,7 @@ pub fn secant(f, x0, x1, tol, max_iter) {
     let b = x1;
     let fa = f(a);
     let fb = f(b);
-    for (let i = 0; i < max_iter; i = i + 1) {
+    for i in 0..max_iter {
         if (abs(fb) < tol) { return b; }
         if (fb - fa == 0) {
             throw "secant: divergent (f values coincide)";
@@ -74,7 +74,7 @@ pub fn trapezoidal(f, a, b, n) {
     if (n < 1) { throw "trapezoidal: need n >= 1"; }
     let h = (b - a) / n;
     let s = (f(a) + f(b)) / 2;
-    for (let i = 1; i < n; i = i + 1) {
+    for i in 1..n {
         s = s + f(a + i * h);
     }
     return s * h;
@@ -87,7 +87,7 @@ pub fn simpson(f, a, b, n) {
     }
     let h = (b - a) / n;
     let s = f(a) + f(b);
-    for (let i = 1; i < n; i = i + 1) {
+    for i in 1..n {
         let w = 2;
         if (i % 2 == 1) { w = 4; }
         s = s + w * f(a + i * h);
@@ -142,7 +142,7 @@ pub fn poly_eval(coeffs, x) {
 // = c1 + 2 c2 x + 3 c3 x² + ...
 pub fn poly_derivative(coeffs) {
     let out = [];
-    for (let i = 1; i < len(coeffs); i = i + 1) {
+    for i in 1..len(coeffs) {
         push(out, i * coeffs[i]);
     }
     return out;

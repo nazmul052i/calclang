@@ -18,16 +18,16 @@ priv fn _f2_cols(X) {
     let n = len(X[0]);
     // Out: complex matrix m x n with each column FFT'd.
     let Y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let row = [];
-        for (let j = 0; j < n; j = j + 1) { push(row, complex(0, 0)); }
+        for j in 0..n { push(row, complex(0, 0)); }
         push(Y, row);
     }
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let col = [];
-        for (let i = 0; i < m; i = i + 1) { push(col, X[i][j]); }
+        for i in 0..m { push(col, X[i][j]); }
         let C = fft(col);
-        for (let i = 0; i < m; i = i + 1) { Y[i][j] = C[i]; }
+        for i in 0..m { Y[i][j] = C[i]; }
     }
     return Y;
 }
@@ -36,7 +36,7 @@ priv fn _f2_rows(X) {
     let m = len(X);
     let n = len(X[0]);
     let Y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let R = fft(X[i]);
         push(Y, R);
     }
@@ -47,16 +47,16 @@ priv fn _f2_cols_inv(X) {
     let m = len(X);
     let n = len(X[0]);
     let Y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let row = [];
-        for (let j = 0; j < n; j = j + 1) { push(row, complex(0, 0)); }
+        for j in 0..n { push(row, complex(0, 0)); }
         push(Y, row);
     }
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let col = [];
-        for (let i = 0; i < m; i = i + 1) { push(col, X[i][j]); }
+        for i in 0..m { push(col, X[i][j]); }
         let C = ifft(col);
-        for (let i = 0; i < m; i = i + 1) { Y[i][j] = C[i]; }
+        for i in 0..m { Y[i][j] = C[i]; }
     }
     return Y;
 }
@@ -64,7 +64,7 @@ priv fn _f2_cols_inv(X) {
 priv fn _f2_rows_inv(X) {
     let m = len(X);
     let Y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let R = ifft(X[i]);
         push(Y, R);
     }

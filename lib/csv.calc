@@ -24,7 +24,7 @@ pub fn csv_read(path) {
     raw = str_replace_all_cr(raw);
     let lines = str_split(raw, "\n");
     let out = [];
-    for (let i = 0; i < len(lines); i = i + 1) {
+    for i in 0..len(lines) {
         let row = str_split(lines[i], ",");
         push(out, row);
     }
@@ -38,10 +38,10 @@ pub fn csv_read_with_headers(path) {
     if (len(rows) == 0) { return []; }
     let headers = rows[0];
     let out = [];
-    for (let i = 1; i < len(rows); i = i + 1) {
+    for i in 1..len(rows) {
         let row = rows[i];
         let m = {};
-        for (let j = 0; j < len(headers); j = j + 1) {
+        for j in 0..len(headers) {
             let key = headers[j];
             if (j < len(row)) {
                 m[key] = row[j];
@@ -58,7 +58,7 @@ pub fn csv_read_with_headers(path) {
 // Useful right after csv_read for purely-numeric data.
 pub fn csv_row_to_nums(row) {
     let out = [];
-    for (let i = 0; i < len(row); i = i + 1) {
+    for i in 0..len(row) {
         push(out, to_num(row[i]));
     }
     return out;
@@ -72,9 +72,9 @@ pub fn csv_row_to_nums(row) {
 // trip incorrectly, like the read side.
 pub fn csv_write(path, rows) {
     file_write(path, "");
-    for (let i = 0; i < len(rows); i = i + 1) {
+    for i in 0..len(rows) {
         let row = rows[i];
-        for (let j = 0; j < len(row); j = j + 1) {
+        for j in 0..len(row) {
             if (j > 0) { file_append(path, ","); }
             file_append(path, to_str(row[j]));
         }
@@ -87,14 +87,14 @@ pub fn csv_write(path, rows) {
 // reproducible.
 pub fn csv_write_with_headers(path, headers, rows) {
     file_write(path, "");
-    for (let h = 0; h < len(headers); h = h + 1) {
+    for h in 0..len(headers) {
         if (h > 0) { file_append(path, ","); }
         file_append(path, headers[h]);
     }
     file_append(path, "\n");
-    for (let i = 0; i < len(rows); i = i + 1) {
+    for i in 0..len(rows) {
         let m = rows[i];
-        for (let h = 0; h < len(headers); h = h + 1) {
+        for h in 0..len(headers) {
             if (h > 0) { file_append(path, ","); }
             let v = "";
             if (has_key(m, headers[h])) {

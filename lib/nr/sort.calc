@@ -73,7 +73,7 @@ pub fn heapsort_idx(arr) {
     let n = len(arr);
     let v = [];
     let idx = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         push(v,   arr[i]);
         push(idx, i);
     }
@@ -131,7 +131,7 @@ pub fn median(arr) {
     if (n == 0) { throw "median: empty array"; }
     // Quickselect mutates, so copy first.
     let a = [];
-    for (let i = 0; i < n; i = i + 1) { push(a, arr[i]); }
+    for i in 0..n { push(a, arr[i]); }
     if (n % 2 == 1) {
         let mid = floor((n - 1) / 2);
         return quickselect(a, mid);
@@ -140,7 +140,7 @@ pub fn median(arr) {
     let lo = quickselect(a, m1);
     // After quickselect, a[m1+1:] all >= lo, so re-run select for m1+1.
     let b = [];
-    for (let i = 0; i < n; i = i + 1) { push(b, arr[i]); }
+    for i in 0..n { push(b, arr[i]); }
     let hi = quickselect(b, m1 + 1);
     return (lo + hi) / 2;
 }

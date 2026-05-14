@@ -18,9 +18,9 @@ let b = [3, 2, 4, 5];   // overdetermined 4 x 3
 let qr = qr_decompose(A);
 print "R (upper-triangular block):";
 let R = qr["R"];
-for (let i = 0; i < 3; i = i + 1) {
+for i in 0..3 {
     let row = [];
-    for (let j = 0; j < 3; j = j + 1) { push(row, R[i][j]); }
+    for j in 0..3 { push(row, R[i][j]); }
     print row;
 }
 let x_qr = qr_solve(qr, b);
@@ -29,9 +29,9 @@ print x_qr;
 
 // Residual ||A x - b||.
 let r2 = 0;
-for (let i = 0; i < 4; i = i + 1) {
+for i in 0..4 {
     let s = 0;
-    for (let j = 0; j < 3; j = j + 1) { s = s + A[i][j] * x_qr[j]; }
+    for j in 0..3 { s = s + A[i][j] * x_qr[j]; }
     r2 = r2 + (s - b[i]) * (s - b[i]);
 }
 print "||A x - b|| = " + sqrt(r2);
@@ -60,10 +60,10 @@ print "SVD LS solution = ";  print x_svd;
 // Pseudo-inverse times A should be ~ identity for a tall full-rank A.
 let pinv = svd_pinv(A2);
 let prod_zero = 0;
-for (let i = 0; i < 3; i = i + 1) {
-    for (let j = 0; j < 3; j = j + 1) {
+for i in 0..3 {
+    for j in 0..3 {
         let s = 0;
-        for (let k = 0; k < 4; k = k + 1) { s = s + pinv[i][k] * A2[k][j]; }
+        for k in 0..4 { s = s + pinv[i][k] * A2[k][j]; }
         let target = 0;  if (i == j) { target = 1; }
         let d = s - target;
         prod_zero = prod_zero + d * d;
@@ -80,7 +80,7 @@ print "===== Polynomial roots (Laguerre's method) =====";
 let p1 = [-6, 11, -6, 1];
 let roots1 = poly_roots(p1);
 print "roots of (x - 1)(x - 2)(x - 3):";
-for (let i = 0; i < len(roots1); i = i + 1) {
+for i in 0..len(roots1) {
     print "  " + real(roots1[i]) + " + " + imag(roots1[i]) + "i";
 }
 
@@ -88,7 +88,7 @@ for (let i = 0; i < len(roots1); i = i + 1) {
 let p2 = [1, 0, 1];
 let roots2 = poly_roots(p2);
 print "roots of x^2 + 1:";
-for (let i = 0; i < len(roots2); i = i + 1) {
+for i in 0..len(roots2) {
     print "  " + real(roots2[i]) + " + " + imag(roots2[i]) + "i";
 }
 
@@ -96,7 +96,7 @@ for (let i = 0; i < len(roots2); i = i + 1) {
 let p3 = [-1, 0, 0, 0, 1];
 let roots3 = poly_roots(p3);
 print "roots of x^4 - 1:";
-for (let i = 0; i < len(roots3); i = i + 1) {
+for i in 0..len(roots3) {
     print "  " + real(roots3[i]) + " + " + imag(roots3[i]) + "i";
 }
 

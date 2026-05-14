@@ -24,9 +24,9 @@ import "nr.svd";
 
 priv fn _pc_zero(rows, cols) {
     let M = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(M, row);
     }
     return M;
@@ -37,28 +37,28 @@ pub fn pca_fit(X) {
     let n = len(X[0]);
     // Column means.
     let mu = [];
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let s = 0;
-        for (let i = 0; i < m; i = i + 1) { s = s + X[i][j]; }
+        for i in 0..m { s = s + X[i][j]; }
         push(mu, s / m);
     }
     // Centered data.
     let Xc = _pc_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { Xc[i][j] = X[i][j] - mu[j]; }
+    for i in 0..m {
+        for j in 0..n { Xc[i][j] = X[i][j] - mu[j]; }
     }
     // SVD requires m >= n in our implementation.
     let sv = svd(Xc);
     let U = sv["U"];  let S = sv["S"];  let V = sv["V"];
     // Variance explained per PC.
     let var_ = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         push(var_, S[k] * S[k] / (m - 1));
     }
     // Scores = U S  (m x n).
     let scores = _pc_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..m {
+        for j in 0..n {
             scores[i][j] = U[i][j] * S[j];
         }
     }
@@ -71,10 +71,10 @@ pub fn pca_transform(model, X_new) {
     let m = len(X_new);
     let n = len(X_new[0]);
     let out = _pc_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let k = 0; k < n; k = k + 1) {
+    for i in 0..m {
+        for k in 0..n {
             let s = 0;
-            for (let j = 0; j < n; j = j + 1) {
+            for j in 0..n {
                 s = s + (X_new[i][j] - mu[j]) * V[j][k];
             }
             out[i][k] = s;

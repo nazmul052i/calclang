@@ -13,9 +13,9 @@ print "===== 2-D FFT round-trip =====";
 // Build a 4x4 test matrix: 2-D sinusoid.
 let M = 4;  let N = 4;
 let X = [];
-for (let i = 0; i < M; i = i + 1) {
+for i in 0..M {
     let row = [];
-    for (let j = 0; j < N; j = j + 1) {
+    for j in 0..N {
         push(row, sin(2 * pi() * (i + 2 * j) / M));
     }
     push(X, row);
@@ -24,8 +24,8 @@ let F = fft2(X);
 let Xr = ifft2(F);
 // Compute round-trip RMS error on the real parts.
 let err = 0;
-for (let i = 0; i < M; i = i + 1) {
-    for (let j = 0; j < N; j = j + 1) {
+for i in 0..M {
+    for j in 0..N {
         let d = real(Xr[i][j]) - X[i][j];
         err = err + d * d;
     }
@@ -79,7 +79,7 @@ print "===== B-spline least-squares fit of sin(x) =====";
 // Sample noisy sin(x) on [0, 2 pi] with 80 points.
 let xs = [];
 let ys = [];
-for (let i = 0; i < 80; i = i + 1) {
+for i in 0..80 {
     let x = i * 2 * pi() / 79;
     push(xs, x);
     push(ys, sin(x));
@@ -92,7 +92,7 @@ print "fitted coefficient count: " + len(coef);
 // Evaluate the fit at a few probe points.
 let probes = [0, 0.5, 1.5, pi(), 4.7, 6.28];
 print "x  |  spline  |  exact sin(x)  |  diff";
-for (let i = 0; i < len(probes); i = i + 1) {
+for i in 0..len(probes) {
     let x = probes[i];
     let yhat = bspline_eval(knots, 4, coef, x);
     let yexact = sin(x);
@@ -102,7 +102,7 @@ for (let i = 0; i < len(probes); i = i + 1) {
 
 // RMS error over the fit range.
 let rms = 0;
-for (let i = 0; i < len(xs); i = i + 1) {
+for i in 0..len(xs) {
     let yhat = bspline_eval(knots, 4, coef, xs[i]);
     rms = rms + (yhat - ys[i]) * (yhat - ys[i]);
 }

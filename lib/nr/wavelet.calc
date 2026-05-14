@@ -15,8 +15,8 @@ priv fn _haar_step(x) {
     let n = len(x) / 2;
     let s = 1 / sqrt(2);
     let out = [];
-    for (let i = 0; i < 2 * n; i = i + 1) { push(out, 0); }
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..2 * n { push(out, 0); }
+    for i in 0..n {
         out[i]       = s * (x[2 * i] + x[2 * i + 1]);   // approximations
         out[n + i]   = s * (x[2 * i] - x[2 * i + 1]);   // details
     }
@@ -27,8 +27,8 @@ priv fn _haar_step_inv(y) {
     let n = len(y) / 2;
     let s = 1 / sqrt(2);
     let out = [];
-    for (let i = 0; i < 2 * n; i = i + 1) { push(out, 0); }
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..2 * n { push(out, 0); }
+    for i in 0..n {
         out[2 * i]     = s * (y[i] + y[n + i]);
         out[2 * i + 1] = s * (y[i] - y[n + i]);
     }
@@ -47,13 +47,13 @@ pub fn haar_forward(xs) {
     let n = len(xs);
     if (_wv_is_pow2(n) == 0) { throw "haar_forward: length must be a power of two"; }
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, xs[i]); }
+    for i in 0..n { push(x, xs[i]); }
     let m = n;
     while (m >= 2) {
         let head = [];
-        for (let i = 0; i < m; i = i + 1) { push(head, x[i]); }
+        for i in 0..m { push(head, x[i]); }
         let stepped = _haar_step(head);
-        for (let i = 0; i < m; i = i + 1) { x[i] = stepped[i]; }
+        for i in 0..m { x[i] = stepped[i]; }
         m = m / 2;
     }
     return x;
@@ -63,13 +63,13 @@ pub fn haar_inverse(ys) {
     let n = len(ys);
     if (_wv_is_pow2(n) == 0) { throw "haar_inverse: length must be a power of two"; }
     let y = [];
-    for (let i = 0; i < n; i = i + 1) { push(y, ys[i]); }
+    for i in 0..n { push(y, ys[i]); }
     let m = 2;
     while (m <= n) {
         let head = [];
-        for (let i = 0; i < m; i = i + 1) { push(head, y[i]); }
+        for i in 0..m { push(head, y[i]); }
         let stepped = _haar_step_inv(head);
-        for (let i = 0; i < m; i = i + 1) { y[i] = stepped[i]; }
+        for i in 0..m { y[i] = stepped[i]; }
         m = m * 2;
     }
     return y;
@@ -92,9 +92,9 @@ priv fn _d4_step(x) {
     let h0 = coefs[0];  let h1 = coefs[1];
     let h2 = coefs[2];  let h3 = coefs[3];
     let out = [];
-    for (let i = 0; i < n; i = i + 1) { push(out, 0); }
+    for i in 0..n { push(out, 0); }
     let half = n / 2;
-    for (let i = 0; i < half; i = i + 1) {
+    for i in 0..half {
         let j  = 2 * i;
         let j1 = (j + 1) % n;
         let j2 = (j + 2) % n;
@@ -114,8 +114,8 @@ priv fn _d4_step_inv(y) {
     let h2 = coefs[2];  let h3 = coefs[3];
     let half = n / 2;
     let out = [];
-    for (let i = 0; i < n; i = i + 1) { push(out, 0); }
-    for (let i = 0; i < half; i = i + 1) {
+    for i in 0..n { push(out, 0); }
+    for i in 0..half {
         let ip = (i + half - 1) % half;
         // Reconstruction: pairwise reverse of the forward filtering.
         let s_lo = y[ip];           let s_lo_next = y[i];
@@ -133,13 +133,13 @@ pub fn d4_forward(xs) {
     if (_wv_is_pow2(n) == 0) { throw "d4_forward: length must be a power of two"; }
     if (n < 4) { throw "d4_forward: length must be >= 4"; }
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, xs[i]); }
+    for i in 0..n { push(x, xs[i]); }
     let m = n;
     while (m >= 4) {
         let head = [];
-        for (let i = 0; i < m; i = i + 1) { push(head, x[i]); }
+        for i in 0..m { push(head, x[i]); }
         let stepped = _d4_step(head);
-        for (let i = 0; i < m; i = i + 1) { x[i] = stepped[i]; }
+        for i in 0..m { x[i] = stepped[i]; }
         m = m / 2;
     }
     return x;
@@ -149,13 +149,13 @@ pub fn d4_inverse(ys) {
     let n = len(ys);
     if (_wv_is_pow2(n) == 0) { throw "d4_inverse: length must be a power of two"; }
     let y = [];
-    for (let i = 0; i < n; i = i + 1) { push(y, ys[i]); }
+    for i in 0..n { push(y, ys[i]); }
     let m = 4;
     while (m <= n) {
         let head = [];
-        for (let i = 0; i < m; i = i + 1) { push(head, y[i]); }
+        for i in 0..m { push(head, y[i]); }
         let stepped = _d4_step_inv(head);
-        for (let i = 0; i < m; i = i + 1) { y[i] = stepped[i]; }
+        for i in 0..m { y[i] = stepped[i]; }
         m = m * 2;
     }
     return y;

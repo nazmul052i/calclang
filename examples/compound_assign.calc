@@ -2,14 +2,14 @@
 
 // Accumulator pattern.
 let sum = 0;
-for (let i = 1; i <= 100; i++) {
+for i in 1..=100 {
     sum += i;
 }
 print sum;              // 5050
 
 // Factorials by iteration with *=.
 let fact = 1;
-for (let n = 1; n <= 8; n++) {
+for n in 1..=8 {
     fact *= n;
 }
 print fact;             // 40320

@@ -33,7 +33,7 @@ print "===== Cubic spline interpolation =====";
 // Tabulate sin(x) at 7 knots over [0, 2π].
 let xs = [];
 let ys = [];
-for (let i = 0; i < 7; i = i + 1) {
+for i in 0..7 {
     let x = i / 6.0 * 2 * pi();
     push(xs, x);
     push(ys, sin(x));
@@ -41,7 +41,7 @@ for (let i = 0; i < 7; i = i + 1) {
 let y2 = spline_setup(xs, ys);
 // Compare interpolant vs exact at fine query points.
 let max_err = 0;
-for (let i = 0; i < 100; i = i + 1) {
+for i in 0..100 {
     let x = i / 99.0 * 2 * pi();
     let err = abs(spline_eval(xs, ys, y2, x) - sin(x));
     if (err > max_err) { max_err = err; }
@@ -79,24 +79,24 @@ print eig["values"];
 // Verify: A * v_i = lambda_i * v_i for each i.
 let V = eig["vectors"];
 let n = 3;
-for (let i = 0; i < n; i = i + 1) {
+for i in 0..n {
     // Extract column i as a vector.
     let v = [];
-    for (let r = 0; r < n; r = r + 1) { push(v, V[r][i]); }
+    for r in 0..n { push(v, V[r][i]); }
     // Compute A * v.
     let Av = [];
-    for (let r = 0; r < n; r = r + 1) {
+    for r in 0..n {
         let s = 0;
-        for (let c = 0; c < n; c = c + 1) { s = s + A[r][c] * v[c]; }
+        for c in 0..n { s = s + A[r][c] * v[c]; }
         push(Av, s);
     }
     // Compute lambda * v.
     let lam = eig["values"][i];
     let lam_v = [];
-    for (let r = 0; r < n; r = r + 1) { push(lam_v, lam * v[r]); }
+    for r in 0..n { push(lam_v, lam * v[r]); }
     // Max residual.
     let resid = 0;
-    for (let r = 0; r < n; r = r + 1) {
+    for r in 0..n {
         let d = abs(Av[r] - lam_v[r]);
         if (d > resid) { resid = d; }
     }

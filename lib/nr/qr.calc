@@ -15,9 +15,9 @@
 
 priv fn _qr_mat_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -25,7 +25,7 @@ priv fn _qr_mat_zero(rows, cols) {
 
 priv fn _qr_eye(n) {
     let I = _qr_mat_zero(n, n);
-    for (let i = 0; i < n; i = i + 1) { I[i][i] = 1; }
+    for i in 0..n { I[i][i] = 1; }
     return I;
 }
 
@@ -33,8 +33,8 @@ priv fn _qr_mat_copy(A) {
     let rows = len(A);
     let cols = len(A[0]);
     let out = _qr_mat_zero(rows, cols);
-    for (let i = 0; i < rows; i = i + 1) {
-        for (let j = 0; j < cols; j = j + 1) { out[i][j] = A[i][j]; }
+    for i in 0..rows {
+        for j in 0..cols { out[i][j] = A[i][j]; }
     }
     return out;
 }
@@ -50,38 +50,38 @@ pub fn qr_decompose(A_in) {
     // zeros R[k+1..m, k]; apply it to R and accumulate it into Q.
     let cols = n;
     if (m - 1 < n) { cols = m - 1; }   // last column of square A doesn't need a reflector
-    for (let k = 0; k < cols; k = k + 1) {
+    for k in 0..cols {
         // alpha = -sign(R[k][k]) * ||R[k..m, k]||
         let s = 0;
-        for (let i = k; i < m; i = i + 1) { s = s + R[i][k] * R[i][k]; }
+        for i in k..m { s = s + R[i][k] * R[i][k]; }
         let norm = sqrt(s);
         if (norm == 0) { continue; }   // already zero column — skip
         let sign = 1; if (R[k][k] < 0) { sign = -1; }
         let alpha = -sign * norm;
         // v = R[k..m, k] - alpha e_1
         let v = [];
-        for (let i = 0; i < m - k; i = i + 1) { push(v, 0); }
-        for (let i = k; i < m; i = i + 1) { v[i - k] = R[i][k]; }
+        for i in 0..m - k { push(v, 0); }
+        for i in k..m { v[i - k] = R[i][k]; }
         v[0] = v[0] - alpha;
         let vsq = 0;
-        for (let i = 0; i < len(v); i = i + 1) { vsq = vsq + v[i] * v[i]; }
+        for i in 0..len(v) { vsq = vsq + v[i] * v[i]; }
         if (vsq == 0) { continue; }
         // Apply (I - 2 v v^T / v.v) to R from the left (rows k..m-1).
-        for (let j = k; j < n; j = j + 1) {
+        for j in k..n {
             let dot = 0;
-            for (let i = k; i < m; i = i + 1) { dot = dot + v[i - k] * R[i][j]; }
+            for i in k..m { dot = dot + v[i - k] * R[i][j]; }
             let scale = 2 * dot / vsq;
-            for (let i = k; i < m; i = i + 1) {
+            for i in k..m {
                 R[i][j] = R[i][j] - scale * v[i - k];
             }
         }
         // Apply to Q from the right (or build Q^T column by column).
         // Cheapest is: Q := Q * H. H acts on columns k..m-1 of Q similarly.
-        for (let i = 0; i < m; i = i + 1) {
+        for i in 0..m {
             let dot = 0;
-            for (let j = k; j < m; j = j + 1) { dot = dot + Q[i][j] * v[j - k]; }
+            for j in k..m { dot = dot + Q[i][j] * v[j - k]; }
             let scale = 2 * dot / vsq;
-            for (let j = k; j < m; j = j + 1) {
+            for j in k..m {
                 Q[i][j] = Q[i][j] - scale * v[j - k];
             }
         }
@@ -95,9 +95,9 @@ pub fn qr_apply_QT(qr, b) {
     let Q = qr["Q"];
     let m = len(Q);
     let out = [];
-    for (let j = 0; j < m; j = j + 1) {
+    for j in 0..m {
         let s = 0;
-        for (let i = 0; i < m; i = i + 1) { s = s + Q[i][j] * b[i]; }
+        for i in 0..m { s = s + Q[i][j] * b[i]; }
         push(out, s);
     }
     return out;
@@ -112,10 +112,10 @@ pub fn qr_solve(qr, b) {
     let QTb = qr_apply_QT(qr, b);
     // Back-substitute on the upper n x n block.
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for i in 0..n { push(x, 0); }
     for (let i = n - 1; i >= 0; i = i - 1) {
         let s = QTb[i];
-        for (let j = i + 1; j < n; j = j + 1) { s = s - R[i][j] * x[j]; }
+        for j in i + 1..n { s = s - R[i][j] * x[j]; }
         if (R[i][i] == 0) { throw "qr_solve: rank deficient"; }
         x[i] = s / R[i][i];
     }

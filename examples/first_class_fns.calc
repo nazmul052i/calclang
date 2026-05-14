@@ -5,7 +5,7 @@
 
 pub fn map(arr, f) {
     let out = [];
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         push(out, f(arr[i]));
     }
     return out;
@@ -13,7 +13,7 @@ pub fn map(arr, f) {
 
 pub fn filter(arr, pred) {
     let out = [];
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         if (pred(arr[i])) {
             push(out, arr[i]);
         }
@@ -23,14 +23,14 @@ pub fn filter(arr, pred) {
 
 pub fn reduce(arr, f, init) {
     let acc = init;
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         acc = f(acc, arr[i]);
     }
     return acc;
 }
 
 pub fn for_each(arr, f) {
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         f(arr[i]);
     }
 }

@@ -23,16 +23,16 @@ pub fn romberg(f, a, b, tol, max_levels) {
     let r0 = [(f(a) + f(b)) * h / 2];
     push(R, r0);
 
-    for (let k = 1; k < max_levels; k = k + 1) {
+    for k in 1..max_levels {
         // Refine: halve the step, add midpoints of previous intervals.
         let prev = R[k - 1][0];
         let n = 1;
-        for (let p = 0; p < k - 1; p = p + 1) { n = n * 2; }
+        for p in 0..k - 1 { n = n * 2; }
         // After k-1 doublings, the previous level had 2^(k-1) intervals.
         // The new level will have 2^k intervals.
         let h_old = (b - a) / n;
         let sum_mid = 0;
-        for (let i = 0; i < n; i = i + 1) {
+        for i in 0..n {
             sum_mid = sum_mid + f(a + (i + 0.5) * h_old);
         }
         let trap_new = (prev + h_old * sum_mid) / 2;
@@ -40,7 +40,7 @@ pub fn romberg(f, a, b, tol, max_levels) {
         let row = [trap_new];
         // Richardson extrapolation along the row.
         let pow4 = 4;
-        for (let m = 1; m <= k; m = m + 1) {
+        for m in 1..=k {
             let val = (pow4 * row[m - 1] - R[k - 1][m - 1]) / (pow4 - 1);
             push(row, val);
             pow4 = pow4 * 4;

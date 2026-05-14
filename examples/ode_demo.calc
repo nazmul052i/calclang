@@ -18,7 +18,7 @@ let ys_eu = sol_e["ys"];
 
 // And against the exact solution sampled at the same t's.
 let ys_ex = [];
-for (let i = 0; i < len(ts); i = i + 1) {
+for i in 0..len(ts) {
     push(ys_ex, exp(-ts[i]));
 }
 
@@ -47,7 +47,7 @@ let ysv = sol_v["ys"];
 // Split components.
 let y1 = [];
 let y2 = [];
-for (let i = 0; i < len(ysv); i = i + 1) {
+for i in 0..len(ysv) {
     push(y1, ysv[i][0]);
     push(y2, ysv[i][1]);
 }

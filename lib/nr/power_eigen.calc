@@ -23,7 +23,7 @@ import "nr.lu";
 
 priv fn _norm(v) {
     let s = 0;
-    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    for i in 0..len(v) { s = s + v[i] * v[i]; }
     return sqrt(s);
 }
 
@@ -31,9 +31,9 @@ priv fn _matvec(A, x) {
     let m = len(A);
     let n = len(x);
     let y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let s = 0;
-        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        for j in 0..n { s = s + A[i][j] * x[j]; }
         push(y, s);
     }
     return y;
@@ -41,7 +41,7 @@ priv fn _matvec(A, x) {
 
 priv fn _dot(a, b) {
     let s = 0;
-    for (let i = 0; i < len(a); i = i + 1) { s = s + a[i] * b[i]; }
+    for i in 0..len(a) { s = s + a[i] * b[i]; }
     return s;
 }
 
@@ -49,14 +49,14 @@ priv fn _normalize(v) {
     let nv = _norm(v);
     if (nv == 0) { throw "_normalize: zero vector"; }
     let out = [];
-    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i] / nv); }
+    for i in 0..len(v) { push(out, v[i] / nv); }
     return out;
 }
 
 pub fn power_iterate(A, x0, tol, max_iter) {
     let x = _normalize(x0);
     let lambda_old = 0;
-    for (let it = 1; it <= max_iter; it = it + 1) {
+    for it in 1..=max_iter {
         let y = _matvec(A, x);
         let lambda = _dot(x, y);     // Rayleigh quotient on unit x
         let xn = _normalize(y);
@@ -74,9 +74,9 @@ pub fn power_iterate(A, x0, tol, max_iter) {
 priv fn _shift_matrix(A, sigma) {
     let n = len(A);
     let B = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let row = [];
-        for (let j = 0; j < n; j = j + 1) {
+        for j in 0..n {
             let v = A[i][j];
             if (i == j) { v = v - sigma; }
             push(row, v);
@@ -91,7 +91,7 @@ pub fn inverse_iterate(A, sigma, x0, tol, max_iter) {
     let lu = lu_decompose(B);
     let x = _normalize(x0);
     let lambda_old = 0;
-    for (let it = 1; it <= max_iter; it = it + 1) {
+    for it in 1..=max_iter {
         let y = lu_solve(lu, x);
         let xn = _normalize(y);
         // Rayleigh quotient on the ORIGINAL A: lambda = x^T A x.

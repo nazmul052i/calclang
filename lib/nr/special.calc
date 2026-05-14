@@ -38,7 +38,7 @@ pub fn lgamma(x) {
     let tmp = x + 5.5;
     tmp = (x + 0.5) * log(tmp) - tmp;
     let ser = 1.000000000190015;
-    for (let i = 0; i < 6; i = i + 1) {
+    for i in 0..6 {
         y = y + 1;
         ser = ser + c[i] / y;
     }

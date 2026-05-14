@@ -13,7 +13,7 @@ print primes;
 // --- Building a result list ---
 fn squares_up_to(n) {
     let out = [];
-    for (let i = 1; i <= n; i++) {
+    for i in 1..=n {
         push(out, i * i);
     }
     return out;
@@ -33,14 +33,14 @@ push(people, ["Alice", 30]);
 push(people, ["Bob",   42]);
 push(people, ["Carol", 19]);
 print people;
-for (let i = 0; i < len(people); i++) {
+for i in 0..len(people) {
     let p = people[i];
     print p[0] + " is " + to_str(p[1]);
 }
 
 // --- in-place transform ---
 fn double_in_place(a) {
-    for (let i = 0; i < len(a); i++) {
+    for i in 0..len(a) {
         a[i] = a[i] * 2;
     }
 }

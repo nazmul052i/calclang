@@ -3,7 +3,7 @@
 
 pub fn sum_of(xs) {
     let s = 0;
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         s = s + xs[i];
     }
     return s;
@@ -18,7 +18,7 @@ pub fn variance(xs) {
     if (len(xs) < 2) { throw "variance: need at least 2 values"; }
     let m = mean(xs);
     let s = 0;
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         let d = xs[i] - m;
         s = s + d * d;
     }
@@ -33,7 +33,7 @@ pub fn stddev(xs) {
 pub fn min_of(xs) {
     if (len(xs) == 0) { throw "min_of: empty array"; }
     let m = xs[0];
-    for (let i = 1; i < len(xs); i = i + 1) {
+    for i in 1..len(xs) {
         if (xs[i] < m) { m = xs[i]; }
     }
     return m;
@@ -42,7 +42,7 @@ pub fn min_of(xs) {
 pub fn max_of(xs) {
     if (len(xs) == 0) { throw "max_of: empty array"; }
     let m = xs[0];
-    for (let i = 1; i < len(xs); i = i + 1) {
+    for i in 1..len(xs) {
         if (xs[i] > m) { m = xs[i]; }
     }
     return m;
@@ -75,7 +75,7 @@ pub fn correlate(xs, ys) {
     let num = 0;
     let sx = 0;
     let sy = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let dx = xs[i] - mx;
         let dy = ys[i] - my;
         num = num + dx * dy;
@@ -98,7 +98,7 @@ pub fn linreg(xs, ys) {
     let my = mean(ys);
     let num = 0;
     let den = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         num = num + (xs[i] - mx) * (ys[i] - my);
         den = den + (xs[i] - mx) * (xs[i] - mx);
     }
@@ -108,7 +108,7 @@ pub fn linreg(xs, ys) {
     // r² as 1 - SS_res / SS_tot.
     let ss_res = 0;
     let ss_tot = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let pred = slope * xs[i] + intercept;
         let resid = ys[i] - pred;
         let dev   = ys[i] - my;
@@ -129,12 +129,12 @@ pub fn histogram(xs, n_bins) {
     if (hi == lo) { hi = lo + 1; }   // avoid zero-width
     let width = (hi - lo) / n_bins;
     let edges = [];
-    for (let i = 0; i <= n_bins; i = i + 1) {
+    for i in 0..=n_bins {
         push(edges, lo + i * width);
     }
     let counts = [];
-    for (let i = 0; i < n_bins; i = i + 1) { push(counts, 0); }
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..n_bins { push(counts, 0); }
+    for i in 0..len(xs) {
         let bin = floor((xs[i] - lo) / width);
         if (bin < 0) { bin = 0; }
         if (bin >= n_bins) { bin = n_bins - 1; }

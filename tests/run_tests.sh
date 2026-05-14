@@ -118,6 +118,49 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] for-in / range (arr, str, range exclusive/inclusive, parens, classic)"
+# This one runs through the native pipeline too, since most for-in
+# iteration uses calls like len() / index that already get exercised
+# by the larger native sweep below — keeping it on the VM side here.
+build/calcnat tests/for_in.calc -o build/d_forin.exe
+out=$(build/d_forin.exe | strip_cr)
+check "for_in" '10
+20
+30
+0
+1
+2
+3
+4
+1
+2
+3
+a
+b
+c
+a
+1
+b
+2
+2
+3
+4
+0
+1
+10
+11
+1
+3
+7
+8
+9
+100
+200
+300
+0
+100
+200' "$out"
+
 echo "[test] switch statement (num and str cases, default, break)"
 out=$(run switch_stmt)
 check "switch_stmt" 'Sun

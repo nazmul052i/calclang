@@ -12,7 +12,7 @@ import "stats";
 let rng = Rng(2024);
 let inside = 0;
 let n = 100000;
-for (let i = 0; i < n; i = i + 1) {
+for i in 0..n {
     let x = rng.uniform01();
     let y = rng.uniform01();
     if (x * x + y * y <= 1) { inside = inside + 1; }
@@ -35,9 +35,10 @@ print "  max    = " + max_of(samples);
 let h = histogram(samples, 10);
 print "  histogram (10 bins):";
 let counts = h["counts"];
-for (let i = 0; i < len(counts); i = i + 1) {
-    let bar = "    bin " + i + ": " + counts[i];
-    print bar;
+let bin_idx = 0;
+for c in counts {
+    print "    bin " + bin_idx + ": " + c;
+    bin_idx = bin_idx + 1;
 }
 
 // ===== Random choice + shuffle =====

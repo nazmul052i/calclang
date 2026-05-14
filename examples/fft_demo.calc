@@ -17,7 +17,7 @@ let f2 = 18;      // weaker tone
 let rng = Rng(7);
 let signal = [];
 let t = [];
-for (let i = 0; i < N; i = i + 1) {
+for i in 0..N {
     let ti = i / fs;
     let v = sin(2 * pi() * f1 * ti) + 0.5 * sin(2 * pi() * f2 * ti);
     v = v + 0.1 * rng.normal(0, 1);
@@ -34,13 +34,13 @@ let freqs = fft_freqs(N, fs);
 // just the mirror image).
 let half = N / 2;
 let peaks = [];
-for (let k = 1; k < half; k = k + 1) {
+for k in 1..half {
     if (mag[k] > mag[k - 1] && mag[k] > mag[k + 1] && mag[k] > 2) {
         push(peaks, [freqs[k], mag[k]]);
     }
 }
 print "Detected peaks (frequency, magnitude):";
-for (let i = 0; i < len(peaks); i = i + 1) {
+for i in 0..len(peaks) {
     print "  " + peaks[i][0] + " Hz   mag = " + peaks[i][1];
 }
 print "(injected: 7 Hz strong, 18 Hz weaker)";
@@ -48,7 +48,7 @@ print "(injected: 7 Hz strong, 18 Hz weaker)";
 // Plot magnitude spectrum (first half only).
 let pf = [];
 let pm = [];
-for (let k = 0; k < half; k = k + 1) {
+for k in 0..half {
     push(pf, freqs[k]);
     push(pm, mag[k]);
 }
@@ -62,7 +62,7 @@ print "wrote build/fft_signal.svg";
 // Round-trip check: ifft(fft(signal)) ≈ signal (real part).
 let back = ifft(X);
 let max_err = 0;
-for (let i = 0; i < N; i = i + 1) {
+for i in 0..N {
     let err = abs(real(back[i]) - signal[i]);
     if (err > max_err) { max_err = err; }
 }

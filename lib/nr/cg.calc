@@ -22,13 +22,13 @@
 
 priv fn _cg_dot(a, b) {
     let s = 0;
-    for (let i = 0; i < len(a); i = i + 1) { s = s + a[i] * b[i]; }
+    for i in 0..len(a) { s = s + a[i] * b[i]; }
     return s;
 }
 
 priv fn _cg_axpy(alpha, x, beta, y) {
     let out = [];
-    for (let i = 0; i < len(x); i = i + 1) { push(out, alpha * x[i] + beta * y[i]); }
+    for i in 0..len(x) { push(out, alpha * x[i] + beta * y[i]); }
     return out;
 }
 
@@ -36,9 +36,9 @@ priv fn _cg_matvec(A, x) {
     let m = len(A);
     let n = len(x);
     let y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let s = 0;
-        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        for j in 0..n { s = s + A[i][j] * x[j]; }
         push(y, s);
     }
     return y;
@@ -47,33 +47,33 @@ priv fn _cg_matvec(A, x) {
 pub fn cg_solve(A, b, x0, tol, max_iter) {
     let n = len(b);
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, x0[i]); }
+    for i in 0..n { push(x, x0[i]); }
     // r = b - A x
     let Ax = _cg_matvec(A, x);
     let r = [];
-    for (let i = 0; i < n; i = i + 1) { push(r, b[i] - Ax[i]); }
+    for i in 0..n { push(r, b[i] - Ax[i]); }
     let p = [];
-    for (let i = 0; i < n; i = i + 1) { push(p, r[i]); }
+    for i in 0..n { push(p, r[i]); }
     let rsold = _cg_dot(r, r);
     let bnorm = sqrt(_cg_dot(b, b));
     if (bnorm == 0) { bnorm = 1; }
     if (sqrt(rsold) / bnorm < tol) {
         return {"x": x, "iters": 0, "converged": 1, "residual": sqrt(rsold)};
     }
-    for (let k = 1; k <= max_iter; k = k + 1) {
+    for k in 1..=max_iter {
         let Ap = _cg_matvec(A, p);
         let alpha = rsold / _cg_dot(p, Ap);
         // x = x + alpha p
-        for (let i = 0; i < n; i = i + 1) { x[i] = x[i] + alpha * p[i]; }
+        for i in 0..n { x[i] = x[i] + alpha * p[i]; }
         // r = r - alpha A p
-        for (let i = 0; i < n; i = i + 1) { r[i] = r[i] - alpha * Ap[i]; }
+        for i in 0..n { r[i] = r[i] - alpha * Ap[i]; }
         let rsnew = _cg_dot(r, r);
         if (sqrt(rsnew) / bnorm < tol) {
             return {"x": x, "iters": k, "converged": 1, "residual": sqrt(rsnew)};
         }
         let beta = rsnew / rsold;
         // p = r + beta p
-        for (let i = 0; i < n; i = i + 1) { p[i] = r[i] + beta * p[i]; }
+        for i in 0..n { p[i] = r[i] + beta * p[i]; }
         rsold = rsnew;
     }
     return {"x": x, "iters": max_iter, "converged": 0, "residual": sqrt(rsold)};
@@ -83,21 +83,21 @@ pub fn cg_solve(A, b, x0, tol, max_iter) {
 pub fn pcg_solve(A, b, x0, apply_Minv, tol, max_iter) {
     let n = len(b);
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, x0[i]); }
+    for i in 0..n { push(x, x0[i]); }
     let Ax = _cg_matvec(A, x);
     let r = [];
-    for (let i = 0; i < n; i = i + 1) { push(r, b[i] - Ax[i]); }
+    for i in 0..n { push(r, b[i] - Ax[i]); }
     let z = apply_Minv(r);
     let p = [];
-    for (let i = 0; i < n; i = i + 1) { push(p, z[i]); }
+    for i in 0..n { push(p, z[i]); }
     let rz_old = _cg_dot(r, z);
     let bnorm = sqrt(_cg_dot(b, b));
     if (bnorm == 0) { bnorm = 1; }
-    for (let k = 1; k <= max_iter; k = k + 1) {
+    for k in 1..=max_iter {
         let Ap = _cg_matvec(A, p);
         let alpha = rz_old / _cg_dot(p, Ap);
-        for (let i = 0; i < n; i = i + 1) { x[i] = x[i] + alpha * p[i]; }
-        for (let i = 0; i < n; i = i + 1) { r[i] = r[i] - alpha * Ap[i]; }
+        for i in 0..n { x[i] = x[i] + alpha * p[i]; }
+        for i in 0..n { r[i] = r[i] - alpha * Ap[i]; }
         let rnorm = sqrt(_cg_dot(r, r));
         if (rnorm / bnorm < tol) {
             return {"x": x, "iters": k, "converged": 1, "residual": rnorm};
@@ -105,7 +105,7 @@ pub fn pcg_solve(A, b, x0, apply_Minv, tol, max_iter) {
         z = apply_Minv(r);
         let rz_new = _cg_dot(r, z);
         let beta = rz_new / rz_old;
-        for (let i = 0; i < n; i = i + 1) { p[i] = z[i] + beta * p[i]; }
+        for i in 0..n { p[i] = z[i] + beta * p[i]; }
         rz_old = rz_new;
     }
     return {"x": x, "iters": max_iter, "converged": 0, "residual": sqrt(_cg_dot(r, r))};

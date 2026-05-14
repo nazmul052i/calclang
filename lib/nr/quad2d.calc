@@ -51,9 +51,9 @@ pub fn quad2d_gl(f, ax, bx, ay, by, n) {
     let cy = 0.5 * (by - ay);
     let my = 0.5 * (by + ay);
     let s = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let x = mx + cx * xs[i];
-        for (let j = 0; j < n; j = j + 1) {
+        for j in 0..n {
             let y = my + cy * xs[j];
             s = s + ws[i] * ws[j] * f(x, y);
         }

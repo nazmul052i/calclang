@@ -5,7 +5,7 @@
 
 pub fn pow_int(base: num, exp: num): num {
     let acc = 1;
-    for (let i = 0; i < exp; i++) {
+    for i in 0..exp {
         acc *= base;
     }
     return acc;
@@ -19,7 +19,7 @@ fn even_only(n: num): num {
 
 pub fn sum_even_squares(upto: num): num {
     let acc = 0;
-    for (let i = 1; i <= upto; i++) {
+    for i in 1..=upto {
         acc += even_only(pow_int(i, 2));
     }
     return acc;

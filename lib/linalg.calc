@@ -11,9 +11,9 @@
 
 pub fn mat_zeros(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) {
+        for j in 0..cols {
             push(row, 0);
         }
         push(m, row);
@@ -23,8 +23,8 @@ pub fn mat_zeros(rows, cols) {
 
 pub fn mat_ones(rows, cols) {
     let m = mat_zeros(rows, cols);
-    for (let i = 0; i < rows; i = i + 1) {
-        for (let j = 0; j < cols; j = j + 1) {
+    for i in 0..rows {
+        for j in 0..cols {
             m[i][j] = 1;
         }
     }
@@ -33,7 +33,7 @@ pub fn mat_ones(rows, cols) {
 
 pub fn mat_eye(n) {
     let m = mat_zeros(n, n);
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         m[i][i] = 1;
     }
     return m;
@@ -43,7 +43,7 @@ pub fn mat_eye(n) {
 pub fn mat_from_rows(rows) {
     if (len(rows) == 0) { throw "mat_from_rows: empty"; }
     let cols = len(rows[0]);
-    for (let i = 1; i < len(rows); i = i + 1) {
+    for i in 1..len(rows) {
         if (len(rows[i]) != cols) { throw "mat_from_rows: ragged rows"; }
     }
     return rows;
@@ -71,8 +71,8 @@ pub fn mat_add(a, b) {
         throw "mat_add: shape mismatch";
     }
     let r = mat_zeros(sa[0], sa[1]);
-    for (let i = 0; i < sa[0]; i = i + 1) {
-        for (let j = 0; j < sa[1]; j = j + 1) {
+    for i in 0..sa[0] {
+        for j in 0..sa[1] {
             r[i][j] = a[i][j] + b[i][j];
         }
     }
@@ -86,8 +86,8 @@ pub fn mat_sub(a, b) {
         throw "mat_sub: shape mismatch";
     }
     let r = mat_zeros(sa[0], sa[1]);
-    for (let i = 0; i < sa[0]; i = i + 1) {
-        for (let j = 0; j < sa[1]; j = j + 1) {
+    for i in 0..sa[0] {
+        for j in 0..sa[1] {
             r[i][j] = a[i][j] - b[i][j];
         }
     }
@@ -97,8 +97,8 @@ pub fn mat_sub(a, b) {
 pub fn mat_scale(m, s) {
     let sm = mat_shape(m);
     let r = mat_zeros(sm[0], sm[1]);
-    for (let i = 0; i < sm[0]; i = i + 1) {
-        for (let j = 0; j < sm[1]; j = j + 1) {
+    for i in 0..sm[0] {
+        for j in 0..sm[1] {
             r[i][j] = m[i][j] * s;
         }
     }
@@ -114,10 +114,10 @@ pub fn mat_mul(a, b) {
         throw "mat_mul: incompatible shapes";
     }
     let r = mat_zeros(sa[0], sb[1]);
-    for (let i = 0; i < sa[0]; i = i + 1) {
-        for (let j = 0; j < sb[1]; j = j + 1) {
+    for i in 0..sa[0] {
+        for j in 0..sb[1] {
             let s = 0;
-            for (let k = 0; k < sa[1]; k = k + 1) {
+            for k in 0..sa[1] {
                 s = s + a[i][k] * b[k][j];
             }
             r[i][j] = s;
@@ -134,9 +134,9 @@ pub fn mat_vec_mul(a, v) {
         throw "mat_vec_mul: incompatible shapes";
     }
     let r = [];
-    for (let i = 0; i < sa[0]; i = i + 1) {
+    for i in 0..sa[0] {
         let s = 0;
-        for (let k = 0; k < sa[1]; k = k + 1) {
+        for k in 0..sa[1] {
             s = s + a[i][k] * v[k];
         }
         push(r, s);
@@ -147,8 +147,8 @@ pub fn mat_vec_mul(a, v) {
 pub fn mat_transpose(m) {
     let sm = mat_shape(m);
     let r = mat_zeros(sm[1], sm[0]);
-    for (let i = 0; i < sm[0]; i = i + 1) {
-        for (let j = 0; j < sm[1]; j = j + 1) {
+    for i in 0..sm[0] {
+        for j in 0..sm[1] {
             r[j][i] = m[i][j];
         }
     }
@@ -167,18 +167,18 @@ pub fn mat_solve(a, b) {
     }
     // Build augmented matrix [A | b], working copy.
     let m = mat_zeros(n, n + 1);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..n {
+        for j in 0..n {
             m[i][j] = a[i][j];
         }
         m[i][n] = b[i];
     }
     // Forward elimination with partial pivoting.
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         // Pivot: pick row with largest |m[r][k]| for r >= k.
         let pr = k;
         let pv = abs(m[k][k]);
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let v = abs(m[r][k]);
             if (v > pv) { pv = v; pr = r; }
         }
@@ -187,19 +187,19 @@ pub fn mat_solve(a, b) {
             let tmp = m[k]; m[k] = m[pr]; m[pr] = tmp;
         }
         // Eliminate below.
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let factor = m[r][k] / m[k][k];
-            for (let c = k; c <= n; c = c + 1) {
+            for c in k..=n {
                 m[r][c] = m[r][c] - factor * m[k][c];
             }
         }
     }
     // Back substitution.
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for i in 0..n { push(x, 0); }
     for (let i = n - 1; i >= 0; i = i - 1) {
         let s = m[i][n];
-        for (let j = i + 1; j < n; j = j + 1) {
+        for j in i + 1..n {
             s = s - m[i][j] * x[j];
         }
         x[i] = s / m[i][i];
@@ -215,15 +215,15 @@ pub fn mat_inv(a) {
         throw "mat_inv: A must be square";
     }
     let m = mat_zeros(n, 2 * n);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { m[i][j] = a[i][j]; }
+    for i in 0..n {
+        for j in 0..n { m[i][j] = a[i][j]; }
         m[i][n + i] = 1;
     }
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         // Partial pivot.
         let pr = k;
         let pv = abs(m[k][k]);
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let v = abs(m[r][k]);
             if (v > pv) { pv = v; pr = r; }
         }
@@ -233,22 +233,22 @@ pub fn mat_inv(a) {
         }
         // Scale pivot row.
         let pivot = m[k][k];
-        for (let c = 0; c < 2 * n; c = c + 1) {
+        for c in 0..2 * n {
             m[k][c] = m[k][c] / pivot;
         }
         // Eliminate above and below.
-        for (let r = 0; r < n; r = r + 1) {
+        for r in 0..n {
             if (r == k) { continue; }
             let f = m[r][k];
-            for (let c = 0; c < 2 * n; c = c + 1) {
+            for c in 0..2 * n {
                 m[r][c] = m[r][c] - f * m[k][c];
             }
         }
     }
     // Extract the right half.
     let inv = mat_zeros(n, n);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..n {
+        for j in 0..n {
             inv[i][j] = m[i][n + j];
         }
     }
@@ -260,21 +260,21 @@ pub fn mat_inv(a) {
 // L1 norm: sum of absolute values.
 pub fn vec_norm1(v) {
     let s = 0;
-    for (let i = 0; i < len(v); i = i + 1) { s = s + abs(v[i]); }
+    for i in 0..len(v) { s = s + abs(v[i]); }
     return s;
 }
 
 // L2 (Euclidean) norm.
 pub fn vec_norm2(v) {
     let s = 0;
-    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    for i in 0..len(v) { s = s + v[i] * v[i]; }
     return sqrt(s);
 }
 
 // Infinity norm: max absolute value.
 pub fn vec_norm_inf(v) {
     let m = 0;
-    for (let i = 0; i < len(v); i = i + 1) {
+    for i in 0..len(v) {
         let av = abs(v[i]);
         if (av > m) { m = av; }
     }
@@ -284,8 +284,8 @@ pub fn vec_norm_inf(v) {
 // Frobenius norm of a matrix: sqrt(sum of squared entries).
 pub fn mat_norm_frobenius(a) {
     let s = 0;
-    for (let i = 0; i < len(a); i = i + 1) {
-        for (let j = 0; j < len(a[i]); j = j + 1) {
+    for i in 0..len(a) {
+        for j in 0..len(a[i]) {
             s = s + a[i][j] * a[i][j];
         }
     }
@@ -299,14 +299,14 @@ pub fn mat_det(a) {
         throw "mat_det: A must be square";
     }
     let m = mat_zeros(n, n);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { m[i][j] = a[i][j]; }
+    for i in 0..n {
+        for j in 0..n { m[i][j] = a[i][j]; }
     }
     let sign = 1;
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         let pr = k;
         let pv = abs(m[k][k]);
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let v = abs(m[r][k]);
             if (v > pv) { pv = v; pr = r; }
         }
@@ -315,15 +315,15 @@ pub fn mat_det(a) {
             let tmp = m[k]; m[k] = m[pr]; m[pr] = tmp;
             sign = -sign;
         }
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let factor = m[r][k] / m[k][k];
-            for (let c = k; c < n; c = c + 1) {
+            for c in k..n {
                 m[r][c] = m[r][c] - factor * m[k][c];
             }
         }
     }
     let d = sign;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         d = d * m[i][i];
     }
     return d;

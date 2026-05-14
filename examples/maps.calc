@@ -23,7 +23,7 @@ if (config["debug"]) {
 // --- Word count via map of counts ---
 fn count_words(words) {
     let counts = {};
-    for (let i = 0; i < len(words); i++) {
+    for i in 0..len(words) {
         let w = words[i];
         if (has_key(counts, w)) {
             counts[w] = counts[w] + 1;
@@ -41,7 +41,7 @@ print counts;
 let codes = {"red": 1, "green": 2, "blue": 3};
 fn find_name(m, target_value) {
     let ks = keys(m);
-    for (let i = 0; i < len(ks); i++) {
+    for i in 0..len(ks) {
         if (m[ks[i]] == target_value) { return ks[i]; }
     }
     return "";
@@ -55,7 +55,7 @@ book["alice"] = { "phone": "555-0101", "email": "a@example.com" };
 book["bob"]   = { "phone": "555-0202", "email": "b@example.com" };
 
 let ks = keys(book);
-for (let i = 0; i < len(ks); i++) {
+for i in 0..len(ks) {
     let name = ks[i];
     let entry = book[name];
     print name + ": " + entry["phone"];

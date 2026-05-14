@@ -33,9 +33,9 @@ import "nr.lu";
 
 priv fn _kf_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -43,7 +43,7 @@ priv fn _kf_zero(rows, cols) {
 
 priv fn _kf_eye(n) {
     let I = _kf_zero(n, n);
-    for (let i = 0; i < n; i = i + 1) { I[i][i] = 1; }
+    for i in 0..n { I[i][i] = 1; }
     return I;
 }
 
@@ -52,10 +52,10 @@ priv fn _kf_matmul(A, B) {
     let k = len(B);
     let n = len(B[0]);
     let C = _kf_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..m {
+        for j in 0..n {
             let s = 0;
-            for (let p = 0; p < k; p = p + 1) { s = s + A[i][p] * B[p][j]; }
+            for p in 0..k { s = s + A[i][p] * B[p][j]; }
             C[i][j] = s;
         }
     }
@@ -66,8 +66,8 @@ priv fn _kf_transpose(A) {
     let m = len(A);
     let n = len(A[0]);
     let T = _kf_zero(n, m);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { T[j][i] = A[i][j]; }
+    for i in 0..m {
+        for j in 0..n { T[j][i] = A[i][j]; }
     }
     return T;
 }
@@ -76,9 +76,9 @@ priv fn _kf_matvec(A, x) {
     let m = len(A);
     let n = len(x);
     let y = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         let s = 0;
-        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        for j in 0..n { s = s + A[i][j] * x[j]; }
         push(y, s);
     }
     return y;
@@ -86,13 +86,13 @@ priv fn _kf_matvec(A, x) {
 
 priv fn _kf_vadd(a, b) {
     let out = [];
-    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] + b[i]); }
+    for i in 0..len(a) { push(out, a[i] + b[i]); }
     return out;
 }
 
 priv fn _kf_vsub(a, b) {
     let out = [];
-    for (let i = 0; i < len(a); i = i + 1) { push(out, a[i] - b[i]); }
+    for i in 0..len(a) { push(out, a[i] - b[i]); }
     return out;
 }
 
@@ -100,8 +100,8 @@ priv fn _kf_madd(A, B) {
     let m = len(A);
     let n = len(A[0]);
     let C = _kf_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { C[i][j] = A[i][j] + B[i][j]; }
+    for i in 0..m {
+        for j in 0..n { C[i][j] = A[i][j] + B[i][j]; }
     }
     return C;
 }
@@ -110,8 +110,8 @@ priv fn _kf_msub(A, B) {
     let m = len(A);
     let n = len(A[0]);
     let C = _kf_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { C[i][j] = A[i][j] - B[i][j]; }
+    for i in 0..m {
+        for j in 0..n { C[i][j] = A[i][j] - B[i][j]; }
     }
     return C;
 }
@@ -154,22 +154,22 @@ pub fn kf_update(kf, z) {
     let n_state = len(kf["P"]);
     let m_meas  = len(kf["R"]);
     let K = _kf_zero(n_state, m_meas);
-    for (let j = 0; j < m_meas; j = j + 1) {
+    for j in 0..m_meas {
         // Build the j-th column of PHT.
         let rhs = [];
-        for (let i = 0; i < n_state; i = i + 1) { push(rhs, PHT[i][j]); }
+        for i in 0..n_state { push(rhs, PHT[i][j]); }
         let col = lu_solve(lu, rhs);   // S^-1 * (col j of PHT) — wrong order!
         // Actually we need (PHT . S^-1)[:, j] = PHT . e_j' where e_j' = S^-1 . e_j.
         // So: solve S . v = e_j, then K[:][j] = PHT . v.
         // Let's redo: build e_j, solve, multiply.
         let e = [];
-        for (let i = 0; i < m_meas; i = i + 1) {
+        for i in 0..m_meas {
             if (i == j) { push(e, 1); } else { push(e, 0); }
         }
         let v = lu_solve(lu, e);
-        for (let i = 0; i < n_state; i = i + 1) {
+        for i in 0..n_state {
             let s = 0;
-            for (let k = 0; k < m_meas; k = k + 1) { s = s + PHT[i][k] * v[k]; }
+            for k in 0..m_meas { s = s + PHT[i][k] * v[k]; }
             K[i][j] = s;
         }
     }

@@ -6,7 +6,7 @@ print "hello, " + name + "!";
 
 // Build up a string in a loop.
 let bar = "";
-for (let i = 0; i < 20; i++) {
+for i in 0..20 {
     bar = bar + "=";
 }
 print bar;                          // ====================

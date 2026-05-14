@@ -29,9 +29,9 @@ pub fn conv_direct(a, b) {
     let m = len(b);
     let out_len = n + m - 1;
     let out = [];
-    for (let i = 0; i < out_len; i = i + 1) { push(out, 0); }
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < m; j = j + 1) {
+    for i in 0..out_len { push(out, 0); }
+    for i in 0..n {
+        for j in 0..m {
             out[i + j] = out[i + j] + a[i] * b[j];
         }
     }
@@ -47,7 +47,7 @@ pub fn corr_direct(a, b) {
     let m = len(b);
     let out_len = n + m - 1;
     let out = [];
-    for (let i = 0; i < out_len; i = i + 1) { push(out, 0); }
+    for i in 0..out_len { push(out, 0); }
     // Equivalent to conv(a, reverse(b)).
     let br = [];
     for (let i = m - 1; i >= 0; i = i - 1) { push(br, b[i]); }
@@ -56,7 +56,7 @@ pub fn corr_direct(a, b) {
 
 priv fn _zero_pad(x, N) {
     let out = [];
-    for (let i = 0; i < N; i = i + 1) {
+    for i in 0..N {
         if (i < len(x)) { push(out, x[i]); } else { push(out, 0); }
     }
     return out;
@@ -74,11 +74,11 @@ pub fn conv_fft(a, b) {
     let B = fft(bp);
     // Pointwise product.
     let C = [];
-    for (let i = 0; i < N; i = i + 1) { push(C, A[i] * B[i]); }
+    for i in 0..N { push(C, A[i] * B[i]); }
     let c = ifft(C);
     // Take the real part of the first L samples.
     let out = [];
-    for (let i = 0; i < L; i = i + 1) { push(out, real(c[i])); }
+    for i in 0..L { push(out, real(c[i])); }
     return out;
 }
 
@@ -94,13 +94,13 @@ pub fn correlate_fft(a, b) {
     let B = fft(bp);
     // A(f) * conj(B(f)).
     let C = [];
-    for (let i = 0; i < N; i = i + 1) {
+    for i in 0..N {
         push(C, A[i] * conj(B[i]));
     }
     let c = ifft(C);
     // Roll by m-1 so output indexing matches corr_direct.
     let out = [];
-    for (let i = 0; i < L; i = i + 1) {
+    for i in 0..L {
         let src = (i + N - (m - 1)) % N;
         push(out, real(c[src]));
     }

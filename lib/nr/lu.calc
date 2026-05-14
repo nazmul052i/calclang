@@ -17,9 +17,9 @@
 
 priv fn _zeros(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -34,18 +34,18 @@ pub fn lu_decompose(A) {
     // diagonal, and L's strictly-lower part. L's diagonal is 1 by
     // convention. We extract them at the end for a cleaner API.
     let M = _zeros(n, n);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { M[i][j] = A[i][j]; }
+    for i in 0..n {
+        for j in 0..n { M[i][j] = A[i][j]; }
     }
     let P    = [];
-    for (let i = 0; i < n; i = i + 1) { push(P, i); }
+    for i in 0..n { push(P, i); }
     let sign = 1;
 
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         // Pivot: pick row with largest |M[r][k]| for r >= k.
         let pr = k;
         let pv = abs(M[k][k]);
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let v = abs(M[r][k]);
             if (v > pv) { pv = v; pr = r; }
         }
@@ -56,10 +56,10 @@ pub fn lu_decompose(A) {
             sign = -sign;
         }
         // Eliminate below.
-        for (let r = k + 1; r < n; r = r + 1) {
+        for r in k + 1..n {
             let factor = M[r][k] / M[k][k];
             M[r][k] = factor;             // store L's entry in place
-            for (let c = k + 1; c < n; c = c + 1) {
+            for c in k + 1..n {
                 M[r][c] = M[r][c] - factor * M[k][c];
             }
         }
@@ -67,10 +67,10 @@ pub fn lu_decompose(A) {
     // Split L (with unit diagonal) and U.
     let L = _zeros(n, n);
     let U = _zeros(n, n);
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         L[i][i] = 1;
-        for (let j = 0; j < i; j = j + 1) { L[i][j] = M[i][j]; }
-        for (let j = i; j < n; j = j + 1) { U[i][j] = M[i][j]; }
+        for j in 0..i { L[i][j] = M[i][j]; }
+        for j in i..n { U[i][j] = M[i][j]; }
     }
     return {"L": L, "U": U, "P": P, "sign": sign};
 }
@@ -84,21 +84,21 @@ pub fn lu_solve(lu, b) {
     if (len(b) != n) { throw "lu_solve: b length doesn't match LU"; }
     // Apply the permutation to b.
     let pb = [];
-    for (let i = 0; i < n; i = i + 1) { push(pb, b[P[i]]); }
+    for i in 0..n { push(pb, b[P[i]]); }
     // Forward-substitute L y = P b. L has unit diagonal.
     let y = [];
-    for (let i = 0; i < n; i = i + 1) { push(y, 0); }
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n { push(y, 0); }
+    for i in 0..n {
         let s = pb[i];
-        for (let j = 0; j < i; j = j + 1) { s = s - L[i][j] * y[j]; }
+        for j in 0..i { s = s - L[i][j] * y[j]; }
         y[i] = s;
     }
     // Back-substitute U x = y.
     let x = [];
-    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for i in 0..n { push(x, 0); }
     for (let i = n - 1; i >= 0; i = i - 1) {
         let s = y[i];
-        for (let j = i + 1; j < n; j = j + 1) { s = s - U[i][j] * x[j]; }
+        for j in i + 1..n { s = s - U[i][j] * x[j]; }
         x[i] = s / U[i][i];
     }
     return x;
@@ -109,6 +109,6 @@ pub fn lu_det(lu) {
     let U = lu["U"];
     let d = lu["sign"];
     let n = len(U);
-    for (let i = 0; i < n; i = i + 1) { d = d * U[i][i]; }
+    for i in 0..n { d = d * U[i][i]; }
     return d;
 }

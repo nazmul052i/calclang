@@ -6,7 +6,7 @@
 
 pub fn sum(arr: arr): num {
     let acc = 0;
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         acc += arr[i];
     }
     return acc;
@@ -19,7 +19,7 @@ pub fn mean(arr: arr): num {
 pub fn variance(arr: arr): num {
     let m = mean(arr);
     let acc = 0;
-    for (let i = 0; i < len(arr); i++) {
+    for i in 0..len(arr) {
         let d = arr[i] - m;
         acc += d * d;
     }
@@ -32,7 +32,7 @@ pub fn stddev(arr: arr): num {
 
 pub fn minimum(arr: arr): num {
     let v = arr[0];
-    for (let i = 1; i < len(arr); i++) {
+    for i in 1..len(arr) {
         v = min(v, arr[i]);
     }
     return v;
@@ -40,7 +40,7 @@ pub fn minimum(arr: arr): num {
 
 pub fn maximum(arr: arr): num {
     let v = arr[0];
-    for (let i = 1; i < len(arr); i++) {
+    for i in 1..len(arr) {
         v = max(v, arr[i]);
     }
     return v;

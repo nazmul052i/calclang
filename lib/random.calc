@@ -109,7 +109,7 @@ pub class Rng {
     // n independent normal samples — common enough to be worth a helper.
     fn normal_array(n, mu, sigma) {
         let out = [];
-        for (let i = 0; i < n; i = i + 1) {
+        for i in 0..n {
             push(out, this.normal(mu, sigma));
         }
         return out;

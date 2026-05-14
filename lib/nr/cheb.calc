@@ -24,15 +24,15 @@ pub fn cheb_fit(f, a, b, n) {
     let bpa = 0.5 * (b + a);
     // Sample f at the n Chebyshev nodes (in y-space).
     let fs = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         let y = cos(pi() * (k + 0.5) / n);
         push(fs, f(y * bma + bpa));
     }
     let fac = 2.0 / n;
     let c = [];
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let s = 0;
-        for (let k = 0; k < n; k = k + 1) {
+        for k in 0..n {
             s = s + fs[k] * cos(pi() * j * (k + 0.5) / n);
         }
         push(c, fac * s);
@@ -68,14 +68,14 @@ pub fn cheb_deriv(cm) {
     let a = cm["a"];  let b = cm["b"];
     if (n < 2) { throw "cheb_deriv: need at least 2 coefficients"; }
     let cd = [];
-    for (let i = 0; i < n; i = i + 1) { push(cd, 0); }
+    for i in 0..n { push(cd, 0); }
     cd[n - 1] = 0;
     cd[n - 2] = 2 * (n - 1) * c[n - 1];
     for (let j = n - 2; j >= 1; j = j - 1) {
         cd[j - 1] = cd[j + 1] + 2 * j * c[j];
     }
     let scale = 2 / (b - a);
-    for (let i = 0; i < n; i = i + 1) { cd[i] = cd[i] * scale; }
+    for i in 0..n { cd[i] = cd[i] * scale; }
     return {"a": a, "b": b, "n": n, "c": cd};
 }
 
@@ -88,10 +88,10 @@ pub fn cheb_integral(cm) {
     let a = cm["a"];  let b = cm["b"];
     let con  = 0.25 * (b - a);
     let ci = [];
-    for (let i = 0; i < n; i = i + 1) { push(ci, 0); }
+    for i in 0..n { push(ci, 0); }
     let sum  = 0;
     let sign = 1;
-    for (let j = 1; j < n - 1; j = j + 1) {
+    for j in 1..n - 1 {
         ci[j] = con * (c[j - 1] - c[j + 1]) / j;
         sum = sum + sign * ci[j];
         sign = -sign;

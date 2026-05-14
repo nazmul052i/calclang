@@ -23,9 +23,9 @@ import "nr.qr";
 
 priv fn _bs_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -57,7 +57,7 @@ pub fn bspline_basis_one(knots, k, i, x) {
 pub fn bspline_basis(knots, k, x) {
     let n = len(knots) - k;
     let out = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         push(out, bspline_basis_one(knots, k, i, x));
     }
     return out;
@@ -68,7 +68,7 @@ pub fn bspline_eval(knots, k, c, x) {
     let n = len(knots) - k;
     if (len(c) != n) { throw "bspline_eval: |c| must equal len(knots) - k"; }
     let s = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         s = s + c[i] * bspline_basis_one(knots, k, i, x);
     }
     return s;
@@ -81,8 +81,8 @@ pub fn bspline_fit(xs, ys, knots, k) {
     let n = len(knots) - k;
     if (m < n) { throw "bspline_fit: more basis functions than data points"; }
     let B = _bs_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..m {
+        for j in 0..n {
             B[i][j] = bspline_basis_one(knots, k, j, xs[i]);
         }
     }
@@ -94,9 +94,9 @@ pub fn bspline_fit(xs, ys, knots, k) {
 // (i.e. n_interior + 1 polynomial pieces). Total knots = n_interior + 2k.
 pub fn bspline_clamped_knots(a, b, n_interior, k) {
     let knots = [];
-    for (let i = 0; i < k; i = i + 1) { push(knots, a); }
+    for i in 0..k { push(knots, a); }
     let dx = (b - a) / (n_interior + 1);
-    for (let i = 1; i <= n_interior; i = i + 1) { push(knots, a + i * dx); }
-    for (let i = 0; i < k; i = i + 1) { push(knots, b); }
+    for i in 1..=n_interior { push(knots, a + i * dx); }
+    for i in 0..k { push(knots, b); }
     return knots;
 }

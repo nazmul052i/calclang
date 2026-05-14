@@ -20,7 +20,7 @@ let rand01 = fn() {
 let xs = [];
 let ys = [];
 let n = 60;
-for (let i = 0; i < n; i = i + 1) {
+for i in 0..n {
     let x = i;
     let noise = (rand01() - 0.5) * 12;       // ~ U(-6, 6)
     let y = 1.7 * x + 4.2 + noise;
@@ -39,7 +39,7 @@ print "  R^2 = " + fit["r2"];
 print "(true model: y = 1.7 * x + 4.2)";
 
 let ys_fit = [];
-for (let i = 0; i < n; i = i + 1) {
+for i in 0..n {
     push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
 }
 

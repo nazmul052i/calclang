@@ -28,7 +28,7 @@ pub fn brent_root(f, a_in, b_in, tol, max_iter) {
     let mflag = 1;
     let d = 0;        // unused on first iteration
 
-    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+    for iter in 0..max_iter {
         if (abs(fb) < tol) { return b; }
         if (b - a == 0)     { return b; }
 

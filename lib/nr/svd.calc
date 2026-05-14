@@ -27,9 +27,9 @@ import "nr.eigen";
 
 priv fn _svd_mat_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -40,10 +40,10 @@ priv fn _svd_matmul(A, B) {
     let n = len(B[0]);
     let k = len(B);
     let C = _svd_mat_zero(m, n);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) {
+    for i in 0..m {
+        for j in 0..n {
             let s = 0;
-            for (let p = 0; p < k; p = p + 1) { s = s + A[i][p] * B[p][j]; }
+            for p in 0..k { s = s + A[i][p] * B[p][j]; }
             C[i][j] = s;
         }
     }
@@ -54,8 +54,8 @@ priv fn _svd_transpose(A) {
     let m = len(A);
     let n = len(A[0]);
     let T = _svd_mat_zero(n, m);
-    for (let i = 0; i < m; i = i + 1) {
-        for (let j = 0; j < n; j = j + 1) { T[j][i] = A[i][j]; }
+    for i in 0..m {
+        for j in 0..n { T[j][i] = A[i][j]; }
     }
     return T;
 }
@@ -76,10 +76,10 @@ pub fn svd(A) {
     // Build an index permutation by simple O(n^2) selection sort —
     // n here is small (matrix-rank scale), so it doesn't matter.
     let order = [];
-    for (let i = 0; i < n; i = i + 1) { push(order, i); }
-    for (let i = 0; i < n - 1; i = i + 1) {
+    for i in 0..n { push(order, i); }
+    for i in 0..n - 1 {
         let best = i;
-        for (let j = i + 1; j < n; j = j + 1) {
+        for j in i + 1..n {
             if (lam[order[j]] > lam[order[best]]) { best = j; }
         }
         if (best != i) {
@@ -89,24 +89,24 @@ pub fn svd(A) {
     // Reorder V's columns and lam to match.
     let V2 = _svd_mat_zero(n, n);
     let S  = [];
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         let src = order[j];
         let val = lam[src];
         if (val < 0) { val = 0; }   // numerical noise on PSD eigenvalues
         push(S, sqrt(val));
-        for (let i = 0; i < n; i = i + 1) { V2[i][j] = V[i][src]; }
+        for i in 0..n { V2[i][j] = V[i][src]; }
     }
     // Step 4: U = A V S^-1 (column by column). For zero singular values,
     // leave the corresponding U column zero — the demo doesn't probe it.
     let U = _svd_mat_zero(m, n);
     let tol = 0;
     if (S[0] > 0) { tol = 1e-12 * S[0]; }
-    for (let j = 0; j < n; j = j + 1) {
+    for j in 0..n {
         if (S[j] > tol) {
             // U[:,j] = A V[:,j] / S[j]
-            for (let i = 0; i < m; i = i + 1) {
+            for i in 0..m {
                 let s = 0;
-                for (let k = 0; k < n; k = k + 1) { s = s + A[i][k] * V2[k][j]; }
+                for k in 0..n { s = s + A[i][k] * V2[k][j]; }
                 U[i][j] = s / S[j];
             }
         }
@@ -123,10 +123,10 @@ pub fn svd_pinv(A) {
     let tol = 0;
     if (S[0] > 0) { tol = 1e-12 * max(m, n) * S[0]; }
     let pinv = _svd_mat_zero(n, m);
-    for (let i = 0; i < n; i = i + 1) {
-        for (let j = 0; j < m; j = j + 1) {
+    for i in 0..n {
+        for j in 0..m {
             let s = 0;
-            for (let k = 0; k < n; k = k + 1) {
+            for k in 0..n {
                 if (S[k] > tol) {
                     s = s + V[i][k] * U[j][k] / S[k];
                 }
@@ -147,21 +147,21 @@ pub fn svd_solve(A, b) {
     if (S[0] > 0) { tol = 1e-12 * S[0]; }
     // c = U^T b
     let c = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         let s = 0;
-        for (let i = 0; i < m; i = i + 1) { s = s + U[i][k] * b[i]; }
+        for i in 0..m { s = s + U[i][k] * b[i]; }
         push(c, s);
     }
     // y_k = c_k / s_k for s_k > tol, else 0
     let y = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         if (S[k] > tol) { push(y, c[k] / S[k]); } else { push(y, 0); }
     }
     // x = V y
     let x = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let s = 0;
-        for (let k = 0; k < n; k = k + 1) { s = s + V[i][k] * y[k]; }
+        for k in 0..n { s = s + V[i][k] * y[k]; }
         push(x, s);
     }
     return x;

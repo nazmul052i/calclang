@@ -18,7 +18,7 @@ let N  = 1024;
 let f0 = 17;
 let rng = Rng(2026);
 let xs = [];
-for (let i = 0; i < N; i = i + 1) {
+for i in 0..N {
     let t = i / fs;
     push(xs, cos(2 * pi() * f0 * t) + 0.3 * rng.normal(0, 1));
 }
@@ -27,7 +27,7 @@ let psd = w["psd"];
 let freqs = w["freqs"];
 // Locate the peak frequency.
 let pkbin = 0;  let pkval = 0;
-for (let i = 0; i < len(psd); i = i + 1) {
+for i in 0..len(psd) {
     if (psd[i] > pkval) { pkval = psd[i]; pkbin = i; }
 }
 print "peak at f = " + freqs[pkbin] + " Hz (expected ~17 Hz)";
@@ -43,19 +43,19 @@ print "forward Haar on [1..8]:";  print h;
 let hi = haar_inverse(h);
 print "round-trip:";  print hi;
 let rt_err = 0;
-for (let i = 0; i < 8; i = i + 1) { rt_err = rt_err + (hi[i] - signal8[i]) * (hi[i] - signal8[i]); }
+for i in 0..8 { rt_err = rt_err + (hi[i] - signal8[i]) * (hi[i] - signal8[i]); }
 print "round-trip RMS error = " + sqrt(rt_err / 8);
 
 print "";
 print "===== Daubechies-4 round-trip =====";
 let sig16 = [];
-for (let i = 0; i < 16; i = i + 1) {
+for i in 0..16 {
     push(sig16, sin(2 * pi() * i / 8) + 0.5 * cos(2 * pi() * i / 4));
 }
 let d = d4_forward(sig16);
 let di = d4_inverse(d);
 let d4_err = 0;
-for (let i = 0; i < 16; i = i + 1) { d4_err = d4_err + (di[i] - sig16[i]) * (di[i] - sig16[i]); }
+for i in 0..16 { d4_err = d4_err + (di[i] - sig16[i]) * (di[i] - sig16[i]); }
 print "D4 round-trip RMS error = " + sqrt(d4_err / 16);
 
 // ===== Toeplitz / Yule-Walker =====
@@ -69,9 +69,9 @@ let xt = levinson_solve(r, y);
 print "x = ";  print xt;
 // Verify by reconstructing T x and comparing to y.
 let yhat = [0, 0, 0, 0];
-for (let i = 0; i < 4; i = i + 1) {
+for i in 0..4 {
     let s = 0;
-    for (let j = 0; j < 4; j = j + 1) {
+    for j in 0..4 {
         let idx = i - j;  if (idx < 0) { idx = -idx; }
         s = s + r[idx] * xt[j];
     }
@@ -87,17 +87,17 @@ let M = 2000;
 let sig = [];
 push(sig, 0);  push(sig, 0);
 let rng2 = Rng(99);
-for (let n = 2; n < M; n = n + 1) {
+for n in 2..M {
     push(sig, 0.7 * sig[n - 1] - 0.2 * sig[n - 2] + rng2.normal(0, 1));
 }
 // Compute biased autocorrelation r[0..2].
 let mean_sig = 0;
-for (let i = 0; i < M; i = i + 1) { mean_sig = mean_sig + sig[i]; }
+for i in 0..M { mean_sig = mean_sig + sig[i]; }
 mean_sig = mean_sig / M;
 let ac = [0, 0, 0];
-for (let k = 0; k < 3; k = k + 1) {
+for k in 0..3 {
     let s = 0;
-    for (let i = 0; i < M - k; i = i + 1) {
+    for i in 0..M - k {
         s = s + (sig[i] - mean_sig) * (sig[i + k] - mean_sig);
     }
     ac[k] = s / M;

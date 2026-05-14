@@ -53,7 +53,7 @@ pub fn rk45(f, t0, y0, t_end, tol) {
     let accepted  = 0;
     let rejected  = 0;
 
-    for (let step = 0; step < max_steps; step = step + 1) {
+    for step in 0..max_steps {
         if (t >= t_end) { break; }
         // Don't overshoot the endpoint.
         if (t + h > t_end) { h = t_end - t; }

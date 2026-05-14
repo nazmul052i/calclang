@@ -22,19 +22,19 @@ import "nr.diff";
 
 priv fn _norm2(v) {
     let s = 0;
-    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    for i in 0..len(v) { s = s + v[i] * v[i]; }
     return sqrt(s);
 }
 
 priv fn _neg(v) {
     let out = [];
-    for (let i = 0; i < len(v); i = i + 1) { push(out, -v[i]); }
+    for i in 0..len(v) { push(out, -v[i]); }
     return out;
 }
 
 priv fn _add_scaled(x, alpha, dx) {
     let out = [];
-    for (let i = 0; i < len(x); i = i + 1) { push(out, x[i] + alpha * dx[i]); }
+    for i in 0..len(x) { push(out, x[i] + alpha * dx[i]); }
     return out;
 }
 
@@ -47,10 +47,10 @@ priv fn _add_scaled(x, alpha, dx) {
 // Returns {"x": x, "iters": k, "converged": 0|1}.
 pub fn newton_n(F, J, x0, tol, max_iter) {
     let x = [];
-    for (let i = 0; i < len(x0); i = i + 1) { push(x, x0[i]); }
+    for i in 0..len(x0) { push(x, x0[i]); }
     let fx = F(x);
     let f_norm = _norm2(fx);
-    for (let k = 0; k < max_iter; k = k + 1) {
+    for k in 0..max_iter {
         if (f_norm < tol) {
             return {"x": x, "iters": k, "converged": 1};
         }

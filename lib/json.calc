@@ -158,7 +158,7 @@ pub fn json_parse(src) {
 
 priv fn _enc_string(s) {
     let out = "\"";
-    for (let i = 0; i < len(s); i = i + 1) {
+    for i in 0..len(s) {
         let c = str_at(s, i);
         if      (c == "\\") { out = out + "\\\\"; }
         else if (c == "\"") { out = out + "\\\""; }
@@ -176,7 +176,7 @@ pub fn json_encode(v) {
     if (t == "str") { return _enc_string(v); }
     if (t == "arr") {
         let out = "[";
-        for (let i = 0; i < len(v); i = i + 1) {
+        for i in 0..len(v) {
             if (i > 0) { out = out + ","; }
             out = out + json_encode(v[i]);
         }
@@ -185,7 +185,7 @@ pub fn json_encode(v) {
     if (t == "map") {
         let out = "{";
         let ks = keys(v);
-        for (let i = 0; i < len(ks); i = i + 1) {
+        for i in 0..len(ks) {
             if (i > 0) { out = out + ","; }
             out = out + _enc_string(ks[i]) + ":" + json_encode(v[ks[i]]);
         }

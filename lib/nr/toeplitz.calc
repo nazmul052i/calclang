@@ -19,7 +19,7 @@
 
 priv fn _vec_copy(v) {
     let out = [];
-    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    for i in 0..len(v) { push(out, v[i]); }
     return out;
 }
 
@@ -30,17 +30,17 @@ pub fn levinson_solve(r, y) {
     let x = [];
     let f = [];   // forward predictor coefficients
     let b = [];   // backward predictor coefficients (identical for symmetric T)
-    for (let i = 0; i < n; i = i + 1) { push(x, 0); push(f, 0); push(b, 0); }
+    for i in 0..n { push(x, 0); push(f, 0); push(b, 0); }
     x[0] = y[0] / r[0];
     if (n == 1) { return x; }
     f[0] = 1 / r[0];
     b[0] = 1 / r[0];
     let alpha = 1;
-    for (let k = 1; k < n; k = k + 1) {
+    for k in 1..n {
         // Compute the Schur parameter.
         let ef = 0;
         let eb = 0;
-        for (let j = 0; j < k; j = j + 1) {
+        for j in 0..k {
             ef = ef + r[k - j] * f[j];
             eb = eb + r[j + 1] * b[j];
         }
@@ -48,18 +48,18 @@ pub fn levinson_solve(r, y) {
         // Update forward and backward predictors.
         let f_new = [];
         let b_new = [];
-        for (let i = 0; i <= k; i = i + 1) { push(f_new, 0); push(b_new, 0); }
-        for (let i = 0; i <= k; i = i + 1) {
+        for i in 0..=k { push(f_new, 0); push(b_new, 0); }
+        for i in 0..=k {
             let fi = 0;  if (i < k) { fi = f[i]; }
             let bi = 0;  if (i > 0) { bi = b[i - 1]; }
             f_new[i] = (fi - ef * bi) / alpha_new;
             b_new[i] = (bi - eb * fi) / alpha_new;
         }
-        for (let i = 0; i <= k; i = i + 1) { f[i] = f_new[i]; b[i] = b_new[i]; }
+        for i in 0..=k { f[i] = f_new[i]; b[i] = b_new[i]; }
         // Update solution.
         let dy = y[k];
-        for (let j = 0; j < k; j = j + 1) { dy = dy - r[k - j] * x[j]; }
-        for (let i = 0; i <= k; i = i + 1) { x[i] = x[i] + dy * b[i]; }
+        for j in 0..k { dy = dy - r[k - j] * x[j]; }
+        for i in 0..=k { x[i] = x[i] + dy * b[i]; }
         alpha = alpha_new;
     }
     return x;
@@ -76,13 +76,13 @@ pub fn yule_walker(autocorr, p) {
     // RHS: r[1..p].
     let R_first = [];
     let y = [];
-    for (let i = 0; i < p; i = i + 1) {
+    for i in 0..p {
         push(R_first, autocorr[i]);
         push(y, autocorr[i + 1]);
     }
     let coef = levinson_solve(R_first, y);
     // Prediction-error variance: sigma^2 = r[0] - sum a_k r[k].
     let s = autocorr[0];
-    for (let k = 0; k < p; k = k + 1) { s = s - coef[k] * autocorr[k + 1]; }
+    for k in 0..p { s = s - coef[k] * autocorr[k + 1]; }
     return {"coef": coef, "sigma2": s};
 }

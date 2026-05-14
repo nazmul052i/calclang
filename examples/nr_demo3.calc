@@ -44,7 +44,7 @@ print "  iters = " + res["iters"];
 // A 4-D quadratic. Min at zero.
 let quad4 = fn(v) {
     let s = 0;
-    for (let i = 0; i < 4; i = i + 1) {
+    for i in 0..4 {
         s = s + (v[i] - i) * (v[i] - i);
     }
     return s;
@@ -68,17 +68,17 @@ print "original idx  =";  print h["index"];
 
 // heapsort sorts in place. Make a copy first.
 let r2 = [];
-for (let i = 0; i < len(raw); i = i + 1) { push(r2, raw[i]); }
+for i in 0..len(raw) { push(r2, raw[i]); }
 heapsort(r2);
 print "in-place sorted =";  print r2;
 
 // quickselect — k-th smallest without sorting.
 let r3 = [];
-for (let i = 0; i < len(raw); i = i + 1) { push(r3, raw[i]); }
+for i in 0..len(raw) { push(r3, raw[i]); }
 print "3rd smallest (k=2) = " + quickselect(r3, 2);   // expect 2
 
 let r4 = [];
-for (let i = 0; i < len(raw); i = i + 1) { push(r4, raw[i]); }
+for i in 0..len(raw) { push(r4, raw[i]); }
 print "max (k=n-1)        = " + quickselect(r4, len(r4) - 1);   // expect 9
 
 // median.

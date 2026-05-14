@@ -20,7 +20,7 @@ priv fn _legendre_pp(n, x) {
     // Returns [P_n(x), P_n'(x)] using Bonnet's three-term recurrence.
     let p_prev = 1;
     let p_curr = x;
-    for (let k = 1; k < n; k = k + 1) {
+    for k in 1..n {
         let p_next = ((2 * k + 1) * x * p_curr - k * p_prev) / (k + 1);
         p_prev = p_curr;
         p_curr = p_next;
@@ -38,16 +38,16 @@ pub fn gauleg(n, a, b) {
     if (n < 1) { throw "gauleg: n must be >= 1"; }
     let xs = [];
     let ws = [];
-    for (let i = 0; i < n; i = i + 1) { push(xs, 0); push(ws, 0); }
+    for i in 0..n { push(xs, 0); push(ws, 0); }
     let half = floor((n + 1) / 2);
-    for (let i = 0; i < half; i = i + 1) {
+    for i in 0..half {
         // Initial guess (NR's formula).
         let x = cos(pi() * (i + 0.75) / (n + 0.5));
         // Newton iteration on P_n.
         let max_it = 50;
         let conv = 0;
         let dp_at = 0;
-        for (let it = 0; it < max_it; it = it + 1) {
+        for it in 0..max_it {
             let pd = _legendre_pp(n, x);
             let p  = pd[0];
             let dp = pd[1];
@@ -75,7 +75,7 @@ pub fn gauleg(n, a, b) {
     let mx = 0.5 * (b + a);
     let xo = [];
     let wo = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         push(xo, mx + cx * xs[i]);
         push(wo, cx * ws[i]);
     }
@@ -86,6 +86,6 @@ pub fn integrate_gauleg(f, a, b, n) {
     let nw = gauleg(n, a, b);
     let xs = nw["x"];  let ws = nw["w"];
     let s = 0;
-    for (let i = 0; i < n; i = i + 1) { s = s + ws[i] * f(xs[i]); }
+    for i in 0..n { s = s + ws[i] * f(xs[i]); }
     return s;
 }

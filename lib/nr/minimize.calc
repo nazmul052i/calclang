@@ -34,7 +34,7 @@ pub fn golden_section(f, a_in, b_in, c_in, tol) {
     let f1 = f(x1);
     let f2 = f(x2);
     let max_iter = 200;
-    for (let it = 0; it < max_iter; it = it + 1) {
+    for it in 0..max_iter {
         if (abs(x3 - x0) < tol * (abs(x1) + abs(x2))) {
             if (f1 < f2) { return x1; }
             return x2;
@@ -66,7 +66,7 @@ pub fn brent_min(f, ax, bx, cx, tol) {
     let fx = f(x);  let fw = fx;  let fv = fx;
     let d = 0;  let e = 0;       // step / step-before-last
 
-    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+    for iter in 0..max_iter {
         let xm = 0.5 * (a + b);
         let tol1 = tol * abs(x) + ZEPS;
         let tol2 = 2 * tol1;
@@ -136,29 +136,29 @@ pub fn brent_min(f, ax, bx, cx, tol) {
 
 priv fn _vcopy(v) {
     let out = [];
-    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i]); }
+    for i in 0..len(v) { push(out, v[i]); }
     return out;
 }
 
 priv fn _centroid(simplex, ihi) {
     let n = len(simplex[0]);
     let c = [];
-    for (let i = 0; i < n; i = i + 1) { push(c, 0); }
+    for i in 0..n { push(c, 0); }
     let m = len(simplex);
-    for (let k = 0; k < m; k = k + 1) {
+    for k in 0..m {
         if (k == ihi) { continue; }
-        for (let i = 0; i < n; i = i + 1) {
+        for i in 0..n {
             c[i] = c[i] + simplex[k][i];
         }
     }
-    for (let i = 0; i < n; i = i + 1) { c[i] = c[i] / (m - 1); }
+    for i in 0..n { c[i] = c[i] / (m - 1); }
     return c;
 }
 
 priv fn _reflect(centroid, xhi, alpha) {
     let n = len(centroid);
     let r = [];
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         push(r, centroid[i] + alpha * (centroid[i] - xhi[i]));
     }
     return r;
@@ -171,7 +171,7 @@ pub fn simplex_min(f, x0, step, tol) {
     let fvals = [];
     push(simplex, _vcopy(x0));
     push(fvals, f(x0));
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let v = _vcopy(x0);
         v[i] = v[i] + step;
         push(simplex, v);
@@ -183,17 +183,17 @@ pub fn simplex_min(f, x0, step, tol) {
     let rho   = 0.5;   // contraction
     let sigma = 0.5;   // shrink
 
-    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+    for iter in 0..max_iter {
         // Locate lo / hi / second-hi indices.
         let ilo = 0;
         let ihi = 0;
         let isec = 0;
-        for (let k = 1; k < len(fvals); k = k + 1) {
+        for k in 1..len(fvals) {
             if (fvals[k] < fvals[ilo]) { ilo = k; }
             if (fvals[k] > fvals[ihi]) { ihi = k; }
         }
         isec = ilo;
-        for (let k = 0; k < len(fvals); k = k + 1) {
+        for k in 0..len(fvals) {
             if (k == ihi) { continue; }
             if (fvals[k] > fvals[isec]) { isec = k; }
         }
@@ -222,7 +222,7 @@ pub fn simplex_min(f, x0, step, tol) {
                 let xc = [];
                 let base = simplex[ihi];
                 if (fr < fvals[ihi]) { base = xr; }
-                for (let i = 0; i < n; i = i + 1) {
+                for i in 0..n {
                     push(xc, cen[i] + rho * (base[i] - cen[i]));
                 }
                 let fc = f(xc);
@@ -234,10 +234,10 @@ pub fn simplex_min(f, x0, step, tol) {
                 if (used_contract == 0) {
                     // Shrink toward the best vertex.
                     let xlo = simplex[ilo];
-                    for (let k = 0; k < len(simplex); k = k + 1) {
+                    for k in 0..len(simplex) {
                         if (k == ilo) { continue; }
                         let v = simplex[k];
-                        for (let i = 0; i < n; i = i + 1) {
+                        for i in 0..n {
                             v[i] = xlo[i] + sigma * (v[i] - xlo[i]);
                         }
                         simplex[k] = v;
@@ -249,7 +249,7 @@ pub fn simplex_min(f, x0, step, tol) {
     }
     // Return current best.
     let ilo = 0;
-    for (let k = 1; k < len(fvals); k = k + 1) {
+    for k in 1..len(fvals) {
         if (fvals[k] < fvals[ilo]) { ilo = k; }
     }
     return {"x": simplex[ilo], "f": fvals[ilo], "iters": max_iter};

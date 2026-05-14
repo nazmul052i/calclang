@@ -35,7 +35,7 @@ let rng = Rng(2026);
 
 let n_draw = 5000;
 let g_sum = 0;  let g_sum2 = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     let v = gamma_sample(rng, 3, 2);   // mean = shape * scale = 6
     g_sum  = g_sum  + v;
     g_sum2 = g_sum2 + v * v;
@@ -46,32 +46,32 @@ print "Gamma(shape=3, scale=2)  mean ~ " + g_mean
     + "  (theory 6),  var ~ " + g_var + " (theory 12)";
 
 let b_sum = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     b_sum = b_sum + beta_sample(rng, 2, 5);
 }
 print "Beta(2, 5)             mean ~ " + (b_sum / n_draw)
     + "  (theory 2/7 = " + (2.0 / 7.0) + ")";
 
 let c2_sum = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     c2_sum = c2_sum + chi2_sample(rng, 4);
 }
 print "Chi^2(4 dof)           mean ~ " + (c2_sum / n_draw) + "  (theory 4)";
 
 let t_sum = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     t_sum = t_sum + student_t_sample(rng, 10);
 }
 print "Student t(10 dof)      mean ~ " + (t_sum / n_draw) + "  (theory 0)";
 
 let bin_sum = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     bin_sum = bin_sum + binomial_sample(rng, 20, 0.3);
 }
 print "Binomial(n=20, p=0.3)  mean ~ " + (bin_sum / n_draw) + "  (theory 6)";
 
 let tri_sum = 0;
-for (let i = 0; i < n_draw; i = i + 1) {
+for i in 0..n_draw {
     tri_sum = tri_sum + triangular_sample(rng, 0, 1, 0.7);
 }
 print "Triangular(0,1,0.7)    mean ~ " + (tri_sum / n_draw)
@@ -108,7 +108,7 @@ print "===== Levenberg-Marquardt fit: y = A * exp(-k x) + C =====";
 let xs = [];
 let ys = [];
 let rng2 = Rng(7);
-for (let i = 0; i < 40; i = i + 1) {
+for i in 0..40 {
     let xi = i * 0.25;                    // 0, 0.25, ... 9.75
     let yi = 2.5 * exp(-0.3 * xi) + 0.5 + rng2.normal(0, 0.02);
     push(xs, xi);
@@ -132,6 +132,6 @@ print "  final chi^2 = " + fit["chisq"]
     + "   converged = " + fit["converged"];
 print "parameter variance estimates (covar diagonal):";
 let cv = fit["covar"];
-for (let i = 0; i < 3; i = i + 1) {
+for i in 0..3 {
     print "  sigma(a" + i + ") ~ " + sqrt(cv[i][i]);
 }

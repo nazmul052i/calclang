@@ -10,7 +10,7 @@ let xs = [];
 let s  = [];
 let c  = [];
 let p  = [];
-for (let i = 0; i < 200; i = i + 1) {
+for i in 0..200 {
     let x = (i / 199.0) * 4 * pi();
     push(xs, x);
     push(s, sin(x));
@@ -34,7 +34,7 @@ print "wrote build/bar.svg";
 // ===== Log-Y plot: exponential decay =====
 let ts = [];
 let ys = [];
-for (let i = 0; i < 100; i = i + 1) {
+for i in 0..100 {
     let t = i * 0.05;             // 0 to ~5
     push(ts, t);
     push(ys, exp(-t));            // strictly positive

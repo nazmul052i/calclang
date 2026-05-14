@@ -9,14 +9,14 @@
 // to link against stats.calc).
 priv fn p_min(xs) {
     let m = xs[0];
-    for (let i = 1; i < len(xs); i = i + 1) {
+    for i in 1..len(xs) {
         if (xs[i] < m) { m = xs[i]; }
     }
     return m;
 }
 priv fn p_max(xs) {
     let m = xs[0];
-    for (let i = 1; i < len(xs); i = i + 1) {
+    for i in 1..len(xs) {
         if (xs[i] > m) { m = xs[i]; }
     }
     return m;
@@ -75,7 +75,7 @@ priv fn p_axes(path, w, h) {
 // Axis tick labels: 5 along each axis.
 priv fn p_axis_labels(path, w, h, xmin, xmax, ymin, ymax) {
     let pad = p_padding();
-    for (let i = 0; i <= 4; i = i + 1) {
+    for i in 0..=4 {
         let t = i / 4.0;
         let xv = xmin + t * (xmax - xmin);
         let yv = ymin + t * (ymax - ymin);
@@ -120,7 +120,7 @@ pub fn plot_line(filename, xs, ys, title) {
     p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
     // The polyline path itself.
     file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         let px = p_map_x(xs[i], xmin, xmax, w);
         let py = p_map_y(ys[i], ymin, ymax, h);
         if (i > 0) { file_append(filename, " "); }
@@ -145,7 +145,7 @@ pub fn plot_scatter(filename, xs, ys, title) {
     p_open_svg(filename, w, h, title);
     p_axes(filename, w, h);
     p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         let px = p_map_x(xs[i], xmin, xmax, w);
         let py = p_map_y(ys[i], ymin, ymax, h);
         file_append(filename, "<circle cx=\"");
@@ -169,7 +169,7 @@ pub fn plot_lines(filename, xss, yss, labels, title) {
     // Bounds: union over all series.
     let xmin = p_min(xss[0]);  let xmax = p_max(xss[0]);
     let ymin = p_min(yss[0]);  let ymax = p_max(yss[0]);
-    for (let s = 1; s < ns; s = s + 1) {
+    for s in 1..ns {
         let v1 = p_min(xss[s]); if (v1 < xmin) { xmin = v1; }
         let v2 = p_max(xss[s]); if (v2 > xmax) { xmax = v2; }
         let v3 = p_min(yss[s]); if (v3 < ymin) { ymin = v3; }
@@ -180,14 +180,14 @@ pub fn plot_lines(filename, xss, yss, labels, title) {
     p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
     // One polyline per series, cycling through the palette.
     let palette = ["steelblue","crimson","forestgreen","darkorange","purple","teal"];
-    for (let s = 0; s < ns; s = s + 1) {
+    for s in 0..ns {
         let color = palette[s % len(palette)];
         let xs = xss[s];
         let ys = yss[s];
         file_append(filename, "<polyline fill=\"none\" stroke=\"");
         file_append(filename, color);
         file_append(filename, "\" stroke-width=\"2\" points=\"");
-        for (let i = 0; i < len(xs); i = i + 1) {
+        for i in 0..len(xs) {
             if (i > 0) { file_append(filename, " "); }
             file_append(filename, to_str(p_map_x(xs[i], xmin, xmax, w)));
             file_append(filename, ",");
@@ -206,7 +206,7 @@ pub fn plot_lines(filename, xss, yss, labels, title) {
     file_append(filename, "\" width=\"148\" height=\"");
     file_append(filename, to_str(ns * 18 + 6));
     file_append(filename, "\" fill=\"white\" stroke=\"#ccc\"/>\n");
-    for (let s = 0; s < ns; s = s + 1) {
+    for s in 0..ns {
         let color = palette[s % len(palette)];
         let yy = leg_y + s * 18;
         file_append(filename, "<rect x=\"");
@@ -241,7 +241,7 @@ pub fn plot_bar(filename, labels, values, title) {
     p_open_svg(filename, w, h, title);
     p_axes(filename, w, h);
     // Y-axis ticks only (x labels are categorical).
-    for (let i = 0; i <= 4; i = i + 1) {
+    for i in 0..=4 {
         let t = i / 4.0;
         let yv = vmin + t * (vmax - vmin);
         let yp = h - pad - t * (h - 2 * pad);
@@ -257,7 +257,7 @@ pub fn plot_bar(filename, labels, values, title) {
     let slot = (w - 2 * pad) / n;
     let bar_w = slot * 0.7;
     let bar_pad = (slot - bar_w) / 2;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         let x = pad + i * slot + bar_pad;
         let zero_y = p_map_y(0,         vmin, vmax, h);
         let top_y  = p_map_y(values[i], vmin, vmax, h);
@@ -290,7 +290,7 @@ pub fn plot_logy(filename, xs, ys, title) {
     if (len(xs) == 0)        { throw "plot_logy: empty data"; }
     // Transform y -> log10(y); validate positivity.
     let log_ys = [];
-    for (let i = 0; i < len(ys); i = i + 1) {
+    for i in 0..len(ys) {
         if (ys[i] <= 0) { throw "plot_logy: y must be positive"; }
         push(log_ys, log10(ys[i]));
     }
@@ -304,7 +304,7 @@ pub fn plot_logy(filename, xs, ys, title) {
     p_axes(filename, w, h);
     // X-axis labels (linear).
     let pad = p_padding();
-    for (let i = 0; i <= 4; i = i + 1) {
+    for i in 0..=4 {
         let t = i / 4.0;
         let xv = xmin + t * (xmax - xmin);
         let xp = pad + t * (w - 2 * pad);
@@ -317,7 +317,7 @@ pub fn plot_logy(filename, xs, ys, title) {
         file_append(filename, "</text>\n");
     }
     // Y-axis labels (log scale — show 10^k labels).
-    for (let i = 0; i <= 4; i = i + 1) {
+    for i in 0..=4 {
         let t = i / 4.0;
         let yv = ymin + t * (ymax - ymin);
         let yp = h - pad - t * (h - 2 * pad);
@@ -332,7 +332,7 @@ pub fn plot_logy(filename, xs, ys, title) {
     }
     // Line.
     file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         if (i > 0) { file_append(filename, " "); }
         file_append(filename, to_str(p_map_x(xs[i],     xmin, xmax, w)));
         file_append(filename, ",");
@@ -377,7 +377,7 @@ pub fn plot_line_labeled(filename, xs, ys, title, x_label, y_label) {
     file_append(filename, "</text>\n");
     // Polyline.
     file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         if (i > 0) { file_append(filename, " "); }
         file_append(filename, to_str(p_map_x(xs[i], xmin, xmax, w)));
         file_append(filename, ",");
@@ -407,7 +407,7 @@ pub fn plot_data_with_fit(filename, xs, ys_data, ys_fit, title) {
     p_axes(filename, w, h);
     p_axis_labels(filename, w, h, xmin, xmax, ymin, ymax);
     // Scatter for data points.
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         let px = p_map_x(xs[i],     xmin, xmax, w);
         let py = p_map_y(ys_data[i], ymin, ymax, h);
         file_append(filename, "<circle cx=\"");
@@ -418,7 +418,7 @@ pub fn plot_data_with_fit(filename, xs, ys_data, ys_fit, title) {
     }
     // Fit line.
     file_append(filename, "<polyline fill=\"none\" stroke=\"steelblue\" stroke-width=\"2\" points=\"");
-    for (let i = 0; i < len(xs); i = i + 1) {
+    for i in 0..len(xs) {
         let px = p_map_x(xs[i],    xmin, xmax, w);
         let py = p_map_y(ys_fit[i], ymin, ymax, h);
         if (i > 0) { file_append(filename, " "); }

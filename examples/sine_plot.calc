@@ -12,7 +12,7 @@ let xs = [];
 let ys = [];
 let two_pi = 2 * pi();
 
-for (let i = 0; i < 400; i = i + 1) {
+for i in 0..400 {
     let x = (i / 399.0) * 2 * two_pi;     // [0, 4π]
     push(xs, x);
     push(ys, sin(x));

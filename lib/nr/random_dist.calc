@@ -96,7 +96,7 @@ pub fn binomial_sample(rng, n, p) {
     if (n < 0) { throw "binomial_sample: n must be >= 0"; }
     // Direct: count successes.
     let count = 0;
-    for (let i = 0; i < n; i = i + 1) {
+    for i in 0..n {
         if (rng.uniform01() < p) { count = count + 1; }
     }
     return count;

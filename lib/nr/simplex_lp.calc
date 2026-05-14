@@ -18,9 +18,9 @@
 
 priv fn _sx_zero(rows, cols) {
     let m = [];
-    for (let i = 0; i < rows; i = i + 1) {
+    for i in 0..rows {
         let row = [];
-        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        for j in 0..cols { push(row, 0); }
         push(m, row);
     }
     return m;
@@ -39,10 +39,10 @@ pub fn simplex_lp(c, A, b) {
     let BIG = 1e9;
     // Basis: which variable is currently basic in each row.
     let basis = [];
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         // Flip the sign if b[i] < 0 to keep the slack basic.
         let flip = 0;  if (b[i] < 0) { flip = 1; }
-        for (let j = 0; j < n; j = j + 1) {
+        for j in 0..n {
             T[i][j] = A[i][j];
             if (flip == 1) { T[i][j] = -T[i][j]; }
         }
@@ -60,30 +60,30 @@ pub fn simplex_lp(c, A, b) {
         }
     }
     // Objective row (we maximize: store -c so we look for positive entries).
-    for (let j = 0; j < n; j = j + 1) { T[m][j] = -c[j]; }
+    for j in 0..n { T[m][j] = -c[j]; }
     // Adjust objective row for any big-M penalties already injected.
-    for (let i = 0; i < m; i = i + 1) {
+    for i in 0..m {
         if (b[i] < 0) {
-            for (let j = 0; j <= n + m; j = j + 1) {
+            for j in 0..=n + m {
                 T[m][j] = T[m][j] - BIG * T[i][j];
             }
         }
     }
     let max_iter = 200 * (n + m);
-    for (let iter = 0; iter < max_iter; iter = iter + 1) {
+    for iter in 0..max_iter {
         // Pick entering variable: smallest (most negative) value in
         // objective row excluding RHS — but we stored -c so the entering
         // column is the most negative T[m][j]. (Standard form trick.)
         let entering = -1;
         let best = -1e-9;
-        for (let j = 0; j < n + m; j = j + 1) {
+        for j in 0..n + m {
             if (T[m][j] < best) { best = T[m][j]; entering = j; }
         }
         if (entering < 0) {
             // Optimal. Read off x.
             let x = [];
-            for (let j = 0; j < n; j = j + 1) { push(x, 0); }
-            for (let i = 0; i < m; i = i + 1) {
+            for j in 0..n { push(x, 0); }
+            for i in 0..m {
                 if (basis[i] < n) { x[basis[i]] = T[i][n + m]; }
             }
             return {"status": 0, "x": x, "value": T[m][n + m]};
@@ -92,7 +92,7 @@ pub fn simplex_lp(c, A, b) {
         // the entering column.
         let leaving = -1;
         let best_ratio = 1e300;
-        for (let i = 0; i < m; i = i + 1) {
+        for i in 0..m {
             if (T[i][entering] > 1e-12) {
                 let ratio = T[i][n + m] / T[i][entering];
                 if (ratio < best_ratio) { best_ratio = ratio; leaving = i; }
@@ -101,23 +101,23 @@ pub fn simplex_lp(c, A, b) {
         if (leaving < 0) {
             // No bound — unbounded LP.
             let zx = [];
-            for (let j = 0; j < n; j = j + 1) { push(zx, 0); }
+            for j in 0..n { push(zx, 0); }
             return {"status": 1, "x": zx, "value": 1e300};
         }
         // Pivot.
         let pivot = T[leaving][entering];
-        for (let j = 0; j <= n + m; j = j + 1) { T[leaving][j] = T[leaving][j] / pivot; }
-        for (let i = 0; i <= m; i = i + 1) {
+        for j in 0..=n + m { T[leaving][j] = T[leaving][j] / pivot; }
+        for i in 0..=m {
             if (i == leaving) { continue; }
             let factor = T[i][entering];
             if (factor == 0) { continue; }
-            for (let j = 0; j <= n + m; j = j + 1) {
+            for j in 0..=n + m {
                 T[i][j] = T[i][j] - factor * T[leaving][j];
             }
         }
         basis[leaving] = entering;
     }
     let zx = [];
-    for (let j = 0; j < n; j = j + 1) { push(zx, 0); }
+    for j in 0..n { push(zx, 0); }
     return {"status": 2, "x": zx, "value": 0};
 }

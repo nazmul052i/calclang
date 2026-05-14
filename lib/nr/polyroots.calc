@@ -57,7 +57,7 @@ priv fn _laguerre_one(coefs, x_in) {
     let frac = [0.5, 0.25, 0.75, 0.13, 0.38, 1.0, 0.0, 0.0];
     let n = len(coefs) - 1;
     let x = _cpx(x_in);
-    for (let iter = 1; iter <= MAX; iter = iter + 1) {
+    for iter in 1..=MAX {
         let vals = _phorner(coefs, x);
         let P   = vals[0];
         let dP  = vals[1];
@@ -97,13 +97,13 @@ priv fn _laguerre_one(coefs, x_in) {
 priv fn _deflate(coefs, root) {
     let n = len(coefs) - 1;
     let out = [];
-    for (let i = 0; i <= n; i = i + 1) { push(out, complex(0, 0)); }
+    for i in 0..=n { push(out, complex(0, 0)); }
     out[n] = _cpx(coefs[n]);
     for (let i = n - 1; i >= 0; i = i - 1) {
         out[i] = _cpx(coefs[i]) + root * out[i + 1];
     }
     let q = [];
-    for (let i = 1; i <= n; i = i + 1) { push(q, out[i]); }
+    for i in 1..=n { push(q, out[i]); }
     return q;
 }
 
@@ -113,17 +113,17 @@ pub fn poly_roots(coefs_in) {
     let n = len(coefs_in) - 1;
     if (n < 1) { throw "poly_roots: degree must be >= 1"; }
     let work = [];
-    for (let i = 0; i <= n; i = i + 1) { push(work, _cpx(coefs_in[i])); }
+    for i in 0..=n { push(work, _cpx(coefs_in[i])); }
     let roots = [];
-    for (let k = 0; k < n; k = k + 1) {
+    for k in 0..n {
         let r = _laguerre_one(work, complex(0, 0));
         push(roots, r);
         work = _deflate(work, r);
     }
     // Polish each root on the original polynomial to trim deflation drift.
     let orig = [];
-    for (let i = 0; i <= n; i = i + 1) { push(orig, _cpx(coefs_in[i])); }
-    for (let k = 0; k < n; k = k + 1) {
+    for i in 0..=n { push(orig, _cpx(coefs_in[i])); }
+    for k in 0..n {
         roots[k] = _laguerre_one(orig, roots[k]);
     }
     return roots;

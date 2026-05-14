@@ -16,7 +16,7 @@ print "===== Neville polynomial interpolation =====";
 let xs = [0, 1, 2, 3];
 let ys = [sin(0), sin(1), sin(2), sin(3)];
 let probes = [0.5, 1.5, 2.5];
-for (let i = 0; i < len(probes); i = i + 1) {
+for i in 0..len(probes) {
     let x = probes[i];
     let r = neville_interp(xs, ys, x);
     print "  x=" + x + "  interp=" + r["y"] + "  exact=" + sin(x)
@@ -66,7 +66,7 @@ print "  iters = " + r_bfgs["iters"] + "   converged = " + r_bfgs["converged"];
 // Higher-dim: extended Rosenbrock.
 let rosen5 = fn(v) {
     let s = 0;
-    for (let i = 0; i < len(v) - 1; i = i + 1) {
+    for i in 0..len(v) - 1 {
         let a = 1 - v[i];
         let b = v[i + 1] - v[i] * v[i];
         s = s + a * a + 100 * b * b;
@@ -76,8 +76,8 @@ let rosen5 = fn(v) {
 let drosen5 = fn(v) {
     let n = len(v);
     let g = [];
-    for (let i = 0; i < n; i = i + 1) { push(g, 0); }
-    for (let i = 0; i < n - 1; i = i + 1) {
+    for i in 0..n { push(g, 0); }
+    for i in 0..n - 1 {
         let a = 1 - v[i];
         let b = v[i + 1] - v[i] * v[i];
         g[i]     = g[i]     - 2 * a - 400 * v[i] * b;
@@ -98,7 +98,7 @@ print "===== Principal Component Analysis =====";
 let rng = Rng(11);
 let theta = pi() / 6;     // 30 degrees
 let X = [];
-for (let i = 0; i < 200; i = i + 1) {
+for i in 0..200 {
     let u = rng.normal(0, 3);    // big variance
     let v = rng.normal(0, 1);    // small variance
     let x =  cos(theta) * u - sin(theta) * v;

@@ -33,7 +33,7 @@ print "  simpson n=20 -> " + simpson(p_at, 0, 1, 20);
 // Linear interpolation: tabulate sin at 11 points then sample.
 let xs = [];
 let ys = [];
-for (let i = 0; i <= 10; i = i + 1) {
+for i in 0..=10 {
     let x = i / 10 * pi();
     push(xs, x);
     push(ys, sin(x));

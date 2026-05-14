@@ -47,7 +47,7 @@ print "index of 5:  " + to_str(array_find(shuffled, 5));
 
 /* --- write/print mixed --- */
 write("[");
-for (let i = 0; i < len(xs); i++) {
+for i in 0..len(xs) {
     if (i > 0) { write(", "); }
     write(to_str(xs[i]));
 }
@@ -62,16 +62,16 @@ print type_of([1, 2]);      // arr
 // helper aggregations
 fn sum_arr(a) {
     let acc = 0;
-    for (let i = 0; i < len(a); i++) { acc += a[i]; }
+    for i in 0..len(a) { acc += a[i]; }
     return acc;
 }
 fn min_arr(a) {
     let m = a[0];
-    for (let i = 1; i < len(a); i++) { m = min(m, a[i]); }
+    for i in 1..len(a) { m = min(m, a[i]); }
     return m;
 }
 fn max_arr(a) {
     let m = a[0];
-    for (let i = 1; i < len(a); i++) { m = max(m, a[i]); }
+    for i in 1..len(a) { m = max(m, a[i]); }
     return m;
 }

@@ -6,7 +6,7 @@
  */
 
 pub fn fizzbuzz(n: num) {
-    for (let i = 1; i <= n; i++) {
+    for i in 1..=n {
         /* check most-specific condition first */
         if (i % 15 == 0) {
             print "FizzBuzz";

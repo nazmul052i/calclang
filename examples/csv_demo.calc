@@ -11,7 +11,7 @@ import "plot";
 // ===== Write some structured data =====
 let path = "build/measurements.csv";
 let rows = [];
-for (let i = 0; i < 20; i = i + 1) {
+for i in 0..20 {
     let x = i * 0.5;
     // y = 3.2 * x + 1.5 + a deterministic "noise" via sin.
     let y = 3.2 * x + 1.5 + 0.6 * sin(x * 7);
@@ -28,7 +28,7 @@ print "first row: x=" + loaded[0]["x"] + ", y=" + loaded[0]["y"];
 // Convert string columns to numbers and run stats.
 let xs = [];
 let ys = [];
-for (let i = 0; i < len(loaded); i = i + 1) {
+for i in 0..len(loaded) {
     push(xs, to_num(loaded[i]["x"]));
     push(ys, to_num(loaded[i]["y"]));
 }
@@ -44,7 +44,7 @@ print "(true model was y = 3.2 x + 1.5)";
 
 // Plot data + fit to SVG.
 let ys_fit = [];
-for (let i = 0; i < len(xs); i = i + 1) {
+for i in 0..len(xs) {
     push(ys_fit, fit["slope"] * xs[i] + fit["intercept"]);
 }
 plot_data_with_fit("build/measurements.svg", xs, ys, ys_fit,

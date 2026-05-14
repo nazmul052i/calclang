@@ -23,7 +23,7 @@ priv fn _wel_next_pow2(n) {
 
 pub fn hann_window(N) {
     let w = [];
-    for (let n = 0; n < N; n = n + 1) {
+    for n in 0..N {
         push(w, 0.5 * (1 - cos(2 * pi() * n / (N - 1))));
     }
     return w;
@@ -38,22 +38,22 @@ pub fn welch(xs, fs, n_per_seg, overlap_frac) {
     let win = hann_window(n_per_seg);
     // Window normalization for unbiased PSD (NR's `wss`).
     let wss = 0;
-    for (let i = 0; i < n_per_seg; i = i + 1) { wss = wss + win[i] * win[i]; }
+    for i in 0..n_per_seg { wss = wss + win[i] * win[i]; }
     let norm = 1 / (fs * wss);
     let half = floor(N / 2) + 1;
     let psd = [];
-    for (let i = 0; i < half; i = i + 1) { push(psd, 0); }
+    for i in 0..half { push(psd, 0); }
     let n_segs = 0;
     let start = 0;
     while (start + n_per_seg <= n) {
         // Build windowed segment, zero-padded to N.
         let seg = [];
-        for (let i = 0; i < N; i = i + 1) {
+        for i in 0..N {
             if (i < n_per_seg) { push(seg, xs[start + i] * win[i]); }
             else               { push(seg, 0); }
         }
         let X = fft(seg);
-        for (let k = 0; k < half; k = k + 1) {
+        for k in 0..half {
             let re = real(X[k]);  let im = imag(X[k]);
             let p = re * re + im * im;
             psd[k] = psd[k] + p;
@@ -63,7 +63,7 @@ pub fn welch(xs, fs, n_per_seg, overlap_frac) {
     }
     if (n_segs == 0) { throw "welch: no segments — increase n_per_seg or shrink overlap"; }
     let freqs = [];
-    for (let k = 0; k < half; k = k + 1) {
+    for k in 0..half {
         push(freqs, k * fs / N);
         // Average and apply 1/(fs * wss) normalization; double for one-sided
         // PSD on the interior bins.
