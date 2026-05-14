@@ -1,0 +1,114 @@
+// datetime.calc — date/time records and helpers built on the
+// epoch_ms / time_components / time_make / time_format runtime
+// builtins. All times are UTC; no timezone math (yet — local-time
+// support belongs in a later iteration).
+//
+// API:
+//   let now = dt_now();
+//   let bday = dt_make(1990, 1, 15);
+//   print dt_format(now, "%Y-%m-%d %H:%M:%S");
+//
+//   dt_year(d), dt_month(d), dt_day(d), dt_hour(d), dt_minute(d),
+//   dt_second(d), dt_weekday(d)
+//
+//   dt_plus_days(d, n), dt_plus_hours(d, n), dt_plus_minutes(d, n),
+//   dt_plus_seconds(d, n)
+//
+//   dt_diff_ms(a, b), dt_diff_seconds(a, b), dt_diff_minutes(a, b),
+//   dt_diff_hours(a, b), dt_diff_days(a, b)
+//
+//   dt_iso(d)              -> "2026-05-14T18:32:01Z"
+//   dt_from_iso(str)       -> DateTime parsed from ISO 8601
+//   dt_compare(a, b)       -> -1 / 0 / 1
+//
+// DateTime is just a struct wrapping the underlying epoch_ms value
+// so it has a clear type and dot-syntax. You can also use raw
+// epoch_ms numbers directly with the dt_* helpers — they accept
+// either.
+
+pub struct DateTime { ms: num }
+
+priv fn _as_ms(d) {
+    // Accept either a DateTime record (with .ms) or a bare number.
+    if (type_of(d) == "num") { return d; }
+    return d.ms;
+}
+
+pub fn dt_now() {
+    return DateTime(epoch_ms());
+}
+
+pub fn dt_make(year, month, day) {
+    return DateTime(time_make(year, month, day));
+}
+
+pub fn dt_make_hms(year, month, day, hour, minute, second) {
+    let base = time_make(year, month, day);
+    let extra = hour * 3600000 + minute * 60000 + second * 1000;
+    return DateTime(base + extra);
+}
+
+pub fn dt_format(d, fmt) {
+    return time_format(_as_ms(d), fmt);
+}
+
+pub fn dt_iso(d) {
+    return time_format(_as_ms(d), "%Y-%m-%dT%H:%M:%SZ");
+}
+
+// Component accessors — return integers.
+priv fn _comp(d, idx) {
+    return time_components(_as_ms(d))[idx];
+}
+pub fn dt_year(d)    { return _comp(d, 0); }
+pub fn dt_month(d)   { return _comp(d, 1); }
+pub fn dt_day(d)     { return _comp(d, 2); }
+pub fn dt_hour(d)    { return _comp(d, 3); }
+pub fn dt_minute(d)  { return _comp(d, 4); }
+pub fn dt_second(d)  { return _comp(d, 5); }
+pub fn dt_weekday(d) { return _comp(d, 6); }   // 0=Sun..6=Sat
+
+// Arithmetic. All return a fresh DateTime; the original is untouched.
+pub fn dt_plus_ms(d, n)       { return DateTime(_as_ms(d) + n); }
+pub fn dt_plus_seconds(d, n)  { return DateTime(_as_ms(d) + n * 1000); }
+pub fn dt_plus_minutes(d, n)  { return DateTime(_as_ms(d) + n * 60000); }
+pub fn dt_plus_hours(d, n)    { return DateTime(_as_ms(d) + n * 3600000); }
+pub fn dt_plus_days(d, n)     { return DateTime(_as_ms(d) + n * 86400000); }
+
+// Diffs — `a - b` semantics, returned in the requested unit.
+pub fn dt_diff_ms(a, b)       { return _as_ms(a) - _as_ms(b); }
+pub fn dt_diff_seconds(a, b)  { return (_as_ms(a) - _as_ms(b)) / 1000; }
+pub fn dt_diff_minutes(a, b)  { return (_as_ms(a) - _as_ms(b)) / 60000; }
+pub fn dt_diff_hours(a, b)    { return (_as_ms(a) - _as_ms(b)) / 3600000; }
+pub fn dt_diff_days(a, b)     { return (_as_ms(a) - _as_ms(b)) / 86400000; }
+
+pub fn dt_compare(a, b) {
+    let da = _as_ms(a);
+    let db = _as_ms(b);
+    if (da < db) { return -1; }
+    if (da > db) { return 1; }
+    return 0;
+}
+
+// Parse a minimal ISO 8601 form: YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS,
+// or YYYY-MM-DDTHH:MM:SSZ. Returns a DateTime. Throws on malformed
+// input — wrap in try/catch if you want graceful handling.
+pub fn dt_from_iso(s) {
+    let n = len(s);
+    if (n < 10) { throw "dt_from_iso: too short, need YYYY-MM-DD..."; }
+    let y = to_num(str_slice(s, 0, 4));
+    let mo = to_num(str_slice(s, 5, 7));
+    let d = to_num(str_slice(s, 8, 10));
+    let h = 0; let mi = 0; let se = 0;
+    if (n >= 19) {
+        h  = to_num(str_slice(s, 11, 13));
+        mi = to_num(str_slice(s, 14, 16));
+        se = to_num(str_slice(s, 17, 19));
+    }
+    return dt_make_hms(y, mo, d, h, mi, se);
+}
+
+// Days-since-epoch convenience (handy for indexing into daily buckets).
+pub fn dt_days_since_epoch(d) {
+    return floor(_as_ms(d) / 86400000);
+}

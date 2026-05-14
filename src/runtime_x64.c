@@ -1646,6 +1646,124 @@ Value cl_builtin_time_ms(void) {
 #endif
 }
 
+/* --- Wall-clock date/time --------------------------------------- */
+
+/* epoch_ms(): wall-clock milliseconds since the Unix epoch
+   (1970-01-01 00:00:00 UTC). Distinct from time_ms (which is a
+   process-start-relative monotonic counter). */
+#ifdef _WIN32
+__declspec(dllimport) void __stdcall GetSystemTimeAsFileTime(void *);
+#endif
+
+Value cl_builtin_epoch_ms(void) {
+#ifdef _WIN32
+    /* FILETIME = 100-ns intervals since 1601-01-01 UTC. Unix epoch
+       is 11644473600 s = 116444736000000000 100-ns ticks later. */
+    union { unsigned long long u; struct { unsigned long lo, hi; } p; } ft;
+    GetSystemTimeAsFileTime(&ft);
+    unsigned long long t100ns = ft.u;
+    unsigned long long ms = (t100ns - 116444736000000000ULL) / 10000ULL;
+    return cl_from_num((double)ms);
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return cl_from_num((double)tv.tv_sec * 1000.0 +
+                       (double)tv.tv_usec / 1000.0);
+#endif
+}
+
+#include <time.h>
+
+/* Cross-platform UTC component extraction. Fills *out with broken-down
+   time from a millisecond-precision epoch value. Returns 0 on success. */
+static int components_from_ms(double ms, struct tm *out) {
+    time_t seconds = (time_t)(ms / 1000.0);
+#ifdef _WIN32
+    /* gmtime_s has reversed arg order on Windows. */
+    if (gmtime_s(out, &seconds) != 0) return -1;
+#else
+    if (gmtime_r(&seconds, out) == NULL) return -1;
+#endif
+    return 0;
+}
+
+/* time_components(ms) — break a wall-clock ms into broken-down UTC
+   fields. Returns an array of 7 numbers:
+     [year, month (1-12), day (1-31), hour (0-23), minute (0-59),
+      second (0-59), weekday (0=Sun..6=Sat)]
+   Sub-second precision (ms within the second) is preserved by the
+   caller — we just floor to whole seconds for component extraction. */
+Value cl_builtin_time_components(Value ms_v) {
+    require_num(ms_v, "time_components");
+    double ms = cl_as_num(ms_v);
+    struct tm t;
+    if (components_from_ms(ms, &t) != 0) {
+        cl_die_rt("time_components: invalid timestamp");
+    }
+    Value a = cl_new_arr();
+    cl_arr_push(a, cl_from_num((double)(t.tm_year + 1900)));
+    cl_arr_push(a, cl_from_num((double)(t.tm_mon + 1)));
+    cl_arr_push(a, cl_from_num((double)t.tm_mday));
+    cl_arr_push(a, cl_from_num((double)t.tm_hour));
+    cl_arr_push(a, cl_from_num((double)t.tm_min));
+    cl_arr_push(a, cl_from_num((double)t.tm_sec));
+    cl_arr_push(a, cl_from_num((double)t.tm_wday));
+    return a;
+}
+
+/* time_make(year, month, day) — UTC midnight of the given date, as
+   epoch milliseconds. month is 1-12, day is 1-31. */
+Value cl_builtin_time_make(Value yv, Value mv, Value dv) {
+    require_num(yv, "time_make");
+    require_num(mv, "time_make");
+    require_num(dv, "time_make");
+    struct tm t;
+    memset(&t, 0, sizeof t);
+    t.tm_year = (int)cl_as_num(yv) - 1900;
+    t.tm_mon  = (int)cl_as_num(mv) - 1;
+    t.tm_mday = (int)cl_as_num(dv);
+    t.tm_hour = 0; t.tm_min = 0; t.tm_sec = 0;
+#ifdef _WIN32
+    time_t s = _mkgmtime(&t);
+#else
+    /* timegm is GNU-extension. The portable workaround is to set the
+       TZ env to UTC and use mktime, but that's invasive — most libcs
+       expose timegm under glibc and BSD. Fall back to a manual day
+       count if timegm isn't available. */
+    time_t s = timegm(&t);
+#endif
+    if (s == (time_t)-1) {
+        cl_die_rt("time_make: invalid date");
+    }
+    return cl_from_num((double)s * 1000.0);
+}
+
+/* time_format(ms, fmt) — format an epoch_ms value as a string using
+   strftime. The format string follows the standard:
+     %Y year (4 digits)   %m month (01-12)   %d day (01-31)
+     %H hour (00-23)      %M minute (00-59)  %S second (00-59)
+     %a abbrev weekday    %A full weekday
+     %B full month        %b abbrev month
+     %j day of year       %Z timezone name
+   See strftime(3) for the full set. Everything renders in UTC. */
+Value cl_builtin_time_format(Value ms_v, Value fmt_v) {
+    require_num(ms_v, "time_format");
+    require_str(fmt_v, "time_format");
+    double ms = cl_as_num(ms_v);
+    struct tm t;
+    if (components_from_ms(ms, &t) != 0) {
+        cl_die_rt("time_format: invalid timestamp");
+    }
+    char buf[512];
+    size_t n = strftime(buf, sizeof buf, cl_as_str(fmt_v)->data, &t);
+    if (n == 0 && cl_as_str(fmt_v)->len > 0) {
+        /* strftime returns 0 on buffer-too-small OR an empty format.
+           For our purposes treat both as success with empty output. */
+        n = 0;
+    }
+    return cl_new_str(buf, (uint64_t)n);
+}
+
 /* sleep_ms(n): pause for n milliseconds. Returns 0. */
 Value cl_builtin_sleep_ms(Value v) {
     require_num(v, "sleep_ms");

@@ -601,6 +601,12 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"sleep_ms",        "cl_builtin_sleep_ms",        1},
     {"read_key",        "cl_builtin_read_key",        0},
     {"time_ms",         "cl_builtin_time_ms",         0},
+    /* Wall-clock date/time. epoch_ms is ms since 1970 UTC; time_make
+       and time_components convert to/from broken-down components. */
+    {"epoch_ms",        "cl_builtin_epoch_ms",        0},
+    {"time_components", "cl_builtin_time_components", 1},
+    {"time_make",       "cl_builtin_time_make",       3},
+    {"time_format",     "cl_builtin_time_format",     2},
 
     /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
        helpers built on top. */

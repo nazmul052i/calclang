@@ -118,6 +118,36 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] datetime (epoch_ms, time_make, time_components, time_format, lib/datetime)"
+build/calcnat tests/datetime.calc -o build/d_dt.exe
+out=$(build/d_dt.exe | strip_cr)
+check "datetime" '1990
+1
+15
+0
+0
+0
+1
+1990-01-15
+Monday, January 15, 1990
+1990-01-15T00:00:00Z
+2026-05-14 18:32:01
+1990-01-16
+1990-01-22
+01:00
+00:05
+7
+1
+5
+-1
+1
+0
+2026-5-14
+18:32:1
+7319
+1
+1' "$out"
+
 echo "[test] struct (typed records — fields, positional ctor, mutation, nesting)"
 build/calcnat tests/struct_record.calc -o build/d_struct.exe
 out=$(build/d_struct.exe | strip_cr)

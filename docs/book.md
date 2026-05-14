@@ -2848,6 +2848,52 @@ build/tetris.exe
 
 Controls are arrow keys to move/rotate, space to hard-drop, `q` to quit. The "ghost" preview (where the piece would land), the next-piece panel, and the standard level-up speedup are all there.
 
+### Date and time
+
+`time_ms()` is a monotonic counter useful for game-loop pacing. For wall-clock dates — "what year is it", "format this timestamp", "is this date before that one" — CalcLang ships four runtime builtins plus `lib/datetime.calc`.
+
+#### Builtins
+
+| Function                              | What it does                                              |
+|---------------------------------------|-----------------------------------------------------------|
+| `epoch_ms()`                          | ms since 1970-01-01 UTC                                   |
+| `time_components(ms)`                 | `[year, month, day, hour, min, sec, weekday]` (UTC)       |
+| `time_make(year, month, day)`         | UTC midnight of that date → ms                            |
+| `time_format(ms, fmt)`                | `strftime`-style format string, returns string (UTC)      |
+
+`%Y %m %d %H %M %S %A %B %a %b %j %Z` are all supported (anything `strftime(3)` accepts). All wall-clock math is in UTC for now — timezone-aware variants will come with locale support.
+
+#### `lib/datetime.calc` — DateTime records and helpers
+
+```calc
+import "datetime";
+
+let now = dt_now();
+let bday = dt_make(1990, 1, 15);
+print dt_format(now, "%Y-%m-%d %H:%M:%S");
+
+let next_week = dt_plus_days(now, 7);
+let age_days  = dt_diff_days(now, bday);
+
+if (dt_compare(now, bday) > 0) {
+    print "born " + age_days + " days ago";
+}
+
+let parsed = dt_from_iso("2026-05-14T18:32:01Z");
+print dt_iso(parsed);                                // 2026-05-14T18:32:01Z
+```
+
+Available helpers:
+
+- **Construct**: `dt_now()`, `dt_make(y, m, d)`, `dt_make_hms(y, m, d, h, mi, s)`, `dt_from_iso(str)`.
+- **Format**: `dt_format(d, fmt)`, `dt_iso(d)`.
+- **Components**: `dt_year(d)`, `dt_month(d)`, `dt_day(d)`, `dt_hour(d)`, `dt_minute(d)`, `dt_second(d)`, `dt_weekday(d)` (0 = Sunday).
+- **Arithmetic**: `dt_plus_ms(d, n)`, `dt_plus_seconds`, `dt_plus_minutes`, `dt_plus_hours`, `dt_plus_days`. All return a new `DateTime`; the original is untouched.
+- **Diffs**: `dt_diff_ms(a, b)`, and `_seconds`/`_minutes`/`_hours`/`_days` variants. Result is `a − b` in the requested unit.
+- **Compare**: `dt_compare(a, b)` returns `-1` / `0` / `1`.
+
+Every helper accepts either a `DateTime` record or a bare epoch-ms number — `dt_plus_days(now, 1)` and `dt_plus_days(now.ms, 1)` both work. Use the record form when you want type-checked code and the bare form when you're passing through an existing numeric pipeline.
+
 ### Windowed GUI via SDL2
 
 For an actual *windowed* program — pixels, mouse, keyboard, smooth animation — CalcLang ships an SDL2-backed set of builtins. Same pattern as the terminal builtins: pure CalcLang code on top, a small C runtime module (`src/runtime_gui_sdl2.c`) that wraps SDL2's window/renderer/event API.

@@ -1,0 +1,60 @@
+// datetime tests — exercise lib/datetime.calc + runtime builtins.
+
+import "datetime";
+
+// Construct a known date and read components back out.
+let bday = dt_make(1990, 1, 15);
+print dt_year(bday);             // 1990
+print dt_month(bday);            // 1
+print dt_day(bday);              // 15
+print dt_hour(bday);             // 0  — midnight UTC
+print dt_minute(bday);           // 0
+print dt_second(bday);           // 0
+print dt_weekday(bday);          // 1  — Jan 15 1990 was a Monday
+
+// Format.
+print dt_format(bday, "%Y-%m-%d");                 // 1990-01-15
+print dt_format(bday, "%A, %B %d, %Y");            // Monday, January 15, 1990
+print dt_iso(bday);                                 // 1990-01-15T00:00:00Z
+
+// dt_make_hms.
+let exact = dt_make_hms(2026, 5, 14, 18, 32, 1);
+print dt_format(exact, "%Y-%m-%d %H:%M:%S");      // 2026-05-14 18:32:01
+
+// Arithmetic.
+let next_day = dt_plus_days(bday, 1);
+print dt_format(next_day, "%Y-%m-%d");             // 1990-01-16
+
+let one_week_later = dt_plus_days(bday, 7);
+print dt_format(one_week_later, "%Y-%m-%d");       // 1990-01-22
+
+let in_an_hour = dt_plus_hours(bday, 1);
+print dt_format(in_an_hour, "%H:%M");              // 01:00
+
+let in_5_min = dt_plus_minutes(bday, 5);
+print dt_format(in_5_min, "%H:%M");                // 00:05
+
+// Diffs.
+print dt_diff_days(one_week_later, bday);          // 7
+print dt_diff_hours(in_an_hour, bday);             // 1
+print dt_diff_minutes(in_5_min, bday);             // 5
+
+// Compare.
+print dt_compare(bday, next_day);                  // -1
+print dt_compare(next_day, bday);                  // 1
+print dt_compare(bday, bday);                      // 0
+
+// ISO parse round-trip.
+let parsed = dt_from_iso("2026-05-14T18:32:01Z");
+print dt_year(parsed) + "-" + dt_month(parsed) + "-" + dt_day(parsed);  // 2026-5-14
+print dt_hour(parsed) + ":" + dt_minute(parsed) + ":" + dt_second(parsed);  // 18:32:1
+
+// Days since epoch — Jan 15 1990 is 7319 days after 1970-01-01.
+print dt_days_since_epoch(bday);                   // 7319
+
+// epoch_ms() is monotonically non-decreasing and large.
+let t1 = epoch_ms();
+sleep_ms(20);
+let t2 = epoch_ms();
+print (t2 - t1) >= 15;                              // 1 — at least 15 ms passed
+print t1 > 1700000000000;                           // 1 — past 2023
