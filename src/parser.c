@@ -261,8 +261,24 @@ static AST *parse_logical_or(Parser *p) {
     return n;
 }
 
+/* Ternary `cond ? a : b` — lowest precedence in expressions, right-associative.
+   We parse `cond` at logical-or precedence; then if a `?` follows, we parse
+   the `then` branch at expression (= ternary) precedence so chains like
+   `a ? b : c ? d : e` parse as `a ? b : (c ? d : e)`. */
+static AST *parse_ternary(Parser *p) {
+    AST *cond = parse_logical_or(p);
+    if (p->current.type == TOK_QMARK) {
+        next(p);
+        AST *then_expr = parse_ternary(p);
+        expect(p, TOK_COLON);
+        AST *else_expr = parse_ternary(p);
+        return ast_ternary(cond, then_expr, else_expr);
+    }
+    return cond;
+}
+
 static AST *parse_expr(Parser *p) {
-    return parse_logical_or(p);
+    return parse_ternary(p);
 }
 
 static AST *parse_block(Parser *p) {
@@ -428,6 +444,16 @@ static AST *parse_stmt(Parser *p) {
         expect(p, TOK_RPAREN);
         AST *body = parse_stmt(p);
         return ast_while(cond, body);
+    }
+    if (p->current.type == TOK_DO) {
+        next(p);
+        AST *body = parse_stmt(p);
+        expect(p, TOK_WHILE);
+        expect(p, TOK_LPAREN);
+        AST *cond = parse_expr(p);
+        expect(p, TOK_RPAREN);
+        expect(p, TOK_SEMICOLON);
+        return ast_do_while(body, cond);
     }
     if (p->current.type == TOK_FOR) {
         next(p);

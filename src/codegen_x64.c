@@ -487,6 +487,21 @@ static const RtBuiltin RT_BUILTINS[] = {
     /* FFI / dynamic linking. */
     {"ffi_load",        "cl_builtin_ffi_load",        1},
     {"ffi_call",        "cl_builtin_ffi_call",        4},
+
+    /* ctype helpers. */
+    {"is_digit",        "cl_builtin_is_digit",        1},
+    {"is_alpha",        "cl_builtin_is_alpha",        1},
+    {"is_alnum",        "cl_builtin_is_alnum",        1},
+    {"is_space",        "cl_builtin_is_space",        1},
+    {"is_upper",        "cl_builtin_is_upper",        1},
+    {"is_lower",        "cl_builtin_is_lower",        1},
+    {"char_to_upper",   "cl_builtin_char_to_upper",   1},
+    {"char_to_lower",   "cl_builtin_char_to_lower",   1},
+    {"char_code",       "cl_builtin_char_code",       1},
+    {"char_from",       "cl_builtin_char_from",       1},
+
+    /* Format string. */
+    {"fmt",             "cl_builtin_fmt",             2},
     {NULL, NULL, 0}
 };
 
@@ -671,6 +686,8 @@ static void load_string_imm(Cg *cg, int id) {
 /* --- Forward decls ------------------------------------------------- */
 static void gen_expr(Cg *cg, AST *n);
 static void gen_stmt(Cg *cg, AST *n);
+static void gen_ternary(Cg *cg, AST *n);
+static void gen_do_while(Cg *cg, AST *n);
 static int  ast_uses_name_recur(AST *n, const char *name, int descend_into_fns);
 
 /* --- Expression generation ---------------------------------------- */
@@ -1233,9 +1250,10 @@ static void gen_expr(Cg *cg, AST *n) {
             fprintf(stderr, "native codegen: undefined variable '%s'\n", n->as.var);
             exit(1);
         }
-        case NODE_BINOP: gen_binop(cg, n); return;
-        case NODE_UNOP:  gen_unop(cg, n);  return;
-        case NODE_CALL:  gen_call(cg, n);  return;
+        case NODE_BINOP:   gen_binop(cg, n);   return;
+        case NODE_UNOP:    gen_unop(cg, n);    return;
+        case NODE_CALL:    gen_call(cg, n);    return;
+        case NODE_TERNARY: gen_ternary(cg, n); return;
         case NODE_ARRAY_LIT: {
             /* `[a, b, c]` -> cl_new_arr(); for each item, push. The
                array pointer lives in a 16-byte stack slot between
@@ -1453,6 +1471,52 @@ static void gen_while(Cg *cg, AST *n) {
     cg->cont_label  = saved_cont;
 }
 
+static void gen_do_while(Cg *cg, AST *n) {
+    int L_top  = fresh_label(cg);
+    int L_cont = fresh_label(cg);
+    int L_end  = fresh_label(cg);
+    int saved_break = cg->break_label;
+    int saved_cont  = cg->cont_label;
+    cg->break_label = L_end;
+    cg->cont_label  = L_cont;
+
+    label(cg, L_top);
+    gen_stmt(cg, n->as.while_stmt.body);
+    label(cg, L_cont);
+    {
+        TInfer t = infer_type(cg, n->as.while_stmt.cond);
+        gen_expr(cg, n->as.while_stmt.cond);
+        emit_truthify_if_not_num(cg, t == TI_NUM);
+    }
+    e(cg, "xorpd xmm1, xmm1");
+    e(cg, "ucomisd xmm0, xmm1");
+    ef(cg, "jp   .L%d", L_end);
+    ef(cg, "jne  .L%d", L_top);
+    label(cg, L_end);
+
+    cg->break_label = saved_break;
+    cg->cont_label  = saved_cont;
+}
+
+static void gen_ternary(Cg *cg, AST *n) {
+    int L_else = fresh_label(cg);
+    int L_end  = fresh_label(cg);
+    {
+        TInfer t = infer_type(cg, n->as.ternary.cond);
+        gen_expr(cg, n->as.ternary.cond);
+        emit_truthify_if_not_num(cg, t == TI_NUM);
+    }
+    e(cg, "xorpd xmm1, xmm1");
+    e(cg, "ucomisd xmm0, xmm1");
+    ef(cg, "jp   .L%d", L_else);
+    ef(cg, "je   .L%d", L_else);
+    gen_expr(cg, n->as.ternary.then_expr);
+    ef(cg, "jmp  .L%d", L_end);
+    label(cg, L_else);
+    gen_expr(cg, n->as.ternary.else_expr);
+    label(cg, L_end);
+}
+
 static void gen_for(Cg *cg, AST *n) {
     /* for (init; cond; step) body
        Implemented as: { init; while (cond) { body; step; } }
@@ -1540,10 +1604,11 @@ static void gen_stmt(Cg *cg, AST *n) {
             }
             return;
         }
-        case NODE_PRINT: gen_print(cg, n); return;
-        case NODE_IF:    gen_if(cg, n);    return;
-        case NODE_WHILE: gen_while(cg, n); return;
-        case NODE_FOR:   gen_for(cg, n);   return;
+        case NODE_PRINT:    gen_print(cg, n);    return;
+        case NODE_IF:       gen_if(cg, n);       return;
+        case NODE_WHILE:    gen_while(cg, n);    return;
+        case NODE_DO_WHILE: gen_do_while(cg, n); return;
+        case NODE_FOR:      gen_for(cg, n);      return;
         case NODE_SWITCH: {
             /* Evaluate discriminant, save to a stack slot. For each case,
                compare against the case value via cl_op_eq (polymorphic —

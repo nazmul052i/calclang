@@ -69,7 +69,22 @@ typedef enum {
     BI_KEYS            = 48,
     BI_VALUES          = 49,
     BI_HAS_KEY         = 50,
-    BI_DEL             = 51
+    BI_DEL             = 51,
+
+    /* ctype-style character helpers */
+    BI_IS_DIGIT        = 52,
+    BI_IS_ALPHA        = 53,
+    BI_IS_ALNUM        = 54,
+    BI_IS_SPACE        = 55,
+    BI_IS_UPPER        = 56,
+    BI_IS_LOWER        = 57,
+    BI_CHAR_TO_UPPER   = 58,
+    BI_CHAR_TO_LOWER   = 59,
+    BI_CHAR_CODE       = 60,
+    BI_CHAR_FROM       = 61,
+
+    /* format strings */
+    BI_FMT             = 62
 } BuiltinId;
 
 typedef struct {

@@ -335,6 +335,27 @@ if (cfg["verbose"] && len(messages) > 0) {
 }
 ```
 
+### Ternary operator
+
+`cond ? a : b` is an expression that evaluates `cond` and yields `a` if truthy, `b` otherwise. Only the chosen branch runs:
+
+```calc
+let x = 5;
+let y = 10;
+print x > y ? "x wins" : "y wins";    // y wins
+
+// Chain for if-else-if expression form:
+fn grade(s) {
+    return s >= 90 ? "A"
+         : s >= 80 ? "B"
+         : s >= 70 ? "C" : "F";
+}
+```
+
+Right-associative: `a ? b : c ? d : e` parses as `a ? b : (c ? d : e)`. Use parentheses if you want the other grouping.
+
+The two branches can have different types — the result type is the union. For numeric `?` chains in tight loops you can annotate the surrounding function as `: num` to keep the codegen on the hardware fast path.
+
 ### Bitwise operators
 
 CalcLang has the full C set of bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift — arithmetic, sign-extending). The compound forms `&=`, `|=`, `^=`, `<<=`, `>>=` work too.
@@ -717,6 +738,19 @@ for (let r = 0; r < len(m); r = r + 1) {
     }
 }
 ```
+
+### `do { ... } while (cond);`
+
+A loop that **runs the body at least once**, then re-runs while `cond` is truthy:
+
+```calc
+let answer = "";
+do {
+    answer = read_line();
+} while (answer != "quit");
+```
+
+Compared to `while (cond) { ... }`, the difference is just where the test runs. `do/while` is the natural fit when the very first iteration computes the value the test inspects (the read-loop above, a "do work; check if done" pattern, etc.). Semicolon after the closing `)` is required.
 
 ### `break` and `continue`
 
@@ -3125,6 +3159,109 @@ for (let i = 0; i < 100; i = i + 1) {
 let rc = system("gcc --version");
 print "gcc returned " + rc;
 ```
+
+### Character helpers (`ctype`-style)
+
+CalcLang has byte-oriented strings, so it's natural to have the C-style character predicates:
+
+| Function              | What it does                                |
+|-----------------------|---------------------------------------------|
+| `is_digit(s)`         | 1 if `s[0]` is `0–9`                        |
+| `is_alpha(s)`         | 1 if `s[0]` is a letter                     |
+| `is_alnum(s)`         | 1 if letter or digit                        |
+| `is_space(s)`         | 1 if whitespace (space, tab, \n, \r, \f, \v)|
+| `is_upper(s)` / `is_lower(s)` | uppercase / lowercase test          |
+| `char_to_upper(s)`    | `s[0]` converted to uppercase (returns 1-char string) |
+| `char_to_lower(s)`    | same, but lowercase                         |
+| `char_code(s)`        | ASCII / byte value of `s[0]` (the `ord`)    |
+| `char_from(n)`        | byte → 1-char string (the `chr`)            |
+
+Each operates on a single-byte string (`str_at(s, i)` returns one of these). Non-character inputs raise at runtime.
+
+**Examples:**
+
+```calc
+print is_digit("5");           // 1
+print char_code("A");          // 65
+print char_from(48);           // "0"
+
+// Caesar cipher, no lookup table needed:
+fn caesar(s, shift) {
+    let out = "";
+    for (let i = 0; i < len(s); i = i + 1) {
+        let ch = str_at(s, i);
+        if (is_lower(ch)) {
+            let code = char_code(ch) - char_code("a");
+            code = (code + shift + 26) % 26;
+            out += char_from(code + char_code("a"));
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+print caesar("hello", 3);    // khoor
+print caesar("khoor", -3);   // hello
+```
+
+### `fmt` — printf-style formatting
+
+`print "x = " + x` uses `%.10g` whether you want it or not. `fmt(format, args)` gives you the full C-style format-string toolbox:
+
+```calc
+extern fn fmt(format: str, args: arr): str;     // (always available; no import)
+
+print fmt("hello %s, you are %d years old", ["Alice", 30]);
+print fmt("pi = %.4f", [pi()]);                     // pi = 3.1416
+print fmt("%5d|%-5d|%05d", [1, 2, 3]);              //     1|2    |00003
+print fmt("hex: 0x%x  binary: 0b%b", [255, 10]);    // hex: 0xff  binary: 0b1010
+print fmt("%.2f %% complete", [37.5]);              // 37.50 % complete
+```
+
+Supported specifiers:
+
+| Spec | Meaning                                       |
+|------|-----------------------------------------------|
+| `%d` / `%i` | signed integer (operand cast to int64) |
+| `%f`  | fixed-point float                            |
+| `%e` / `%E` | scientific                             |
+| `%g` / `%G` | shortest representation (like `print`) |
+| `%x` / `%X` | hex (lowercase / uppercase)            |
+| `%o`  | octal                                        |
+| `%b`  | binary                                       |
+| `%s`  | string — numbers auto-stringify via `%.10g` |
+| `%c`  | character (num as ASCII code, or first char of str) |
+| `%%`  | literal `%`                                  |
+
+Flags: `-` (left-align), `0` (zero-pad), `+` (sign), space (leading space for positive), `#` (alternate form). Width is a decimal number; precision is `.N`. Examples:
+
+```calc
+fmt("%-10s | %8.2f", ["item",   3.14])     // "item       |     3.14"
+fmt("%+d %+d", [42, -5])                   // "+42 -5"
+fmt("%08.3f", [pi()])                      // "0003.142"
+```
+
+The arg array's length must be at least the number of specifiers in the format. Extra args are ignored. Type mismatches (`%d` with a string) raise at runtime.
+
+#### Common uses
+
+- **Logging with timestamps and levels:**
+  ```calc
+  let log = fn(level, msg) {
+      file_append("app.log", fmt("[%s] [%s] %s\n", [now, level, msg]));
+  };
+  ```
+- **CSV / JSON writers** with controlled precision:
+  ```calc
+  file_append("data.csv", fmt("%d,%.6f,%.6f\n", [t, x, y]));
+  ```
+- **Aligned column output:**
+  ```calc
+  for (let i = 0; i < len(rows); i = i + 1) {
+      print fmt("%-20s %8.2f %5d",
+          [rows[i]["name"], rows[i]["price"], rows[i]["qty"]]);
+  }
+  ```
 
 ### Complex numbers *(native-only)*
 

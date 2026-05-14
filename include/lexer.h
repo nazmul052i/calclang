@@ -29,6 +29,7 @@ typedef enum {
     TOK_SWITCH,
     TOK_CASE,
     TOK_DEFAULT,
+    TOK_DO,
 
     /* arithmetic */
     TOK_PLUS,
@@ -76,6 +77,7 @@ typedef enum {
     /* punctuation */
     TOK_SEMICOLON,
     TOK_COLON,
+    TOK_QMARK,    /* ? — ternary */
     TOK_COMMA,
     TOK_DOT,
     TOK_LPAREN,

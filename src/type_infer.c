@@ -352,6 +352,12 @@ static TypeSet infer_expr(AST *expr, TiEnv *env) {
                body during expression inference; it gets analyzed by
                the top-level driver in its own scope. */
             return TS_FN_BIT;
+        case NODE_TERNARY: {
+            infer_expr(expr->as.ternary.cond, env);
+            TypeSet t = infer_expr(expr->as.ternary.then_expr, env);
+            TypeSet e = infer_expr(expr->as.ternary.else_expr, env);
+            return t | e;
+        }
         default:
             return TS_ANY_MASK;
     }
@@ -462,6 +468,10 @@ static void infer_stmt(AST *n, TiEnv *env) {
             }
             return;
         }
+        case NODE_DO_WHILE:
+            infer_stmt(n->as.while_stmt.body, env);
+            infer_expr(n->as.while_stmt.cond, env);
+            return;
         case NODE_CALL:
             infer_expr(n, env);
             return;
@@ -544,6 +554,15 @@ static void walk_for_inner_fns(AST *n) {
                 walk_for_inner_fns(n->as.switch_stmt.case_bodies[i]);
             }
             walk_for_inner_fns(n->as.switch_stmt.default_body);
+            return;
+        case NODE_TERNARY:
+            walk_for_inner_fns(n->as.ternary.cond);
+            walk_for_inner_fns(n->as.ternary.then_expr);
+            walk_for_inner_fns(n->as.ternary.else_expr);
+            return;
+        case NODE_DO_WHILE:
+            walk_for_inner_fns(n->as.while_stmt.body);
+            walk_for_inner_fns(n->as.while_stmt.cond);
             return;
         case NODE_LET:    walk_for_inner_fns(n->as.let_stmt.expr); return;
         case NODE_ASSIGN: walk_for_inner_fns(n->as.assign_stmt.expr); return;

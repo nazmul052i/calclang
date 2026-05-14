@@ -46,7 +46,9 @@ typedef enum {
     NODE_MAP_LIT,
     NODE_TRY,
     NODE_THROW,
-    NODE_SWITCH
+    NODE_SWITCH,
+    NODE_TERNARY,
+    NODE_DO_WHILE
 } NodeKind;
 
 typedef struct AST AST;
@@ -127,6 +129,8 @@ struct AST {
             int   case_cap;
             AST  *default_body;
         } switch_stmt;
+        /* cond ? then : else — an expression, not a statement. */
+        struct { AST *cond; AST *then_expr; AST *else_expr; } ternary;
     } as;
 };
 
@@ -172,6 +176,8 @@ AST *ast_throw(AST *expr);
 AST *ast_switch(AST *discriminant);
 void ast_switch_add_case(AST *sw, AST *value, AST *body);
 void ast_switch_set_default(AST *sw, AST *body);
+AST *ast_ternary(AST *cond, AST *then_expr, AST *else_expr);
+AST *ast_do_while(AST *body, AST *cond);
 
 void ast_print_debug(AST *n, int indent);
 void program_free(Program *p);

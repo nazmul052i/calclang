@@ -283,6 +283,7 @@ Token lexer_next(Lexer *lx) {
         if (strcmp(b, "switch")   == 0) return tok(TOK_SWITCH,   b, line, col);
         if (strcmp(b, "case")     == 0) return tok(TOK_CASE,     b, line, col);
         if (strcmp(b, "default")  == 0) return tok(TOK_DEFAULT,  b, line, col);
+        if (strcmp(b, "do")       == 0) return tok(TOK_DO,       b, line, col);
         return tok(TOK_IDENTIFIER, b, line, col);
     }
 
@@ -344,6 +345,7 @@ Token lexer_next(Lexer *lx) {
         case '|': return tok(TOK_PIPE,      "|", line, col);
         case '^': return tok(TOK_CARET,     "^", line, col);
         case '~': return tok(TOK_TILDE,     "~", line, col);
+        case '?': return tok(TOK_QMARK,     "?", line, col);
         default:  cl_die_at(line, col, "unknown character '%c'", c);
     }
     return tok(TOK_EOF, "", line, col); /* unreachable */

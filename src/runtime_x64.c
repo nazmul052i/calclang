@@ -1101,6 +1101,189 @@ Value cl_builtin_del(Value mv, Value k) {
     return cl_from_num(1.0);
 }
 
+/* --- ctype-style character helpers ------------------------------------- */
+
+static unsigned char cl_first_byte(Value v, const char *name) {
+    if (!cl_is_str(v)) cl_die_rt("ctype expects 1-char string");
+    CalcStr *s = cl_as_str(v);
+    if (s->len < 1) cl_die_rt("ctype expects non-empty string");
+    (void)name;
+    return (unsigned char)s->data[0];
+}
+
+Value cl_builtin_is_digit(Value v) {
+    unsigned char c = cl_first_byte(v, "is_digit");
+    return cl_from_num((c >= '0' && c <= '9') ? 1.0 : 0.0);
+}
+Value cl_builtin_is_alpha(Value v) {
+    unsigned char c = cl_first_byte(v, "is_alpha");
+    int r = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    return cl_from_num(r ? 1.0 : 0.0);
+}
+Value cl_builtin_is_alnum(Value v) {
+    unsigned char c = cl_first_byte(v, "is_alnum");
+    int r = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    return cl_from_num(r ? 1.0 : 0.0);
+}
+Value cl_builtin_is_space(Value v) {
+    unsigned char c = cl_first_byte(v, "is_space");
+    int r = (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
+    return cl_from_num(r ? 1.0 : 0.0);
+}
+Value cl_builtin_is_upper(Value v) {
+    unsigned char c = cl_first_byte(v, "is_upper");
+    return cl_from_num((c >= 'A' && c <= 'Z') ? 1.0 : 0.0);
+}
+Value cl_builtin_is_lower(Value v) {
+    unsigned char c = cl_first_byte(v, "is_lower");
+    return cl_from_num((c >= 'a' && c <= 'z') ? 1.0 : 0.0);
+}
+Value cl_builtin_char_to_upper(Value v) {
+    unsigned char c = cl_first_byte(v, "char_to_upper");
+    if (c >= 'a' && c <= 'z') c = (unsigned char)(c - 32);
+    char tmp[2] = { (char)c, '\0' };
+    return cl_new_str(tmp, 1);
+}
+Value cl_builtin_char_to_lower(Value v) {
+    unsigned char c = cl_first_byte(v, "char_to_lower");
+    if (c >= 'A' && c <= 'Z') c = (unsigned char)(c + 32);
+    char tmp[2] = { (char)c, '\0' };
+    return cl_new_str(tmp, 1);
+}
+Value cl_builtin_char_code(Value v) {
+    if (!cl_is_str(v)) cl_die_rt("char_code expects str");
+    CalcStr *s = cl_as_str(v);
+    if (s->len < 1) cl_die_rt("char_code expects non-empty string");
+    return cl_from_num((double)(unsigned char)s->data[0]);
+}
+Value cl_builtin_char_from(Value v) {
+    require_num(v, "char_from");
+    int code = (int)cl_as_num(v);
+    if (code < 0 || code > 255) cl_die_rt("char_from: code out of byte range");
+    char tmp[2] = { (char)code, '\0' };
+    return cl_new_str(tmp, 1);
+}
+
+/* --- printf-style formatter ------------------------------------------- */
+
+Value cl_builtin_fmt(Value fv, Value av) {
+    if (!cl_is_str(fv)) cl_die_rt("fmt: format must be a string");
+    if (!cl_is_arr(av)) cl_die_rt("fmt: args must be an array");
+    CalcStr *fs   = cl_as_str(fv);
+    CalcArr *args = cl_as_arr(av);
+    const char *fmt = fs->data;
+    size_t cap = 64;
+    size_t len = 0;
+    /* libc-malloc'd scratch buffer; copied to a CalcStr at the end. */
+    char *buf = (char *)malloc(cap);
+    if (!buf) cl_die_rt("fmt: out of memory");
+    uint64_t arg_idx = 0;
+    #define APPEND_C(c) do { \
+        if (len + 1 >= cap) { cap *= 2; buf = (char *)realloc(buf, cap); if (!buf) cl_die_rt("fmt: out of memory"); } \
+        buf[len++] = (char)(c); \
+    } while (0)
+    #define APPEND_S(s) do { const char *_p = (s); while (*_p) APPEND_C(*_p++); } while (0)
+
+    for (const char *p = fmt; *p; p++) {
+        if (*p != '%') { APPEND_C(*p); continue; }
+        p++;
+        if (*p == '%') { APPEND_C('%'); continue; }
+        if (*p == '\0') break;
+        char specbuf[32];
+        int  si = 0;
+        specbuf[si++] = '%';
+        if (*p == '-' || *p == '0' || *p == '+' || *p == ' ' || *p == '#') specbuf[si++] = *p++;
+        while (*p >= '0' && *p <= '9') {
+            if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+            p++;
+        }
+        if (*p == '.') {
+            if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+            p++;
+            while (*p >= '0' && *p <= '9') {
+                if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+                p++;
+            }
+        }
+        char conv = *p;
+        if (arg_idx >= args->len) { free(buf); cl_die_rt("fmt: not enough arguments for format string"); }
+        Value v = args->items[arg_idx++];
+        char tmp[256];
+        switch (conv) {
+            case 'd':
+            case 'i':
+                if (!cl_is_num(v)) { free(buf); cl_die_rt("fmt: %d expects num"); }
+                specbuf[si++] = 'l'; specbuf[si++] = 'l'; specbuf[si++] = 'd'; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, (long long)cl_as_num(v));
+                APPEND_S(tmp);
+                break;
+            case 'x':
+            case 'X':
+            case 'o':
+                if (!cl_is_num(v)) { free(buf); cl_die_rt("fmt: %x/%o expects num"); }
+                specbuf[si++] = 'l'; specbuf[si++] = 'l'; specbuf[si++] = conv; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, (long long)cl_as_num(v));
+                APPEND_S(tmp);
+                break;
+            case 'b': {
+                if (!cl_is_num(v)) { free(buf); cl_die_rt("fmt: %b expects num"); }
+                unsigned long long u = (unsigned long long)(long long)cl_as_num(v);
+                char bin[65];
+                int bi = 0;
+                if (u == 0) bin[bi++] = '0';
+                while (u > 0) { bin[bi++] = (u & 1) ? '1' : '0'; u >>= 1; }
+                while (bi > 0) APPEND_C(bin[--bi]);
+                break;
+            }
+            case 'f':
+            case 'e':
+            case 'E':
+            case 'g':
+            case 'G':
+                if (!cl_is_num(v)) { free(buf); cl_die_rt("fmt: %f/%e/%g expects num"); }
+                specbuf[si++] = conv; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, cl_as_num(v));
+                APPEND_S(tmp);
+                break;
+            case 's': {
+                const char *s = NULL;
+                char numbuf[64];
+                if (cl_is_str(v)) {
+                    s = cl_as_str(v)->data;
+                } else if (cl_is_num(v)) {
+                    snprintf(numbuf, sizeof numbuf, "%.10g", cl_as_num(v));
+                    s = numbuf;
+                } else {
+                    s = "?";
+                }
+                specbuf[si++] = 's'; specbuf[si] = '\0';
+                size_t need = strlen(s) + 32;
+                char *t2 = (char *)malloc(need);
+                if (!t2) { free(buf); cl_die_rt("fmt: out of memory"); }
+                snprintf(t2, need, specbuf, s);
+                APPEND_S(t2);
+                free(t2);
+                break;
+            }
+            case 'c':
+                if (cl_is_num(v)) APPEND_C((char)(int)cl_as_num(v));
+                else if (cl_is_str(v)) {
+                    CalcStr *cs = cl_as_str(v);
+                    if (cs->len > 0) APPEND_C(cs->data[0]);
+                } else { free(buf); cl_die_rt("fmt: %c expects num or str"); }
+                break;
+            default:
+                free(buf);
+                cl_die_rt("fmt: unknown format specifier");
+        }
+    }
+    Value out = cl_new_str(buf, len);
+    free(buf);
+    return out;
+    #undef APPEND_C
+    #undef APPEND_S
+}
+
 /* --- Math + transcendental calclib ------------------------------ */
 
 Value cl_builtin_sqrt(Value v) {

@@ -73,6 +73,132 @@ static _Noreturn void type_error(const char *op_name) {
     exit(1);
 }
 
+/* Lightweight printf-style formatter for the `fmt(format, [args])` builtin.
+   Supports %d (int), %f / %.Nf (float), %e (scientific), %g (default),
+   %s (string), %x (hex int), %o (octal int), %b (binary int), %% (literal),
+   plus optional width and zero-padding (%5d, %05d, %-5d, %8.2f).
+   Args is an array of Values. Returns a heap-allocated string. */
+static char *cl_vm_format(const char *fmt, Array *args) {
+    char *buf = (char *)cl_track_malloc(64);
+    size_t cap = 64;
+    size_t len = 0;
+    int    arg_idx = 0;
+    #define APPEND(c) do { \
+        if (len + 1 >= cap) { cap *= 2; buf = (char *)cl_track_realloc(buf, cap); } \
+        buf[len++] = (char)(c); \
+    } while (0)
+    #define APPEND_STR(s) do { \
+        const char *_p = (s); while (*_p) APPEND(*_p++); \
+    } while (0)
+    for (const char *p = fmt; *p; p++) {
+        if (*p != '%') { APPEND(*p); continue; }
+        p++;
+        if (*p == '%') { APPEND('%'); continue; }
+        if (*p == '\0') break;
+        /* parse flags / width / precision */
+        char specbuf[32];
+        int  si = 0;
+        specbuf[si++] = '%';
+        if (*p == '-' || *p == '0' || *p == '+' || *p == ' ' || *p == '#') {
+            specbuf[si++] = *p++;
+        }
+        while (*p >= '0' && *p <= '9') {
+            if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+            p++;
+        }
+        if (*p == '.') {
+            if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+            p++;
+            while (*p >= '0' && *p <= '9') {
+                if (si < (int)sizeof(specbuf) - 4) specbuf[si++] = *p;
+                p++;
+            }
+        }
+        char conv = *p;
+        if (arg_idx >= (args ? args->count : 0)) {
+            cl_die("fmt: not enough arguments for format string");
+        }
+        Value v = args->items[arg_idx++];
+        char tmp[128];
+        switch (conv) {
+            case 'd':
+            case 'i': {
+                if (v.tag != VAL_NUM) cl_die("fmt: %d expects num");
+                specbuf[si++] = 'l'; specbuf[si++] = 'l';
+                specbuf[si++] = 'd'; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, (long long)v.as.num);
+                APPEND_STR(tmp);
+                break;
+            }
+            case 'x':
+            case 'X':
+            case 'o': {
+                if (v.tag != VAL_NUM) cl_die("fmt: %x/%o expects num");
+                specbuf[si++] = 'l'; specbuf[si++] = 'l';
+                specbuf[si++] = conv; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, (long long)v.as.num);
+                APPEND_STR(tmp);
+                break;
+            }
+            case 'b': {
+                if (v.tag != VAL_NUM) cl_die("fmt: %b expects num");
+                /* No libc %b — render manually. */
+                unsigned long long u = (unsigned long long)(long long)v.as.num;
+                char bin[65];
+                int  bi = 0;
+                if (u == 0) bin[bi++] = '0';
+                while (u > 0) { bin[bi++] = (u & 1) ? '1' : '0'; u >>= 1; }
+                while (bi > 0) APPEND(bin[--bi]);
+                break;
+            }
+            case 'f':
+            case 'e':
+            case 'E':
+            case 'g':
+            case 'G': {
+                if (v.tag != VAL_NUM) cl_die("fmt: %f/%e/%g expects num");
+                specbuf[si++] = conv; specbuf[si] = '\0';
+                snprintf(tmp, sizeof tmp, specbuf, v.as.num);
+                APPEND_STR(tmp);
+                break;
+            }
+            case 's': {
+                const char *s = NULL;
+                if (v.tag == VAL_STR) s = v.as.str;
+                else {
+                    /* coerce non-strings via the standard %.10g rendering */
+                    if (v.tag == VAL_NUM) {
+                        snprintf(tmp, sizeof tmp, "%.10g", v.as.num);
+                        s = tmp;
+                    } else {
+                        s = "?";
+                    }
+                }
+                specbuf[si++] = 's'; specbuf[si] = '\0';
+                /* let snprintf handle width/precision */
+                size_t need = strlen(s) + 32;
+                char *t2 = (char *)cl_track_malloc(need);
+                snprintf(t2, need, specbuf, s);
+                APPEND_STR(t2);
+                break;
+            }
+            case 'c': {
+                if (v.tag == VAL_NUM) { APPEND((char)(int)v.as.num); }
+                else if (v.tag == VAL_STR && v.as.str) { APPEND(v.as.str[0]); }
+                else cl_die("fmt: %c expects num or str");
+                break;
+            }
+            default:
+                cl_die("fmt: unknown format specifier");
+        }
+    }
+    if (len + 1 >= cap) { cap = len + 1; buf = (char *)cl_track_realloc(buf, cap); }
+    buf[len] = '\0';
+    return buf;
+    #undef APPEND
+    #undef APPEND_STR
+}
+
 /* Render an array element (used inside [...] formatting): numbers are
    plain, strings get quoted so [1, "two"] is distinguishable from
    [1, two]. Depth limit prevents pathological recursion. */
@@ -1116,6 +1242,83 @@ int main(int argc, char **argv) {
                             m->count--;
                             stack[sp - 2] = val_num(1);
                         }
+                        sp--;
+                        break;
+                    }
+
+                    case BI_IS_DIGIT:
+                    case BI_IS_ALPHA:
+                    case BI_IS_ALNUM:
+                    case BI_IS_SPACE:
+                    case BI_IS_UPPER:
+                    case BI_IS_LOWER: {
+                        if (sp < 1) cl_die("stack underflow");
+                        Value sv = stack[sp - 1];
+                        if (sv.tag != VAL_STR || !sv.as.str || strlen(sv.as.str) != 1) {
+                            type_error("ctype check (expects 1-char string)");
+                        }
+                        unsigned char c = (unsigned char)sv.as.str[0];
+                        int r = 0;
+                        switch (in.iarg) {
+                            case BI_IS_DIGIT: r = (c >= '0' && c <= '9'); break;
+                            case BI_IS_ALPHA: r = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); break;
+                            case BI_IS_ALNUM: r = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); break;
+                            case BI_IS_SPACE: r = (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'); break;
+                            case BI_IS_UPPER: r = (c >= 'A' && c <= 'Z'); break;
+                            case BI_IS_LOWER: r = (c >= 'a' && c <= 'z'); break;
+                        }
+                        stack[sp - 1] = val_num(r ? 1.0 : 0.0);
+                        break;
+                    }
+                    case BI_CHAR_TO_UPPER:
+                    case BI_CHAR_TO_LOWER: {
+                        if (sp < 1) cl_die("stack underflow");
+                        Value sv = stack[sp - 1];
+                        if (sv.tag != VAL_STR || !sv.as.str || strlen(sv.as.str) != 1) {
+                            type_error("char_to_upper/lower (expects 1-char string)");
+                        }
+                        char c = sv.as.str[0];
+                        if (in.iarg == BI_CHAR_TO_UPPER) {
+                            if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+                        } else {
+                            if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+                        }
+                        char *out = (char *)cl_track_malloc(2);
+                        out[0] = c; out[1] = '\0';
+                        stack[sp - 1] = val_str(out);
+                        break;
+                    }
+                    case BI_CHAR_CODE: {
+                        if (sp < 1) cl_die("stack underflow");
+                        Value sv = stack[sp - 1];
+                        if (sv.tag != VAL_STR || !sv.as.str || strlen(sv.as.str) < 1) {
+                            type_error("char_code (expects non-empty string)");
+                        }
+                        stack[sp - 1] = val_num((double)(unsigned char)sv.as.str[0]);
+                        break;
+                    }
+                    case BI_CHAR_FROM: {
+                        if (sp < 1) cl_die("stack underflow");
+                        Value cv = stack[sp - 1];
+                        if (cv.tag != VAL_NUM) type_error("char_from (expects num)");
+                        int code = (int)cv.as.num;
+                        if (code < 0 || code > 255) cl_die("char_from: code out of byte range");
+                        char *out = (char *)cl_track_malloc(2);
+                        out[0] = (char)code; out[1] = '\0';
+                        stack[sp - 1] = val_str(out);
+                        break;
+                    }
+                    case BI_FMT: {
+                        /* fmt(format: str, args: arr) -> str. Implemented
+                           via the shared cl_fmt helper to keep VM and
+                           native in sync. */
+                        if (sp < 2) cl_die("stack underflow");
+                        Value fv = stack[sp - 2];
+                        Value av = stack[sp - 1];
+                        if (fv.tag != VAL_STR) type_error("fmt (format must be string)");
+                        if (av.tag != VAL_ARR) type_error("fmt (args must be array)");
+                        char *out = cl_vm_format(fv.as.str, av.as.arr);
+                        stack[sp - 2] = val_str(out);
                         sp--;
                         break;
                     }

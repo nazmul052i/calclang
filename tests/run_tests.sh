@@ -30,6 +30,33 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] qol — ternary, do-while, ctype, fmt"
+out=$(run qol)
+check "qol" 'yes
+no
+A
+C
+F
+5
+101
+1
+0
+1
+1
+1
+1
+1
+A
+a
+65
+0
+x = 42
+pi = 3.1416
+    1|2    |00003
+0xff
+1010
+one + two = 3' "$out"
+
 echo "[test] switch statement (num and str cases, default, break)"
 out=$(run switch_stmt)
 check "switch_stmt" 'Sun
