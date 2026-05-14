@@ -1,0 +1,128 @@
+// Tier-7 NR demo: Cholesky, conjugate gradient, simulated annealing, Metropolis MCMC.
+
+extern fn chol_decompose(A: arr): arr;
+extern fn chol_solve(L: arr, b: arr): arr;
+extern fn chol_logdet(L: arr): num;
+extern fn chol_inverse(L: arr): arr;
+
+extern fn cg_solve(A: arr, b: arr, x0: arr, tol: num, max_iter: num): map;
+extern fn pcg_solve(A: arr, b: arr, x0: arr, apply_Minv: fn, tol: num, max_iter: num): map;
+
+extern fn anneal_continuous(f: fn, x0: arr, step: num, t_start: num, t_end: num, cooling: num, steps_per_T: num, rng: map): map;
+
+extern fn metropolis_rw(log_pi: fn, x0: arr, step: num, n_samples: num, burn_in: num, thin: num, rng: map): map;
+extern fn Rng(seed: num): map;
+
+// ===== Cholesky =====
+print "===== Cholesky decomposition =====";
+// SPD test matrix:
+//   A = [[ 4, 12, -16],
+//        [12, 37, -43],
+//        [-16, -43, 98]]
+// Expected L = [[2, 0, 0], [6, 1, 0], [-8, 5, 3]].
+let A = [[ 4,  12, -16],
+         [ 12, 37, -43],
+         [-16,-43,  98]];
+let L = chol_decompose(A);
+print "L =";  print L;
+let b = [1, 1, 1];
+let x = chol_solve(L, b);
+print "A x = b for b=[1,1,1] -> x = ";  print x;
+
+// Verify: A x = b within ~1e-13.
+let resid = 0;
+for (let i = 0; i < 3; i = i + 1) {
+    let s = 0;
+    for (let j = 0; j < 3; j = j + 1) { s = s + A[i][j] * x[j]; }
+    resid = resid + (s - b[i]) * (s - b[i]);
+}
+print "||A x - b|| = " + sqrt(resid);
+print "log det(A)  = " + chol_logdet(L) + "   (exact: log(36) = " + log(36) + ")";
+
+// Inverse round-trip: ||A * A^-1 - I||
+let Ainv = chol_inverse(L);
+let err_inv = 0;
+for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 3; j = j + 1) {
+        let s = 0;
+        for (let k = 0; k < 3; k = k + 1) { s = s + A[i][k] * Ainv[k][j]; }
+        let target = 0;  if (i == j) { target = 1; }
+        err_inv = err_inv + (s - target) * (s - target);
+    }
+}
+print "||A * A^-1 - I||_F = " + sqrt(err_inv);
+
+// ===== Conjugate gradient =====
+print "";
+print "===== Conjugate gradient on a 100 x 100 SPD system =====";
+// Build a tridiagonal 2-Laplacian: [-1, 2, -1] stencil — SPD, well-conditioned.
+let n = 100;
+let At = [];
+for (let i = 0; i < n; i = i + 1) {
+    let row = [];
+    for (let j = 0; j < n; j = j + 1) {
+        if (i == j) { push(row, 2); }
+        else {
+            if (j == i - 1 || j == i + 1) { push(row, -1); }
+            else { push(row, 0); }
+        }
+    }
+    push(At, row);
+}
+let bt = [];  for (let i = 0; i < n; i = i + 1) { push(bt, 1); }
+let x0 = [];  for (let i = 0; i < n; i = i + 1) { push(x0, 0); }
+let r = cg_solve(At, bt, x0, 1e-10, 500);
+print "CG converged = " + r["converged"]
+    + ", iters = " + r["iters"]
+    + ", residual = " + r["residual"];
+// First-derivative-like solution; print a few entries to confirm:
+print "x[0] = " + r["x"][0] + ",  x[49] = " + r["x"][49] + ",  x[99] = " + r["x"][99];
+
+// Preconditioned CG with diagonal (Jacobi) preconditioner.
+let apply_Minv = fn(rv) {
+    let out = [];
+    for (let i = 0; i < len(rv); i = i + 1) { push(out, rv[i] / 2); }   // M = diag(2)
+    return out;
+};
+let rp = pcg_solve(At, bt, x0, apply_Minv, 1e-10, 500);
+print "PCG with diag preconditioner: iters = " + rp["iters"]
+    + ", converged = " + rp["converged"];
+
+// ===== Simulated annealing =====
+print "";
+print "===== Simulated annealing: minimize a noisy quartic with two minima =====";
+// f(x) = (x^2 - 1)^2 + 0.1 x         — minima near x = ±1, lower at x = -1.
+let f = fn(v) {
+    let x = v[0];
+    return (x*x - 1) * (x*x - 1) + 0.1 * x;
+};
+let rng = Rng(2026);
+let res = anneal_continuous(f, [3.0], 0.5, 10, 0.001, 0.92, 60, rng);
+print "best x  = " + res["x"][0];
+print "best f  = " + res["f"];
+print "  (exact minimum is near x = -1.008, f = -0.0975)";
+print "  outer-loop steps = " + len(res["history"]);
+
+// ===== Metropolis MCMC =====
+print "";
+print "===== Metropolis-Hastings: sample from a bimodal target =====";
+// Target: pi(x) propto exp(-((x^2 - 4)^2)/2) — concentrated at x = ±2.
+let log_pi = fn(v) {
+    let x = v[0];
+    let q = x * x - 4;
+    return -0.5 * q * q;
+};
+let mc = metropolis_rw(log_pi, [0], 1.0, 5000, 500, 5, rng);
+print "samples drawn  = " + len(mc["samples"]);
+print "accept rate    = " + mc["accept_rate"];
+// Empirical mean of x^2 (should be near 4 for the bimodal target).
+let sumsq = 0;
+let pos = 0;  let neg = 0;
+for (let i = 0; i < len(mc["samples"]); i = i + 1) {
+    let s = mc["samples"][i][0];
+    sumsq = sumsq + s * s;
+    if (s > 0) { pos = pos + 1; } else { neg = neg + 1; }
+}
+print "mean x^2       = " + (sumsq / len(mc["samples"])) + "  (theory: 4)";
+print "pos / neg      = " + pos + " / " + neg
+    + "  (should be roughly balanced — both modes visited)";

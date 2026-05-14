@@ -1051,6 +1051,35 @@ A * I3 == A?  1' "$nat_out"
         echo "FAIL: nr6 — Crank-Nicolson dissipation"; echo "$cn_line"; exit 1
     fi
 
+    echo "[test] demo — nr_demo7 (Cholesky + CG + simulated annealing + MCMC)"
+    build/calcnat --lib lib/nr/cholesky.calc -o build/calclib/nr_cholesky.s
+    build/calcnat --lib lib/nr/cg.calc       -o build/calclib/nr_cg.s
+    build/calcnat --lib lib/nr/anneal.calc   -o build/calclib/nr_anneal.s
+    build/calcnat --lib lib/nr/mcmc.calc     -o build/calclib/nr_mcmc.s
+    build/calcnat examples/nr_demo7.calc \
+        build/calclib/nr_cholesky.s build/calclib/nr_cg.s \
+        build/calclib/nr_anneal.s build/calclib/nr_mcmc.s \
+        build/calclib/random.s \
+        -o build/d_nr7.exe
+    nat_out=$(build/d_nr7.exe | strip_cr)
+    # Cholesky: NR's canonical example must produce L = [[2,0,0],[6,1,0],[-8,5,3]].
+    echo "$nat_out" | grep -q "\[\[2, 0, 0\], \[6, 1, 0\], \[-8, 5, 3\]\]" \
+        || { echo "FAIL: nr7 — Cholesky L matrix"; echo "$nat_out"; exit 1; }
+    # CG must converge on the 100x100 Laplacian.
+    echo "$nat_out" | grep -qE "CG converged = 1, iters = [0-9]+, residual = (0|[0-9]+(\.[0-9]+)?e-[0-9]+)" \
+        || { echo "FAIL: nr7 — CG didn't converge"; echo "$nat_out"; exit 1; }
+    # CG endpoint: x[49] should be 1275 (parabolic formula for the discrete Laplacian).
+    echo "$nat_out" | grep -q "x\[49\] = 1275" \
+        || { echo "FAIL: nr7 — CG solution wrong at center"; echo "$nat_out"; exit 1; }
+    # Annealing: should locate a near-minimum f ~ -0.1.
+    ann_f=$(echo "$nat_out" | grep "^best f" | awk '{print $NF}')
+    awk -v f="$ann_f" 'BEGIN { exit !(f < -0.05 && f > -0.5) }' \
+        || { echo "FAIL: nr7 — annealing didn't find minimum"; echo "f=$ann_f"; exit 1; }
+    # MCMC: mean x^2 should be between 3 and 5 (theory is 4).
+    mc_var=$(echo "$nat_out" | grep "mean x\^2" | awk '{print $4}')
+    awk -v v="$mc_var" 'BEGIN { exit !(v > 3 && v < 5) }' \
+        || { echo "FAIL: nr7 — MCMC mean x^2 out of band"; echo "v=$mc_var"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

@@ -1,0 +1,112 @@
+// cg.calc — preconditioned conjugate-gradient for symmetric positive-definite
+// linear systems A x = b.
+//
+// CG is the Krylov-subspace method of choice when A is large, SPD, and you
+// can apply A cheaply (e.g. as a matrix-free operator). It converges in
+// at most n iterations exactly, but in practice in O(sqrt(cond(A)))
+// iterations to a given tolerance — much faster than the n^3 work of a
+// direct factorization for sparse / structured problems.
+//
+// Reference: Numerical Recipes 2.7.
+//
+// The "preconditioned" form replaces the residual with M^-1 r, where M is
+// a cheap approximation to A whose inverse is fast. We support either
+//   - a matrix M (full)
+//   - a function apply_Minv(r) returning M^-1 r (matrix-free path)
+//   - or no preconditioner (M = I), the simplest case.
+//
+// API:
+//   cg_solve(A, b, x0, tol, max_iter)
+//   pcg_solve(A, b, x0, apply_Minv, tol, max_iter)
+// Both return {"x": x, "iters": k, "converged": 0|1, "residual": final_rnorm}.
+
+priv fn _cg_dot(a, b) {
+    let s = 0;
+    for (let i = 0; i < len(a); i = i + 1) { s = s + a[i] * b[i]; }
+    return s;
+}
+
+priv fn _cg_axpy(alpha, x, beta, y) {
+    let out = [];
+    for (let i = 0; i < len(x); i = i + 1) { push(out, alpha * x[i] + beta * y[i]); }
+    return out;
+}
+
+priv fn _cg_matvec(A, x) {
+    let m = len(A);
+    let n = len(x);
+    let y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let s = 0;
+        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        push(y, s);
+    }
+    return y;
+}
+
+pub fn cg_solve(A, b, x0, tol, max_iter) {
+    let n = len(b);
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, x0[i]); }
+    // r = b - A x
+    let Ax = _cg_matvec(A, x);
+    let r = [];
+    for (let i = 0; i < n; i = i + 1) { push(r, b[i] - Ax[i]); }
+    let p = [];
+    for (let i = 0; i < n; i = i + 1) { push(p, r[i]); }
+    let rsold = _cg_dot(r, r);
+    let bnorm = sqrt(_cg_dot(b, b));
+    if (bnorm == 0) { bnorm = 1; }
+    if (sqrt(rsold) / bnorm < tol) {
+        return {"x": x, "iters": 0, "converged": 1, "residual": sqrt(rsold)};
+    }
+    for (let k = 1; k <= max_iter; k = k + 1) {
+        let Ap = _cg_matvec(A, p);
+        let alpha = rsold / _cg_dot(p, Ap);
+        // x = x + alpha p
+        for (let i = 0; i < n; i = i + 1) { x[i] = x[i] + alpha * p[i]; }
+        // r = r - alpha A p
+        for (let i = 0; i < n; i = i + 1) { r[i] = r[i] - alpha * Ap[i]; }
+        let rsnew = _cg_dot(r, r);
+        if (sqrt(rsnew) / bnorm < tol) {
+            return {"x": x, "iters": k, "converged": 1, "residual": sqrt(rsnew)};
+        }
+        let beta = rsnew / rsold;
+        // p = r + beta p
+        for (let i = 0; i < n; i = i + 1) { p[i] = r[i] + beta * p[i]; }
+        rsold = rsnew;
+    }
+    return {"x": x, "iters": max_iter, "converged": 0, "residual": sqrt(rsold)};
+}
+
+// Preconditioned variant. apply_Minv is a fn(r) -> M^-1 r.
+pub fn pcg_solve(A, b, x0, apply_Minv, tol, max_iter) {
+    let n = len(b);
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, x0[i]); }
+    let Ax = _cg_matvec(A, x);
+    let r = [];
+    for (let i = 0; i < n; i = i + 1) { push(r, b[i] - Ax[i]); }
+    let z = apply_Minv(r);
+    let p = [];
+    for (let i = 0; i < n; i = i + 1) { push(p, z[i]); }
+    let rz_old = _cg_dot(r, z);
+    let bnorm = sqrt(_cg_dot(b, b));
+    if (bnorm == 0) { bnorm = 1; }
+    for (let k = 1; k <= max_iter; k = k + 1) {
+        let Ap = _cg_matvec(A, p);
+        let alpha = rz_old / _cg_dot(p, Ap);
+        for (let i = 0; i < n; i = i + 1) { x[i] = x[i] + alpha * p[i]; }
+        for (let i = 0; i < n; i = i + 1) { r[i] = r[i] - alpha * Ap[i]; }
+        let rnorm = sqrt(_cg_dot(r, r));
+        if (rnorm / bnorm < tol) {
+            return {"x": x, "iters": k, "converged": 1, "residual": rnorm};
+        }
+        z = apply_Minv(r);
+        let rz_new = _cg_dot(r, z);
+        let beta = rz_new / rz_old;
+        for (let i = 0; i < n; i = i + 1) { p[i] = z[i] + beta * p[i]; }
+        rz_old = rz_new;
+    }
+    return {"x": x, "iters": max_iter, "converged": 0, "residual": sqrt(_cg_dot(r, r))};
+}

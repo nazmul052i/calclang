@@ -94,6 +94,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/savgol.calc`** — Savitzky-Golay filter coefficients and apply (smoothing or derivatives) — preserves peaks far better than a moving average.
 - **`nr/kalman.calc`** — discrete-time Kalman filter (predict + update) for arbitrary linear Gaussian state-space models.
 - **`nr/pde.calc`** — Crank-Nicolson scheme for the 1-D heat equation, unconditionally stable, second-order accurate.
+- **`nr/cholesky.calc`** — Cholesky factorization for SPD matrices: decompose, solve, log-determinant, inverse.
+- **`nr/cg.calc`** — conjugate-gradient solver for SPD linear systems (basic and preconditioned variants).
+- **`nr/anneal.calc`** — simulated annealing for combinatorial and continuous global optimization with user-supplied proposal.
+- **`nr/mcmc.calc`** — Metropolis-Hastings sampler in log-space; symmetric random-walk convenience wrapper for R^n targets.
 
 ## Hello world
 

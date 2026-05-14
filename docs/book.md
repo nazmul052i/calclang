@@ -1562,6 +1562,54 @@ Solves `du/dt = α d²u/dx²` on `[0, L]` with Dirichlet boundary conditions. Cr
 
 Returns `{"u_final", "history"}`, where `history` is the full per-step state — drop it in your caller if you only need the final field.
 
+#### `lib/nr/cholesky.calc` — Cholesky factorization
+
+For symmetric positive-definite A, `chol_decompose` returns L (lower-triangular) such that A = L L^T. Half the work and storage of LU and never needs pivoting (NR §2.9).
+
+```calc
+extern fn chol_decompose(A: arr): arr;
+extern fn chol_solve(L: arr, b: arr): arr;
+extern fn chol_logdet(L: arr): num;
+extern fn chol_inverse(L: arr): arr;
+
+let L = chol_decompose([[4, 12, -16], [12, 37, -43], [-16, -43, 98]]);
+// L = [[2, 0, 0], [6, 1, 0], [-8, 5, 3]]
+print chol_logdet(L);       // log(det(A)) — stable for huge determinants
+```
+
+`chol_logdet` avoids forming the determinant explicitly — useful when det(A) underflows or overflows.
+
+#### `lib/nr/cg.calc` — conjugate gradient
+
+```calc
+extern fn cg_solve(A: arr, b: arr, x0: arr, tol: num, max_iter: num): map;
+extern fn pcg_solve(A: arr, b: arr, x0: arr, apply_Minv: fn, tol: num, max_iter: num): map;
+```
+
+The standard Krylov-subspace method for SPD systems. Converges in O(√cond(A)) iterations to a given tolerance — much faster than direct factorization for large, sparse, or structured problems. `pcg_solve` accepts a preconditioner as a closure that maps a residual to M⁻¹r, supporting fully matrix-free workflows.
+
+#### `lib/nr/anneal.calc` — simulated annealing
+
+```calc
+extern fn anneal_solve(f: fn, x0, propose: fn, t_start: num, t_end: num,
+                       cooling: num, steps_per_T: num, rng: map): map;
+extern fn anneal_continuous(f: fn, x0: arr, step: num, t_start: num, t_end: num,
+                            cooling: num, steps_per_T: num, rng: map): map;
+```
+
+Generic minimizer that walks a Metropolis chain whose temperature decays on a geometric schedule. Uphill moves are accepted with probability exp(−ΔF/T) — escapes local minima while T is high, refines as T cools. `anneal_solve` takes any state and a problem-specific `propose(x, T, rng)`. `anneal_continuous` is the convenience wrapper for x ∈ Rⁿ with Gaussian random-walk proposals. NR §10.9.
+
+#### `lib/nr/mcmc.calc` — Metropolis-Hastings sampler
+
+```calc
+extern fn metropolis(log_pi: fn, x0, propose: fn, log_q_ratio,
+                     n_samples: num, burn_in: num, thin: num, rng: map): map;
+extern fn metropolis_rw(log_pi: fn, x0: arr, step: num,
+                        n_samples: num, burn_in: num, thin: num, rng: map): map;
+```
+
+Markov-chain Monte Carlo for sampling from an unnormalized target. Operates in log-space for numerical stability across many decades of probability. `metropolis_rw` is the symmetric random-walk variant for Rⁿ. Returns the post-burn-in, thinned samples plus the acceptance rate (target ~25–40% for Gaussian walks).
+
 #### Building the NR libraries
 
 ```bash
@@ -1572,6 +1620,7 @@ make nr_demo3         # tier 3: minimization + sort/select
 make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
 make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
 make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
+make nr_demo7         # tier 7: Cholesky + CG + simulated annealing + MCMC
 ```
 
 ### Building demos
@@ -1596,6 +1645,7 @@ make nr_demo3                            # 1-D / N-D minimization + sort/select
 make nr_demo4                            # Ridders' + distributions + Newton + LM fit
 make nr_demo5                            # QR + SVD + Laguerre polyroots + convolution
 make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
+make nr_demo7                            # Cholesky + CG + simulated annealing + MCMC
 make demos                               # all of the above
 ```
 

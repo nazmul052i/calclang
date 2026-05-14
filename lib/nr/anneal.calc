@@ -1,0 +1,68 @@
+// anneal.calc — simulated annealing for combinatorial and continuous optimization.
+//
+// Generic minimizer: walks a Metropolis chain whose temperature decays
+// on a geometric schedule. Accepts moves that improve the objective,
+// and accepts uphill moves with probability exp(-delta / T) — escapes
+// local minima as T is high, then refines as T cools.
+//
+// Reference: Kirkpatrick / Numerical Recipes 10.9.
+//
+// API:
+//   anneal_solve(f, x0, propose, t_start, t_end, cooling, steps_per_T, rng)
+//      -> {"x": best, "f": fbest, "history": [...]}
+//
+// Inputs:
+//   f          : fn(x) -> num                (objective; minimize)
+//   x0         : starting point (any value f can score)
+//   propose    : fn(x, T, rng) -> x_proposed (problem-specific neighbour move)
+//   t_start    : initial temperature
+//   t_end      : final temperature (loop stops once T < t_end)
+//   cooling    : multiplicative factor per outer step (e.g. 0.95)
+//   steps_per_T: inner-loop steps at each temperature
+//   rng        : Rng instance (for uniform01 / accept tests)
+
+pub fn anneal_solve(f, x0, propose, t_start, t_end, cooling, steps_per_T, rng) {
+    let x = x0;
+    let fx = f(x);
+    let best = x;
+    let fbest = fx;
+    let T = t_start;
+    let history = [];
+    let total_iter = 0;
+    while (T > t_end) {
+        for (let i = 0; i < steps_per_T; i = i + 1) {
+            let xn = propose(x, T, rng);
+            let fn_ = f(xn);
+            let dF = fn_ - fx;
+            let accept = 0;
+            if (dF < 0) { accept = 1; }
+            else {
+                if (rng.uniform01() < exp(-dF / T)) { accept = 1; }
+            }
+            if (accept == 1) {
+                x  = xn;
+                fx = fn_;
+                if (fx < fbest) { best = x;  fbest = fx; }
+            }
+            total_iter = total_iter + 1;
+        }
+        push(history, {"T": T, "f": fx, "fbest": fbest});
+        T = T * cooling;
+    }
+    return {"x": best, "f": fbest, "history": history, "iters": total_iter};
+}
+
+// Convenience: continuous-vector minimization with Gaussian proposals.
+// Wraps anneal_solve with a default propose() that perturbs each
+// coordinate by N(0, step * sqrt(T / t_start)) — step shrinks with T.
+pub fn anneal_continuous(f, x0, step, t_start, t_end, cooling, steps_per_T, rng) {
+    let propose = fn(x, T, rng_) {
+        let scale = step * sqrt(T / t_start);
+        let out = [];
+        for (let i = 0; i < len(x); i = i + 1) {
+            push(out, x[i] + rng_.normal(0, scale));
+        }
+        return out;
+    };
+    return anneal_solve(f, x0, propose, t_start, t_end, cooling, steps_per_T, rng);
+}

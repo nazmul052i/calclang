@@ -1,0 +1,86 @@
+// cholesky.calc — Cholesky decomposition of a symmetric positive-definite matrix.
+//
+// For SPD A, decomposes A = L L^T with L lower-triangular and positive
+// diagonal. Half the storage and half the work of LU for the same
+// system, and never needs pivoting. Reference: NR §2.9.
+//
+// Throws on non-SPD input (the recurrence asks for sqrt of a negative).
+//
+// API:
+//   chol_decompose(A)        -> L (a lower-triangular n x n matrix)
+//   chol_solve(L, b)         -> x such that A x = b, by L y = b then L^T x = y
+//   chol_logdet(L)           -> log(det(A)) = 2 sum log(L_ii)  (stable for huge dets)
+//   chol_inverse(L)          -> A^{-1}, via the L y_j = e_j; L^T x_j = y_j trick.
+
+priv fn _ch_zero(n) {
+    let m = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < n; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+pub fn chol_decompose(A) {
+    let n = len(A);
+    if (n == 0 || len(A[0]) != n) {
+        throw "chol_decompose: A must be square";
+    }
+    let L = _ch_zero(n);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j <= i; j = j + 1) {
+            let s = A[i][j];
+            for (let k = 0; k < j; k = k + 1) {
+                s = s - L[i][k] * L[j][k];
+            }
+            if (i == j) {
+                if (s <= 0) { throw "chol_decompose: A is not positive-definite"; }
+                L[i][j] = sqrt(s);
+            } else {
+                L[i][j] = s / L[j][j];
+            }
+        }
+    }
+    return L;
+}
+
+pub fn chol_solve(L, b) {
+    let n = len(L);
+    // Forward solve: L y = b.
+    let y = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let s = b[i];
+        for (let k = 0; k < i; k = k + 1) { s = s - L[i][k] * y[k]; }
+        push(y, s / L[i][i]);
+    }
+    // Back solve: L^T x = y.
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, 0); }
+    for (let i = n - 1; i >= 0; i = i - 1) {
+        let s = y[i];
+        for (let k = i + 1; k < n; k = k + 1) { s = s - L[k][i] * x[k]; }
+        x[i] = s / L[i][i];
+    }
+    return x;
+}
+
+pub fn chol_logdet(L) {
+    let s = 0;
+    for (let i = 0; i < len(L); i = i + 1) { s = s + log(L[i][i]); }
+    return 2 * s;
+}
+
+pub fn chol_inverse(L) {
+    let n = len(L);
+    let inv = _ch_zero(n);
+    for (let j = 0; j < n; j = j + 1) {
+        let e = [];
+        for (let i = 0; i < n; i = i + 1) {
+            if (i == j) { push(e, 1); } else { push(e, 0); }
+        }
+        let col = chol_solve(L, e);
+        for (let i = 0; i < n; i = i + 1) { inv[i][j] = col[i]; }
+    }
+    return inv;
+}

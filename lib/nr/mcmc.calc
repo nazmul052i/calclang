@@ -1,0 +1,76 @@
+// mcmc.calc — Metropolis-Hastings MCMC sampler.
+//
+// Draws samples from any (possibly unnormalized) target distribution
+// pi(x) by walking a Markov chain whose stationary distribution is pi.
+// Each step proposes a move via a user-supplied proposal density and
+// accepts with the Metropolis ratio
+//   alpha = min(1, pi(x') q(x | x') / (pi(x) q(x' | x))).
+// For symmetric proposals (e.g. a Gaussian random walk) the q-ratio is
+// 1 and the test reduces to alpha = min(1, pi(x') / pi(x)).
+//
+// We work in log-space (caller supplies log_pi) — much more numerically
+// stable for probabilities that span many decades.
+//
+// API:
+//   metropolis(log_pi, x0, propose, log_q_ratio, n_samples, burn_in, thin, rng)
+//      -> {"samples": [...], "accept_rate": p, "n_accepted": k}
+//
+// Inputs:
+//   log_pi     : fn(x) -> num               (log of target density, unnormalized)
+//   x0         : initial state
+//   propose    : fn(x, rng) -> x'           (next-state proposal)
+//   log_q_ratio: fn(x, x_new) -> num        (log q(x | x') - log q(x' | x))
+//                Pass `null` (or always return 0) for symmetric proposals.
+//   n_samples  : number of samples to draw POST-burnin and POST-thinning
+//   burn_in    : warm-up steps to discard
+//   thin       : keep every k-th sample (1 = no thinning)
+//   rng        : Rng instance
+//
+// Convenience: `metropolis_rw(log_pi, x0, step, n_samples, burn_in, thin, rng)`
+// uses a symmetric N(0, step) random-walk proposal in R^n.
+
+pub fn metropolis(log_pi, x0, propose, log_q_ratio, n_samples, burn_in, thin, rng) {
+    let x = x0;
+    let lp = log_pi(x);
+    let samples = [];
+    let accepted = 0;
+    let total = 0;
+    let want = burn_in + n_samples * thin;
+    for (let it = 0; it < want; it = it + 1) {
+        let xn = propose(x, rng);
+        let lpn = log_pi(xn);
+        // log alpha = (log pi(x') - log pi(x)) + log q-ratio.
+        let dlog = lpn - lp;
+        if (log_q_ratio != 0) { dlog = dlog + log_q_ratio(x, xn); }
+        let accept = 0;
+        if (dlog >= 0) { accept = 1; }
+        else {
+            if (log(rng.uniform01()) < dlog) { accept = 1; }
+        }
+        if (accept == 1) {
+            x = xn;
+            lp = lpn;
+            accepted = accepted + 1;
+        }
+        total = total + 1;
+        if (it >= burn_in && ((it - burn_in) % thin == 0)) {
+            push(samples, x);
+        }
+    }
+    let rate = 0;
+    if (total > 0) { rate = accepted / total; }
+    return {"samples": samples, "accept_rate": rate, "n_accepted": accepted};
+}
+
+// Random-walk Metropolis in R^n. Proposal: x' = x + N(0, step I).
+pub fn metropolis_rw(log_pi, x0, step, n_samples, burn_in, thin, rng) {
+    let propose = fn(x, rng_) {
+        let out = [];
+        for (let i = 0; i < len(x); i = i + 1) {
+            push(out, x[i] + rng_.normal(0, step));
+        }
+        return out;
+    };
+    // Symmetric proposal — q-ratio is 1, log is 0.
+    return metropolis(log_pi, x0, propose, 0, n_samples, burn_in, thin, rng);
+}
