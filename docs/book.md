@@ -3243,6 +3243,35 @@ fmt("%08.3f", [pi()])                      // "0003.142"
 
 The arg array's length must be at least the number of specifiers in the format. Extra args are ignored. Type mismatches (`%d` with a string) raise at runtime.
 
+#### Rust-style `{}` placeholders
+
+`fmt` also recognizes Rust-style `{}` and `{:spec}` placeholders, mixed freely with `%`:
+
+```calc
+print fmt("hello {}, age {}", ["Alice", 30]);     // hello Alice, age 30
+print fmt("pi = {:.4f}", [pi()]);                  // pi = 3.1416
+print fmt("0x{:x}  0b{:b}", [255, 10]);            // 0xff  0b1010
+print fmt("rust {}, c {:5d}", ["wins", 99]);       // rust wins, c    99
+print fmt("literal {{ and }}", []);                // literal { and }
+```
+
+Default placeholder `{}` formats any value (numbers via `%.10g`, strings as-is). Width and precision use the `:N`/`:.N` syntax; an explicit type at the end (`{:5d}`, `{:.2f}`) overrides the default. `{{` and `}}` escape to literal braces.
+
+Internally this is implemented by translating `{}` syntax to the equivalent `%` form before formatting — so anything you can do with `%` you can do with `{}`.
+
+#### `printf` and `println` statement forms
+
+The pattern `print fmt(format, [a, b, c])` is verbose for the common case. Two parser-level conveniences avoid the array wrap and the explicit `fmt` call:
+
+```calc
+printf  "x = %d, y = %.2f\n", x, y;       // C-style: no trailing newline added
+println "x = {}, y = {:.2f}",  x, y;       // Rust-style: trailing newline added
+```
+
+Both desugar to a single statement. The args after the format string become an implicit array passed to `fmt`. `println` adds the trailing newline (using the normal `print` mechanism); `printf` does not (uses `write`, so the format controls its own newlines).
+
+Use which feels natural for the context — they're shorthand, not separate machinery.
+
 #### Common uses
 
 - **Logging with timestamps and levels:**

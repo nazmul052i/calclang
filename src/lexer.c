@@ -265,6 +265,8 @@ Token lexer_next(Lexer *lx) {
         b[i] = '\0';
         if (strcmp(b, "let")      == 0) return tok(TOK_LET,      b, line, col);
         if (strcmp(b, "print")    == 0) return tok(TOK_PRINT,    b, line, col);
+        if (strcmp(b, "printf")   == 0) return tok(TOK_PRINTF,   b, line, col);
+        if (strcmp(b, "println")  == 0) return tok(TOK_PRINTLN,  b, line, col);
         if (strcmp(b, "if")       == 0) return tok(TOK_IF,       b, line, col);
         if (strcmp(b, "else")     == 0) return tok(TOK_ELSE,     b, line, col);
         if (strcmp(b, "while")    == 0) return tok(TOK_WHILE,    b, line, col);

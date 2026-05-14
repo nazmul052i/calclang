@@ -1166,12 +1166,87 @@ Value cl_builtin_char_from(Value v) {
 
 /* --- printf-style formatter ------------------------------------------- */
 
+/* Translate a Rust-style format-string fragment "{...}" into the
+   equivalent C-style "%..." in `out`. `out` must have room for at least
+   16 chars. Returns the number of source bytes consumed (including
+   braces). The fragment starts at p[0] == '{'. Rules:
+     {}           -> %s
+     {:N}         -> %Ns
+     {:.M}        -> %.Ms
+     {:N.M}       -> %N.Ms
+     {:d}/{:x}/{:o}/{:b}/{:f}/{:e}/{:g} -> %d/%x/%o/%b/%f/%e/%g
+     {:Nd}/{:.Mf}/etc. combine width/precision with explicit type.
+     {{ and }} are handled before this function is called.
+*/
+static int translate_brace(const char *p, char *out) {
+    /* p[0] == '{'. Find closing brace. */
+    const char *end = p + 1;
+    while (*end && *end != '}') end++;
+    if (*end != '}') return 0;   /* malformed; caller treats { as literal */
+    char spec[16]; int slen = 0;
+    if (p[1] == ':') {
+        /* Copy chars between ':' and '}', up to 14. */
+        const char *q = p + 2;
+        while (q < end && slen < (int)sizeof(spec) - 2) spec[slen++] = *q++;
+    }
+    spec[slen] = '\0';
+    /* Decide the conversion char: explicit if last char of spec is one
+       of d/i/x/X/o/b/f/e/E/g/G; otherwise default to 's'. */
+    char conv = 's';
+    int  spec_end = slen;
+    if (slen > 0) {
+        char last = spec[slen - 1];
+        if (last == 'd' || last == 'i' || last == 'x' || last == 'X'
+         || last == 'o' || last == 'b' || last == 'f' || last == 'e'
+         || last == 'E' || last == 'g' || last == 'G' || last == 's'
+         || last == 'c') {
+            conv = last;
+            spec_end = slen - 1;
+        }
+    }
+    out[0] = '%';
+    int oi = 1;
+    for (int i = 0; i < spec_end && oi < 14; i++) out[oi++] = spec[i];
+    out[oi++] = conv;
+    out[oi] = '\0';
+    return (int)(end - p) + 1;   /* consumed including '}' */
+}
+
+/* Build a C-style printf format string from a possibly-Rust-style one.
+   {} placeholders are translated to %; {{ and }} unescape to literals.
+   Existing % specifiers pass through (`%%` is preserved). The result is
+   written into a libc-malloc'd buffer; caller frees. */
+static char *normalize_format(const char *src) {
+    size_t cap = strlen(src) * 2 + 16;
+    char *out = (char *)malloc(cap);
+    if (!out) cl_die_rt("fmt: out of memory");
+    size_t oi = 0;
+    for (const char *p = src; *p; ) {
+        if (oi + 32 >= cap) { cap *= 2; out = (char *)realloc(out, cap);
+            if (!out) cl_die_rt("fmt: out of memory"); }
+        if (p[0] == '{' && p[1] == '{') { out[oi++] = '{'; p += 2; continue; }
+        if (p[0] == '}' && p[1] == '}') { out[oi++] = '}'; p += 2; continue; }
+        if (p[0] == '{') {
+            char buf[16];
+            int n = translate_brace(p, buf);
+            if (n == 0) { out[oi++] = *p++; continue; }   /* malformed → literal */
+            for (int i = 0; buf[i]; i++) out[oi++] = buf[i];
+            p += n;
+            continue;
+        }
+        out[oi++] = *p++;
+    }
+    out[oi] = '\0';
+    return out;
+}
+
 Value cl_builtin_fmt(Value fv, Value av) {
     if (!cl_is_str(fv)) cl_die_rt("fmt: format must be a string");
     if (!cl_is_arr(av)) cl_die_rt("fmt: args must be an array");
     CalcStr *fs   = cl_as_str(fv);
     CalcArr *args = cl_as_arr(av);
-    const char *fmt = fs->data;
+    char *normalized = normalize_format(fs->data);
+    const char *fmt = normalized;
     size_t cap = 64;
     size_t len = 0;
     /* libc-malloc'd scratch buffer; copied to a CalcStr at the end. */
@@ -1279,6 +1354,7 @@ Value cl_builtin_fmt(Value fv, Value av) {
     }
     Value out = cl_new_str(buf, len);
     free(buf);
+    free(normalized);
     return out;
     #undef APPEND_C
     #undef APPEND_S
