@@ -278,6 +278,7 @@ Token lexer_next(Lexer *lx) {
         if (strcmp(b, "pub")      == 0) return tok(TOK_PUB,      b, line, col);
         if (strcmp(b, "priv")     == 0) return tok(TOK_PRIV,     b, line, col);
         if (strcmp(b, "extern")   == 0) return tok(TOK_EXTERN,   b, line, col);
+        if (strcmp(b, "import")   == 0) return tok(TOK_IMPORT,   b, line, col);
         if (strcmp(b, "class")    == 0) return tok(TOK_CLASS,    b, line, col);
         if (strcmp(b, "try")      == 0) return tok(TOK_TRY,      b, line, col);
         if (strcmp(b, "catch")    == 0) return tok(TOK_CATCH,    b, line, col);

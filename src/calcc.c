@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
 
     char *src = cl_read_file(in);
     Parser p;
-    parser_init(&p, src);
+    parser_init_with_path(&p, src, in);
     Program prog = parser_parse_program(&p);
     cl_optimize_program(&prog);
     infer_program_types(&prog);

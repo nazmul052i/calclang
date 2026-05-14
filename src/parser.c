@@ -16,6 +16,26 @@ static Token expect(Parser *p, TokenType t) {
 
 void parser_init(Parser *p, const char *src) {
     lexer_init(&p->lexer, src);
+    p->source_dir[0] = '\0';
+    next(p);
+}
+
+void parser_init_with_path(Parser *p, const char *src, const char *file_path) {
+    lexer_init(&p->lexer, src);
+    p->source_dir[0] = '\0';
+    if (file_path) {
+        /* Find the rightmost path separator and copy everything before it. */
+        const char *last = file_path;
+        for (const char *q = file_path; *q; q++) {
+            if (*q == '/' || *q == '\\') last = q + 1;
+        }
+        if (last > file_path) {
+            size_t n = (size_t)(last - file_path);
+            if (n >= sizeof p->source_dir) n = sizeof p->source_dir - 1;
+            memcpy(p->source_dir, file_path, n);
+            p->source_dir[n] = '\0';
+        }
+    }
     next(p);
 }
 
@@ -905,11 +925,87 @@ static AST *parse_class_def(Parser *p) {
     return ctor;
 }
 
+/* Clone a fn_def's signature (name, params, types, return type) as a
+   fresh extern declaration. Body is left null; used by `import` to
+   project a library's pub fns into the current compilation unit. */
+static AST *clone_fn_as_extern(AST *fn) {
+    AST *out = ast_fn(fn->as.fn_def.name);
+    ast_fn_set_public(out, 1);
+    ast_fn_set_extern(out, 1);
+    out->as.fn_def.param_count = fn->as.fn_def.param_count;
+    out->as.fn_def.return_type = fn->as.fn_def.return_type;
+    for (int i = 0; i < fn->as.fn_def.param_count; i++) {
+        cl_strncpy_z(out->as.fn_def.params[i], fn->as.fn_def.params[i], CL_MAX_TEXT);
+        out->as.fn_def.param_types[i] = fn->as.fn_def.param_types[i];
+    }
+    return out;
+}
+
+/* Handle a top-level `import "path";`. Reads the file relative to the
+   current parser's source_dir, parses it, and projects every `pub fn`
+   (or `pub class` — the parser already lowered the class to a
+   NODE_FN whose params come from the class's init method) into the
+   current Program as an `extern fn` declaration. Bodies are NOT copied
+   — the library is expected to be compiled separately (e.g., via
+   `--lib` and linked with the consumer). */
+static void parse_import(Parser *p, Program *out) {
+    expect(p, TOK_IMPORT);
+    Token path_tok = expect(p, TOK_STRING);
+    expect(p, TOK_SEMICOLON);
+
+    /* Path resolution:
+         - Absolute path:        used as-is.
+         - "./..." or "../...":  always importer-relative.
+         - Anything else:        try cwd first, then importer-relative.
+       That matches how most modern languages handle imports: cwd
+       resolution catches the "build from project root" case (`import
+       "lib/math.calc"`), explicit `./` forces locality. */
+    const char *path = path_tok.text;
+    int is_abs = path[0] == '/' || path[0] == '\\' ||
+                 (path[0] != '\0' && path[1] == ':');
+    int is_dot = path[0] == '.' && (path[1] == '/' || path[1] == '\\'
+                 || (path[1] == '.' && (path[2] == '/' || path[2] == '\\')));
+
+    char full_path[1024];
+    if (is_abs || is_dot || p->source_dir[0] == '\0') {
+        cl_strncpy_z(full_path, path, sizeof full_path);
+        if (is_dot && p->source_dir[0] != '\0') {
+            snprintf(full_path, sizeof full_path, "%s%s", p->source_dir, path);
+        }
+    } else {
+        /* Probe cwd-relative first, fall back to importer-relative. */
+        FILE *test = fopen(path, "rb");
+        if (test) {
+            fclose(test);
+            cl_strncpy_z(full_path, path, sizeof full_path);
+        } else {
+            snprintf(full_path, sizeof full_path, "%s%s", p->source_dir, path);
+        }
+    }
+    char *src = cl_read_file(full_path);   /* exits on failure with a clear path */
+    Parser sub;
+    parser_init_with_path(&sub, src, full_path);
+    Program sub_prog = parser_parse_program(&sub);
+
+    for (int i = 0; i < sub_prog.count; i++) {
+        AST *item = sub_prog.items[i];
+        if (item->kind != NODE_FN) continue;
+        if (!item->as.fn_def.is_public)  continue;   /* skip priv */
+        if (item->as.fn_def.is_extern)   continue;   /* already an extern */
+        if (out->count >= CL_MAX_NODES) cl_die("too many top-level items after import");
+        out->items[out->count++] = clone_fn_as_extern(item);
+    }
+}
+
 Program parser_parse_program(Parser *p) {
     Program prog;
     prog.count = 0;
     while (p->current.type != TOK_EOF) {
         if (prog.count >= CL_MAX_NODES) cl_die("too many top-level items");
+        if (p->current.type == TOK_IMPORT) {
+            parse_import(p, &prog);
+            continue;
+        }
         if (p->current.type == TOK_PUB) {
             next(p);
             if (p->current.type == TOK_FN) {
