@@ -11,8 +11,7 @@
 //
 // Caller is responsible for power-of-two dimensions.
 
-extern fn fft(x: arr): arr;
-extern fn ifft(x: arr): arr;
+import "fft";
 
 priv fn _f2_cols(X) {
     let m = len(X);

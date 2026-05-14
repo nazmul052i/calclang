@@ -1,18 +1,11 @@
 // Generate noisy linear data, fit a line, plot data + fit overlay.
 //
 // Build:
-//   build/calcnat --lib lib/stats.calc -o build/calclib/stats.s
-//   build/calcnat --lib lib/plot.calc  -o build/calclib/plot.s
-//   build/calcnat examples/regression.calc \
-//       build/calclib/stats.s build/calclib/plot.s -o build/regression.exe
+//   build/calcnat examples/regression.calc -o build/regression.exe
 //   build/regression.exe
 
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-extern fn min_of(xs: arr): num;
-extern fn max_of(xs: arr): num;
-extern fn linreg(xs: arr, ys: arr): map;
-extern fn plot_data_with_fit(filename: str, xs: arr, ys_data: arr, ys_fit: arr, title: str);
+import "stats";
+import "plot";
 
 // Synthetic data: y = 1.7 * x + 4.2, with bounded "noise" so the
 // fit is decent but visibly imperfect. We use a tiny in-source PRNG

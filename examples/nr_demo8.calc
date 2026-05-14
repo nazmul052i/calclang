@@ -1,20 +1,14 @@
 // Tier-8 NR demo: Welch periodogram, discrete wavelets (Haar + D4),
 // Toeplitz / Levinson, simplex linear programming.
+//
+// Build:
+//   build/calcnat examples/nr_demo8.calc -o build/nr_demo8.exe
 
-extern fn welch(xs: arr, fs: num, n_per_seg: num, overlap_frac: num): map;
-extern fn hann_window(N: num): arr;
-
-extern fn haar_forward(xs: arr): arr;
-extern fn haar_inverse(ys: arr): arr;
-extern fn d4_forward(xs: arr): arr;
-extern fn d4_inverse(ys: arr): arr;
-
-extern fn levinson_solve(r: arr, y: arr): arr;
-extern fn yule_walker(autocorr: arr, p: num): map;
-
-extern fn simplex_lp(c: arr, A: arr, b: arr): map;
-
-extern fn Rng(seed: num): map;
+import "nr.welch";
+import "nr.wavelet";
+import "nr.toeplitz";
+import "nr.simplex_lp";
+import "random";
 
 // ===== Welch PSD =====
 print "===== Welch's PSD estimate =====";

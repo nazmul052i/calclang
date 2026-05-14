@@ -24,8 +24,7 @@
 //
 // Depends on lu_decompose / lu_solve from lib/nr/lu.calc.
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
+import "nr.lu";
 
 priv fn _mat_zero(rows, cols) {
     let m = [];

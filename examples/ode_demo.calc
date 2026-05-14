@@ -1,14 +1,10 @@
 // Solve ODEs with RK4 and plot the trajectory.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/ode_demo.calc \
-//       build/calclib/ode.s build/calclib/plot.s -o build/ode_demo.exe
+//   build/calcnat examples/ode_demo.calc -o build/ode_demo.exe
 
-extern fn rk4(f: fn, t0: num, y0: num, t_end: num, n: num): map;
-extern fn euler(f: fn, t0: num, y0: num, t_end: num, n: num): map;
-extern fn rk4_vec(f: fn, t0: num, y0: arr, t_end: num, n: num): map;
-extern fn plot_lines(filename: str, xss: arr, yss: arr, labels: arr, title: str);
+import "ode";
+import "plot";
 
 // ===== Scalar: y' = -y, y(0) = 1.  Exact solution: y = e^(-t) =====
 let decay = fn(t, y) { return -y; };

@@ -1,18 +1,12 @@
 // Tier-9 NR demo: 2-D FFT, 2-D quadrature, power iteration, B-splines.
+//
+// Build:
+//   build/calcnat examples/nr_demo9.calc -o build/nr_demo9.exe
 
-extern fn fft2(X: arr): arr;
-extern fn ifft2(Y: arr): arr;
-
-extern fn quad2d_gl(f: fn, ax: num, bx: num, ay: num, by: num, n: num): num;
-extern fn quad2d_adaptive(f: fn, ax: num, bx: num, ay: num, by: num, tol: num): num;
-
-extern fn power_iterate(A: arr, x0: arr, tol: num, max_iter: num): map;
-extern fn inverse_iterate(A: arr, sigma: num, x0: arr, tol: num, max_iter: num): map;
-
-extern fn bspline_basis(knots: arr, k: num, x: num): arr;
-extern fn bspline_eval(knots: arr, k: num, c: arr, x: num): num;
-extern fn bspline_fit(xs: arr, ys: arr, knots: arr, k: num): arr;
-extern fn bspline_clamped_knots(a: num, b: num, n_interior: num, k: num): arr;
+import "nr.fft2d";
+import "nr.quad2d";
+import "nr.power_eigen";
+import "nr.bspline";
 
 // ===== 2-D FFT =====
 print "===== 2-D FFT round-trip =====";

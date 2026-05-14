@@ -3,16 +3,10 @@
 // random.calc and stats.calc working together.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/monte_carlo.calc \
-//       build/calclib/random.s build/calclib/stats.s -o build/monte_carlo.exe
+//   build/calcnat examples/monte_carlo.calc -o build/monte_carlo.exe
 
-extern fn Rng(seed: num): map;
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-extern fn min_of(xs: arr): num;
-extern fn max_of(xs: arr): num;
-extern fn histogram(xs: arr, n_bins: num): map;
+import "random";
+import "stats";
 
 // ===== Estimate π via Monte Carlo =====
 let rng = Rng(2024);

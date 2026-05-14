@@ -1,17 +1,10 @@
 // Solve a small linear system with the matrix library.
 //
 // Build:
-//   build/calcnat --lib lib/linalg.calc -o build/calclib/linalg.s
-//   build/calcnat examples/linsys.calc build/calclib/linalg.s -o build/linsys.exe
+//   build/calcnat examples/linsys.calc -o build/linsys.exe
 //   build/linsys.exe
 
-extern fn mat_from_rows(rows: arr): arr;
-extern fn mat_eye(n: num): arr;
-extern fn mat_mul(a: arr, b: arr): arr;
-extern fn mat_vec_mul(a: arr, v: arr): arr;
-extern fn mat_transpose(m: arr): arr;
-extern fn mat_solve(a: arr, b: arr): arr;
-extern fn mat_det(a: arr): num;
+import "linalg";
 
 // A 3×3 linear system.
 let A = mat_from_rows([

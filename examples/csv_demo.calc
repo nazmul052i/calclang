@@ -2,18 +2,11 @@
 // over a column.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/csv_demo.calc \
-//       build/calclib/csv.s build/calclib/stats.s build/calclib/plot.s \
-//       -o build/csv_demo.exe
+//   build/calcnat examples/csv_demo.calc -o build/csv_demo.exe
 
-extern fn csv_write_with_headers(path: str, headers: arr, rows: arr);
-extern fn csv_read_with_headers(path: str): arr;
-extern fn csv_row_to_nums(row: arr): arr;
-extern fn mean(xs: arr): num;
-extern fn stddev(xs: arr): num;
-extern fn linreg(xs: arr, ys: arr): map;
-extern fn plot_data_with_fit(filename: str, xs: arr, ys: arr, ys_fit: arr, title: str);
+import "csv";
+import "stats";
+import "plot";
 
 // ===== Write some structured data =====
 let path = "build/measurements.csv";

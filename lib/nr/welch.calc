@@ -13,7 +13,7 @@
 // fs is the sampling rate (samples / second). The output has length
 // n_per_seg/2 + 1; freqs run from 0 to fs/2.
 
-extern fn fft(x: arr): arr;
+import "fft";
 
 priv fn _wel_next_pow2(n) {
     let p = 1;

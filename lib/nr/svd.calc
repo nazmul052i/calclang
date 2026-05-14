@@ -23,7 +23,7 @@
 //                        rank-deficient or wider-than-tall A.
 //   - Condition number: cond(A) = s_max / s_min.
 
-extern fn jacobi_eigen(A: arr): map;
+import "nr.eigen";
 
 priv fn _svd_mat_zero(rows, cols) {
     let m = [];

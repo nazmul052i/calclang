@@ -3,21 +3,12 @@
 // the Jacobi eigenvalue decomposition.
 //
 // Build:
-//   make libs nr_libs
-//   build/calcnat examples/nr_demo.calc \
-//       build/calclib/nr_brent.s build/calclib/nr_spline.s \
-//       build/calclib/nr_special.s build/calclib/nr_eigen.s \
-//       -o build/nr_demo.exe
+//   build/calcnat examples/nr_demo.calc -o build/nr_demo.exe
 
-extern fn brent_root(f: fn, a: num, b: num, tol: num, max_iter: num): num;
-extern fn spline_setup(xs: arr, ys: arr): arr;
-extern fn spline_eval(xs: arr, ys: arr, y2: arr, x: num): num;
-extern fn lgamma(x: num): num;
-extern fn gamma(x: num): num;
-extern fn beta(a: num, b: num): num;
-extern fn erf(x: num): num;
-extern fn erfc(x: num): num;
-extern fn jacobi_eigen(a: arr): map;
+import "nr.brent";
+import "nr.spline";
+import "nr.special";
+import "nr.eigen";
 
 // ===== Brent's method =====
 print "===== Brent root finder =====";

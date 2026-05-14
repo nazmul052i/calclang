@@ -1,13 +1,12 @@
 // Generate a sine wave and plot it to SVG.
 //
 // Build:
-//   build/calcnat --lib lib/plot.calc -o build/calclib/plot.s
-//   build/calcnat examples/sine_plot.calc build/calclib/plot.s -o build/sine_plot.exe
+//   build/calcnat examples/sine_plot.calc -o build/sine_plot.exe
 //   build/sine_plot.exe
 //
 // Output: build/sine.svg — open in any browser.
 
-extern fn plot_line(filename: str, xs: arr, ys: arr, title: str);
+import "plot";
 
 let xs = [];
 let ys = [];

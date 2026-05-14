@@ -1,23 +1,12 @@
 // Tier-5 NR demo: QR + SVD + Laguerre poly roots + convolution.
 //
 // Build:
-//   make nr_libs libs
-//   build/calcnat examples/nr_demo5.calc \
-//       build/calclib/nr_qr.s build/calclib/nr_svd.s \
-//       build/calclib/nr_polyroots.s build/calclib/nr_conv.s \
-//       build/calclib/nr_eigen.s build/calclib/fft.s \
-//       -o build/nr_demo5.exe
+//   build/calcnat examples/nr_demo5.calc -o build/nr_demo5.exe
 
-extern fn qr_decompose(A: arr): map;
-extern fn qr_solve(qr: map, b: arr): arr;
-extern fn svd(A: arr): map;
-extern fn svd_solve(A: arr, b: arr): arr;
-extern fn svd_pinv(A: arr): arr;
-extern fn poly_roots(coefs: arr): arr;
-extern fn conv_direct(a: arr, b: arr): arr;
-extern fn conv_fft(a: arr, b: arr): arr;
-extern fn corr_direct(a: arr, b: arr): arr;
-extern fn correlate_fft(a: arr, b: arr): arr;
+import "nr.qr";
+import "nr.svd";
+import "nr.polyroots";
+import "nr.conv";
 
 // ===== QR decomposition / least squares =====
 print "===== QR decomposition (Householder) =====";

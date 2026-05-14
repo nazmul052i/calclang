@@ -20,7 +20,7 @@
 //   pca_transform(model, X_new)
 //      -> X_new projected onto the model's axes (rows are samples).
 
-extern fn svd(A: arr): map;
+import "nr.svd";
 
 priv fn _pc_zero(rows, cols) {
     let M = [];

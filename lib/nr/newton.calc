@@ -17,9 +17,8 @@
 // Depends on lu_decompose / lu_solve from lib/nr/lu.calc and (for the
 // _num variant) jacobian() from lib/nr/diff.calc.
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
-extern fn jacobian(f: fn, x: arr, h: num): arr;
+import "nr.lu";
+import "nr.diff";
 
 priv fn _norm2(v) {
     let s = 0;

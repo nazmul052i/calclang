@@ -1,11 +1,9 @@
 // JSON round-trip + read from disk + use the data.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/json_demo.calc build/calclib/json.s -o build/json_demo.exe
+//   build/calcnat examples/json_demo.calc -o build/json_demo.exe
 
-extern fn json_parse(src: str);
-extern fn json_encode(v): str;
+import "json";
 
 // ===== Encode a CalcLang value =====
 let person = {

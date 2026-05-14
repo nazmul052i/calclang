@@ -19,8 +19,7 @@
 //      Finds the eigenvalue closest to sigma by repeatedly solving
 //      (A - sigma I) y = x_k and renormalizing.
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
+import "nr.lu";
 
 priv fn _norm(v) {
     let s = 0;

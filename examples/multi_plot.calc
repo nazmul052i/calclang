@@ -1,14 +1,9 @@
 // Multi-series plot + bar chart + log-Y plot.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/multi_plot.calc build/calclib/plot.s -o build/multi_plot.exe
+//   build/calcnat examples/multi_plot.calc -o build/multi_plot.exe
 
-extern fn plot_lines(filename: str, xss: arr, yss: arr, labels: arr, title: str);
-extern fn plot_bar(filename: str, labels: arr, values: arr, title: str);
-extern fn plot_logy(filename: str, xs: arr, ys: arr, title: str);
-extern fn plot_line_labeled(filename: str, xs: arr, ys: arr, title: str,
-                            x_label: str, y_label: str);
+import "plot";
 
 // ===== sin, cos, sin(x)·cos(x) on the same axes =====
 let xs = [];

@@ -15,8 +15,7 @@
 // The FFT-backed routines zero-pad both signals to a length >= n+m-1
 // that's a power of two (CalcLang's fft requires power-of-two N).
 
-extern fn fft(x: arr): arr;
-extern fn ifft(X: arr): arr;
+import "fft";
 
 priv fn _next_pow2(n) {
     let p = 1;

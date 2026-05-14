@@ -1,20 +1,14 @@
 // Tier-6 NR demo: Chebyshev approximation, Savitzky-Golay filter,
 // Kalman filter, Crank-Nicolson 1-D diffusion.
+//
+// Build:
+//   build/calcnat examples/nr_demo6.calc -o build/nr_demo6.exe
 
-extern fn cheb_fit(f: fn, a: num, b: num, n: num): map;
-extern fn cheb_eval(cm: map, x: num): num;
-extern fn cheb_deriv(cm: map): map;
-extern fn cheb_integral(cm: map): map;
-
-extern fn savgol_coeffs(nl: num, nr: num, m: num, ld: num): arr;
-extern fn savgol_apply(xs: arr, nl: num, nr: num, m: num, ld: num): arr;
-
-extern fn kf_new(x0: arr, P0: arr, F: arr, B: arr, H: arr, Q: arr, R: arr): map;
-extern fn kf_step(kf: map, u: arr, z: arr): map;
-
-extern fn heat_1d(u0: arr, alpha: num, dx: num, dt: num, n_steps: num, bcL: num, bcR: num): map;
-
-extern fn Rng(seed: num): map;
+import "nr.cheb";
+import "nr.savgol";
+import "nr.kalman";
+import "nr.pde";
+import "random";
 
 // ===== Chebyshev approximation =====
 print "===== Chebyshev approximation =====";

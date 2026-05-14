@@ -1,18 +1,9 @@
 // Numerical methods showcase: root finding + integration.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/numerical.calc build/calclib/numeric.s -o build/numerical.exe
+//   build/calcnat examples/numerical.calc -o build/numerical.exe
 
-extern fn bisect(f: fn, a: num, b: num, tol: num): num;
-extern fn newton(f: fn, df: fn, x0: num, tol: num, max_iter: num): num;
-extern fn secant(f: fn, x0: num, x1: num, tol: num, max_iter: num): num;
-extern fn trapezoidal(f: fn, a: num, b: num, n: num): num;
-extern fn simpson(f: fn, a: num, b: num, n: num): num;
-extern fn adaptive_simpson(f: fn, a: num, b: num, tol: num): num;
-extern fn poly_eval(coeffs: arr, x: num): num;
-extern fn poly_derivative(coeffs: arr): arr;
-extern fn linterp(xs: arr, ys: arr, x: num): num;
+import "numeric";
 
 // Root of cos(x) = 0  on [0, π], expected π/2 ≈ 1.5707963.
 let cos_fn = fn(x) { return cos(x); };

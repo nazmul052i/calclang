@@ -2,16 +2,11 @@
 // recover the dominant frequencies from the magnitude spectrum.
 //
 // Build:
-//   make libs
-//   build/calcnat examples/fft_demo.calc \
-//       build/calclib/fft.s build/calclib/random.s build/calclib/plot.s -o build/fft_demo.exe
+//   build/calcnat examples/fft_demo.calc -o build/fft_demo.exe
 
-extern fn fft(x: arr): arr;
-extern fn ifft(X: arr): arr;
-extern fn fft_magnitude(X: arr): arr;
-extern fn fft_freqs(n: num, fs: num): arr;
-extern fn Rng(seed: num): map;
-extern fn plot_line(filename: str, xs: arr, ys: arr, title: str);
+import "fft";
+import "random";
+import "plot";
 
 // Sampling: 256 samples at 100 Hz -> Nyquist = 50 Hz.
 let N  = 256;

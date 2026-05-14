@@ -2,31 +2,13 @@
 // Newton-Raphson on a nonlinear system, Levenberg-Marquardt fit.
 //
 // Build:
-//   make nr_libs
-//   build/calcnat examples/nr_demo4.calc \
-//       build/calclib/nr_diff.s build/calclib/nr_random_dist.s \
-//       build/calclib/nr_newton.s build/calclib/nr_fitnl.s \
-//       build/calclib/nr_lu.s build/calclib/random.s \
-//       -o build/nr_demo4.exe
+//   build/calcnat examples/nr_demo4.calc -o build/nr_demo4.exe
 
-extern fn dfridr(f: fn, x: num, h: num): map;
-extern fn deriv(f: fn, x: num, h: num): num;
-extern fn gradient(f: fn, x: arr, h: num): arr;
-extern fn jacobian(f: fn, x: arr, h: num): arr;
-
-extern fn Rng(seed: num): map;
-extern fn gamma_sample(rng: map, shape: num, scale: num): num;
-extern fn beta_sample(rng: map, a: num, b: num): num;
-extern fn chi2_sample(rng: map, k: num): num;
-extern fn student_t_sample(rng: map, nu: num): num;
-extern fn cauchy_sample(rng: map, x0: num, gamma: num): num;
-extern fn binomial_sample(rng: map, n: num, p: num): num;
-extern fn triangular_sample(rng: map, a: num, b: num, c: num): num;
-
-extern fn newton_n(F: fn, J: fn, x0: arr, tol: num, max_iter: num): map;
-extern fn newton_num(F: fn, x0: arr, tol: num, max_iter: num): map;
-
-extern fn lm_fit(model: fn, xs: arr, ys: arr, a0: arr, tol: num, max_iter: num): map;
+import "nr.diff";
+import "nr.random_dist";
+import "nr.newton";
+import "nr.fitnl";
+import "random";
 
 // ===== Ridders' derivatives =====
 print "===== Ridders' polynomial-extrapolation derivatives =====";

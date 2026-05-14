@@ -29,8 +29,7 @@
 // Reference: classical Kalman / NR §15.7 ("optimal Wiener filtering"
 // generalises this).
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
+import "nr.lu";
 
 priv fn _kf_zero(rows, cols) {
     let m = [];

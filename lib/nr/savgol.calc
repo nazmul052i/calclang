@@ -20,8 +20,7 @@
 // of the Moore-Penrose pseudo-inverse of the Vandermonde-style design
 // matrix.
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
+import "nr.lu";
 
 priv fn _sg_mat_zero(rows, cols) {
     let m = [];

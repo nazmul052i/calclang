@@ -1,16 +1,14 @@
 // Tier-10 NR demo: Neville polynomial interpolation, arbitrary-order
 // Gauss-Legendre, BFGS quasi-Newton, PCA via SVD.
+//
+// Build:
+//   build/calcnat examples/nr_demo10.calc -o build/nr_demo10.exe
 
-extern fn neville_interp(xs: arr, ys: arr, x: num): map;
-
-extern fn gauleg(n: num, a: num, b: num): map;
-extern fn integrate_gauleg(f: fn, a: num, b: num, n: num): num;
-
-extern fn bfgs_min(f: fn, grad: fn, x0: arr, tol: num, max_iter: num): map;
-
-extern fn pca_fit(X: arr): map;
-extern fn pca_transform(model: map, X_new: arr): arr;
-extern fn Rng(seed: num): map;
+import "nr.neville";
+import "nr.glnodes";
+import "nr.bfgs";
+import "nr.pca";
+import "random";
 
 // ===== Neville =====
 print "===== Neville polynomial interpolation =====";

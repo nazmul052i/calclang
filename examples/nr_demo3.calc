@@ -1,18 +1,10 @@
 // Tier-3 NR demo: 1-D / N-D function minimization and sorting / selection.
 //
 // Build:
-//   make nr_libs3
-//   build/calcnat examples/nr_demo3.calc \
-//       build/calclib/nr_minimize.s build/calclib/nr_sort.s \
-//       -o build/nr_demo3.exe
+//   build/calcnat examples/nr_demo3.calc -o build/nr_demo3.exe
 
-extern fn golden_section(f: fn, a: num, b: num, c: num, tol: num): num;
-extern fn brent_min(f: fn, a: num, b: num, c: num, tol: num): map;
-extern fn simplex_min(f: fn, x0: arr, step: num, tol: num): map;
-extern fn heapsort(arr: arr): arr;
-extern fn heapsort_idx(arr: arr): map;
-extern fn quickselect(arr: arr, k: num): num;
-extern fn median(arr: arr): num;
+import "nr.minimize";
+import "nr.sort";
 
 // ===== 1-D minimization =====
 print "===== Golden section + Brent (1-D) =====";

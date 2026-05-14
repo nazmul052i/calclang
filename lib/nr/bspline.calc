@@ -19,8 +19,7 @@
 // for clamped curves (the standard arrangement so the first and last
 // basis functions evaluate to 1 at the endpoints).
 
-extern fn qr_decompose(A: arr): map;
-extern fn qr_solve(qr: map, b: arr): arr;
+import "nr.qr";
 
 priv fn _bs_zero(rows, cols) {
     let m = [];

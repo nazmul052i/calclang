@@ -1,17 +1,13 @@
 // Tier-7 NR demo: Cholesky, conjugate gradient, simulated annealing, Metropolis MCMC.
+//
+// Build:
+//   build/calcnat examples/nr_demo7.calc -o build/nr_demo7.exe
 
-extern fn chol_decompose(A: arr): arr;
-extern fn chol_solve(L: arr, b: arr): arr;
-extern fn chol_logdet(L: arr): num;
-extern fn chol_inverse(L: arr): arr;
-
-extern fn cg_solve(A: arr, b: arr, x0: arr, tol: num, max_iter: num): map;
-extern fn pcg_solve(A: arr, b: arr, x0: arr, apply_Minv: fn, tol: num, max_iter: num): map;
-
-extern fn anneal_continuous(f: fn, x0: arr, step: num, t_start: num, t_end: num, cooling: num, steps_per_T: num, rng: map): map;
-
-extern fn metropolis_rw(log_pi: fn, x0: arr, step: num, n_samples: num, burn_in: num, thin: num, rng: map): map;
-extern fn Rng(seed: num): map;
+import "nr.cholesky";
+import "nr.cg";
+import "nr.anneal";
+import "nr.mcmc";
+import "random";
 
 // ===== Cholesky =====
 print "===== Cholesky decomposition =====";

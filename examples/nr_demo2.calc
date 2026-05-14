@@ -2,23 +2,12 @@
 // RK45, and the orthogonal-polynomial families.
 //
 // Build:
-//   make nr_libs2
-//   build/calcnat examples/nr_demo2.calc \
-//       build/calclib/nr_lu.s build/calclib/nr_romberg.s \
-//       build/calclib/nr_rk45.s build/calclib/nr_poly.s \
-//       -o build/nr_demo2.exe
+//   build/calcnat examples/nr_demo2.calc -o build/nr_demo2.exe
 
-extern fn lu_decompose(A: arr): map;
-extern fn lu_solve(lu: map, b: arr): arr;
-extern fn lu_det(lu: map): num;
-extern fn romberg(f: fn, a: num, b: num, tol: num, max_levels: num): num;
-extern fn rk45(f: fn, t0: num, y0: num, t_end: num, tol: num): map;
-extern fn chebyshev_T(n: num, x: num): num;
-extern fn legendre_P(n: num, x: num): num;
-extern fn hermite_H(n: num, x: num): num;
-extern fn laguerre_L(n: num, x: num): num;
-extern fn bessel_J0(x: num): num;
-extern fn bessel_J1(x: num): num;
+import "nr.lu";
+import "nr.romberg";
+import "nr.rk45";
+import "nr.poly";
 
 // ===== LU decomposition =====
 print "===== LU decomposition (3 x 3) =====";
