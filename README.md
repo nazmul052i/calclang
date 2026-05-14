@@ -106,6 +106,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/quad2d.calc`** — 2-D Gauss-Legendre quadrature (orders 2-5) and adaptive recursive 2-D integration.
 - **`nr/power_eigen.calc`** — power iteration for the dominant eigenvalue and inverse iteration for the eigenvalue closest to a shift.
 - **`nr/bspline.calc`** — B-spline basis evaluation (Cox-de Boor), spline evaluation, and least-squares curve fitting on arbitrary knot vectors.
+- **`nr/neville.calc`** — Neville's algorithm: polynomial interpolation through few points with built-in error estimate.
+- **`nr/glnodes.calc`** — generate Gauss-Legendre nodes / weights at arbitrary order via Newton iteration on Bonnet's recurrence; `integrate_gauleg` wraps it.
+- **`nr/bfgs.calc`** — BFGS quasi-Newton minimization with Armijo back-tracking line search; uses analytic gradients.
+- **`nr/pca.calc`** — Principal Component Analysis via SVD of the centered data matrix; returns variances, axes, and scores.
 
 ## Hello world
 

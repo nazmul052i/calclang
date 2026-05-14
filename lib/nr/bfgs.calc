@@ -1,0 +1,125 @@
+// bfgs.calc — BFGS quasi-Newton minimization with Wolfe line search.
+//
+// Minimizes f : R^n -> R given a gradient. Each iteration approximates
+// the inverse Hessian by a rank-2 update built from the most recent
+// {x, gradient} samples. Linear convergence becomes superlinear once
+// the approximation gets reasonable — typically beats Nelder-Mead by
+// 10x or more once you have n above 5 or so.
+//
+// Reference: NR §10.7. Standard Broyden-Fletcher-Goldfarb-Shanno.
+//
+// API:
+//   bfgs_min(f, grad, x0, tol, max_iter)
+//     -> {"x": x_opt, "f": f_opt, "iters": k, "converged": 0|1}
+//
+//   f    : fn(arr) -> num
+//   grad : fn(arr) -> arr  (analytic gradient — if you only have f, build
+//          one from lib/nr/diff.calc's gradient())
+
+priv fn _bg_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+priv fn _bg_eye(n) {
+    let I = _bg_zero(n, n);
+    for (let i = 0; i < n; i = i + 1) { I[i][i] = 1; }
+    return I;
+}
+
+priv fn _bg_matvec(H, v) {
+    let n = len(H);
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let s = 0;
+        for (let j = 0; j < n; j = j + 1) { s = s + H[i][j] * v[j]; }
+        push(out, s);
+    }
+    return out;
+}
+
+priv fn _bg_dot(a, b) {
+    let s = 0;
+    for (let i = 0; i < len(a); i = i + 1) { s = s + a[i] * b[i]; }
+    return s;
+}
+
+priv fn _bg_norm(v) { return sqrt(_bg_dot(v, v)); }
+
+// Armijo back-tracking line search (cheap; not full Wolfe, but enough
+// for textbook BFGS to behave well on typical problems).
+priv fn _bg_linesearch(f, x, fx, grad_x, dir) {
+    let alpha = 1.0;
+    let c1 = 1e-4;
+    let gd = _bg_dot(grad_x, dir);   // < 0 since dir is a descent direction
+    for (let it = 0; it < 30; it = it + 1) {
+        let xn = [];
+        for (let i = 0; i < len(x); i = i + 1) { push(xn, x[i] + alpha * dir[i]); }
+        let fn_ = f(xn);
+        if (fn_ <= fx + c1 * alpha * gd) {
+            return {"alpha": alpha, "x": xn, "f": fn_};
+        }
+        alpha = alpha * 0.5;
+    }
+    // Fallback: smallest step we tried.
+    let xn = [];
+    for (let i = 0; i < len(x); i = i + 1) { push(xn, x[i] + alpha * dir[i]); }
+    return {"alpha": alpha, "x": xn, "f": f(xn)};
+}
+
+pub fn bfgs_min(f, grad, x0, tol, max_iter) {
+    let n = len(x0);
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) { push(x, x0[i]); }
+    let fx = f(x);
+    let g = grad(x);
+    let H = _bg_eye(n);              // initial inverse-Hessian approx
+    for (let k = 0; k < max_iter; k = k + 1) {
+        if (_bg_norm(g) < tol) {
+            return {"x": x, "f": fx, "iters": k, "converged": 1};
+        }
+        // Search direction d = -H g.
+        let dir = _bg_matvec(H, g);
+        for (let i = 0; i < n; i = i + 1) { dir[i] = -dir[i]; }
+        let ls = _bg_linesearch(f, x, fx, g, dir);
+        let xnew = ls["x"];
+        let fnew = ls["f"];
+        let gnew = grad(xnew);
+        // s = x_new - x, y = g_new - g
+        let s = [];
+        let y = [];
+        for (let i = 0; i < n; i = i + 1) {
+            push(s, xnew[i] - x[i]);
+            push(y, gnew[i] - g[i]);
+        }
+        let sy = _bg_dot(s, y);
+        if (sy > 1e-12) {
+            // BFGS update: H_{k+1} = (I - rho s y^T) H (I - rho y s^T) + rho s s^T.
+            let rho = 1 / sy;
+            let Hy = _bg_matvec(H, y);
+            let yHy = _bg_dot(y, Hy);
+            // First compute the term (I - rho s y^T) H (I - rho y s^T) -- we expand it.
+            // Let M = H - rho (H y s^T + s y^T H) + rho^2 s y^T H y s^T  +  rho s s^T.
+            // For numerical stability we use the standard explicit BFGS formula.
+            let H_new = _bg_zero(n, n);
+            for (let i = 0; i < n; i = i + 1) {
+                for (let j = 0; j < n; j = j + 1) {
+                    H_new[i][j] = H[i][j]
+                                - rho * (Hy[i] * s[j] + s[i] * Hy[j])
+                                + rho * rho * s[i] * s[j] * yHy
+                                + rho * s[i] * s[j];
+                }
+            }
+            H = H_new;
+        }
+        x  = xnew;
+        fx = fnew;
+        g  = gnew;
+    }
+    return {"x": x, "f": fx, "iters": max_iter, "converged": 0};
+}

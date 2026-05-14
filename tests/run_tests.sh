@@ -1140,6 +1140,39 @@ A * I3 == A?  1' "$nat_out"
     awk -v v="$gl_line" 'BEGIN { exit !(v > 0.6666 && v < 0.6667) }' \
         || { echo "FAIL: nr9 — quad2d_gl"; echo "$gl_line"; exit 1; }
 
+    echo "[test] demo — nr_demo10 (Neville + GL nodes + BFGS + PCA)"
+    build/calcnat --lib lib/nr/neville.calc -o build/calclib/nr_neville.s
+    build/calcnat --lib lib/nr/glnodes.calc -o build/calclib/nr_glnodes.s
+    build/calcnat --lib lib/nr/bfgs.calc    -o build/calclib/nr_bfgs.s
+    build/calcnat --lib lib/nr/pca.calc     -o build/calclib/nr_pca.s
+    build/calcnat examples/nr_demo10.calc \
+        build/calclib/nr_neville.s build/calclib/nr_glnodes.s \
+        build/calclib/nr_bfgs.s build/calclib/nr_pca.s \
+        build/calclib/nr_svd.s build/calclib/nr_eigen.s build/calclib/random.s \
+        -o build/d_nr10.exe
+    nat_out=$(build/d_nr10.exe | strip_cr)
+    # Neville interp at x=1.5 of sin samples must be near sin(1.5)=0.997.
+    nev_line=$(echo "$nat_out" | grep "^  x=1.5 ")
+    if ! echo "$nev_line" | grep -qE "interp=0\.9[0-9]+"; then
+        echo "FAIL: nr10 — Neville interp at 1.5"; echo "$nev_line"; exit 1
+    fi
+    # Gauss-Legendre on int sin(0..pi): n=10 must give 2 to ~15 digits.
+    gl_line=$(echo "$nat_out" | grep "n=10")
+    if ! echo "$gl_line" | grep -qE "  2  err=[0-9.eE+-]+"; then
+        echo "FAIL: nr10 — GL n=10 for int sin"; echo "$gl_line"; exit 1
+    fi
+    # BFGS Rosenbrock: f* must be < 1e-15.
+    bfgs_f=$(echo "$nat_out" | grep "^  f\* = " | head -1 | awk '{print $NF}')
+    awk -v f="$bfgs_f" 'BEGIN { exit !(f < 1e-15) }' \
+        || { echo "FAIL: nr10 — BFGS Rosenbrock f*"; echo "f=$bfgs_f"; exit 1; }
+    # PCA: first principal axis should have variance close to 9 (true variance).
+    pca_var_line=$(echo "$nat_out" | grep "variance explained")
+    # We expect "[8.5..something, 0.8..something]"; just check first component > 7.
+    pca_var_first=$(echo "$nat_out" | grep -A1 "variance explained per PC:" \
+        | tail -1 | sed 's/\[//' | awk -F',' '{print $1}')
+    awk -v v="$pca_var_first" 'BEGIN { exit !(v > 7 && v < 11) }' \
+        || { echo "FAIL: nr10 — PCA first variance"; echo "$pca_var_first"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

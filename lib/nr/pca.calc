@@ -1,0 +1,84 @@
+// pca.calc — Principal Component Analysis via SVD.
+//
+// Given an m x n data matrix (m samples, n features), centers each
+// column at zero mean and computes the SVD of the centered data:
+//   X_centered = U S V^T.
+// V's columns are the principal axes (in feature-space); U S projects
+// each sample onto those axes. The variance explained by the k-th
+// component is S[k]^2 / (m - 1).
+//
+// Reference: standard PCA derivation; NR §2.6 discusses SVD itself.
+//
+// API:
+//   pca_fit(X)
+//      -> {"mean":   length-n column means,
+//          "axes":   n x n (or m x n if m < n) matrix; column j is the j-th
+//                    principal direction in feature space,
+//          "var":    length-n array of variance explained per component,
+//          "scores": m x n matrix of sample coordinates in PC space.}
+//
+//   pca_transform(model, X_new)
+//      -> X_new projected onto the model's axes (rows are samples).
+
+extern fn svd(A: arr): map;
+
+priv fn _pc_zero(rows, cols) {
+    let M = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(M, row);
+    }
+    return M;
+}
+
+pub fn pca_fit(X) {
+    let m = len(X);
+    let n = len(X[0]);
+    // Column means.
+    let mu = [];
+    for (let j = 0; j < n; j = j + 1) {
+        let s = 0;
+        for (let i = 0; i < m; i = i + 1) { s = s + X[i][j]; }
+        push(mu, s / m);
+    }
+    // Centered data.
+    let Xc = _pc_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { Xc[i][j] = X[i][j] - mu[j]; }
+    }
+    // SVD requires m >= n in our implementation.
+    let sv = svd(Xc);
+    let U = sv["U"];  let S = sv["S"];  let V = sv["V"];
+    // Variance explained per PC.
+    let var_ = [];
+    for (let k = 0; k < n; k = k + 1) {
+        push(var_, S[k] * S[k] / (m - 1));
+    }
+    // Scores = U S  (m x n).
+    let scores = _pc_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            scores[i][j] = U[i][j] * S[j];
+        }
+    }
+    return {"mean": mu, "axes": V, "var": var_, "scores": scores};
+}
+
+pub fn pca_transform(model, X_new) {
+    let mu = model["mean"];
+    let V  = model["axes"];
+    let m = len(X_new);
+    let n = len(X_new[0]);
+    let out = _pc_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let k = 0; k < n; k = k + 1) {
+            let s = 0;
+            for (let j = 0; j < n; j = j + 1) {
+                s = s + (X_new[i][j] - mu[j]) * V[j][k];
+            }
+            out[i][k] = s;
+        }
+    }
+    return out;
+}

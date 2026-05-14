@@ -100,6 +100,10 @@ nr_libs: all
 	$(BUILD)/calcnat --lib lib/nr/quad2d.calc      -o $(CALCLIB)/nr_quad2d.s
 	$(BUILD)/calcnat --lib lib/nr/power_eigen.calc -o $(CALCLIB)/nr_power_eigen.s
 	$(BUILD)/calcnat --lib lib/nr/bspline.calc     -o $(CALCLIB)/nr_bspline.s
+	$(BUILD)/calcnat --lib lib/nr/neville.calc     -o $(CALCLIB)/nr_neville.s
+	$(BUILD)/calcnat --lib lib/nr/glnodes.calc     -o $(CALCLIB)/nr_glnodes.s
+	$(BUILD)/calcnat --lib lib/nr/bfgs.calc        -o $(CALCLIB)/nr_bfgs.s
+	$(BUILD)/calcnat --lib lib/nr/pca.calc         -o $(CALCLIB)/nr_pca.s
 
 sine_plot: libs
 	$(BUILD)/calcnat examples/sine_plot.calc $(CALCLIB)/plot.s -o $(BUILD)/sine_plot
@@ -201,8 +205,16 @@ nr_demo9: nr_libs libs
 	    -o $(BUILD)/nr_demo9
 	$(BUILD)/nr_demo9
 
+nr_demo10: nr_libs libs
+	$(BUILD)/calcnat examples/nr_demo10.calc \
+	    $(CALCLIB)/nr_neville.s $(CALCLIB)/nr_glnodes.s \
+	    $(CALCLIB)/nr_bfgs.s $(CALCLIB)/nr_pca.s \
+	    $(CALCLIB)/nr_svd.s $(CALCLIB)/nr_eigen.s $(CALCLIB)/random.s \
+	    -o $(BUILD)/nr_demo10
+	$(BUILD)/nr_demo10
+
 demos: sine_plot regression linsys numerical monte_carlo csv_demo \
-       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5 nr_demo6 nr_demo7 nr_demo8 nr_demo9
+       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5 nr_demo6 nr_demo7 nr_demo8 nr_demo9 nr_demo10
 
 test: all
 	sh tests/run_tests.sh

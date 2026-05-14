@@ -1,0 +1,124 @@
+// Tier-10 NR demo: Neville polynomial interpolation, arbitrary-order
+// Gauss-Legendre, BFGS quasi-Newton, PCA via SVD.
+
+extern fn neville_interp(xs: arr, ys: arr, x: num): map;
+
+extern fn gauleg(n: num, a: num, b: num): map;
+extern fn integrate_gauleg(f: fn, a: num, b: num, n: num): num;
+
+extern fn bfgs_min(f: fn, grad: fn, x0: arr, tol: num, max_iter: num): map;
+
+extern fn pca_fit(X: arr): map;
+extern fn pca_transform(model: map, X_new: arr): arr;
+extern fn Rng(seed: num): map;
+
+// ===== Neville =====
+print "===== Neville polynomial interpolation =====";
+// Fit a cubic through 4 sin(x) samples and interpolate at intermediate points.
+let xs = [0, 1, 2, 3];
+let ys = [sin(0), sin(1), sin(2), sin(3)];
+let probes = [0.5, 1.5, 2.5];
+for (let i = 0; i < len(probes); i = i + 1) {
+    let x = probes[i];
+    let r = neville_interp(xs, ys, x);
+    print "  x=" + x + "  interp=" + r["y"] + "  exact=" + sin(x)
+        + "  est_err=" + r["err"]
+        + "  actual_err=" + abs(r["y"] - sin(x));
+}
+
+// ===== Gauss-Legendre arbitrary order =====
+print "";
+print "===== Gauss-Legendre arbitrary-order quadrature =====";
+// int_0^pi sin(x) dx = 2.
+let sin_fn = fn(x) { return sin(x); };
+print "int_0^pi sin(x) dx (exact: 2):";
+for (let n = 2; n <= 12; n = n + 2) {
+    let val = integrate_gauleg(sin_fn, 0, pi(), n);
+    print "  n=" + n + "  " + val + "  err=" + abs(val - 2);
+}
+
+// int_0^1 1/(1+x^2) dx = pi/4 ~ 0.7853981634.
+let recipsq = fn(x) { return 1 / (1 + x * x); };
+print "";
+print "int_0^1 1/(1+x^2) dx (exact: pi/4 = " + (pi() / 4) + "):";
+print "  n=8  " + integrate_gauleg(recipsq, 0, 1, 8);
+print "  n=16 " + integrate_gauleg(recipsq, 0, 1, 16);
+
+// ===== BFGS =====
+print "";
+print "===== BFGS quasi-Newton minimization =====";
+// Rosenbrock: f = (1-x)^2 + 100 (y - x^2)^2.  Grad analytic:
+//   df/dx = -2 (1-x) - 400 x (y - x^2)
+//   df/dy =  200 (y - x^2)
+let rosen = fn(v) {
+    let dx = 1 - v[0];
+    let dy = v[1] - v[0] * v[0];
+    return dx * dx + 100 * dy * dy;
+};
+let drosen = fn(v) {
+    let dy = v[1] - v[0] * v[0];
+    return [-2 * (1 - v[0]) - 400 * v[0] * dy, 200 * dy];
+};
+let r_bfgs = bfgs_min(rosen, drosen, [-1.2, 1], 1e-10, 200);
+print "Rosenbrock starting at (-1.2, 1):";
+print "  x* =";   print r_bfgs["x"];
+print "  f* = " + r_bfgs["f"];
+print "  iters = " + r_bfgs["iters"] + "   converged = " + r_bfgs["converged"];
+
+// Higher-dim: extended Rosenbrock.
+let rosen5 = fn(v) {
+    let s = 0;
+    for (let i = 0; i < len(v) - 1; i = i + 1) {
+        let a = 1 - v[i];
+        let b = v[i + 1] - v[i] * v[i];
+        s = s + a * a + 100 * b * b;
+    }
+    return s;
+};
+let drosen5 = fn(v) {
+    let n = len(v);
+    let g = [];
+    for (let i = 0; i < n; i = i + 1) { push(g, 0); }
+    for (let i = 0; i < n - 1; i = i + 1) {
+        let a = 1 - v[i];
+        let b = v[i + 1] - v[i] * v[i];
+        g[i]     = g[i]     - 2 * a - 400 * v[i] * b;
+        g[i + 1] = g[i + 1] + 200 * b;
+    }
+    return g;
+};
+let r5 = bfgs_min(rosen5, drosen5, [0, 0, 0, 0, 0], 1e-10, 500);
+print "Extended Rosenbrock 5-D:";
+print "  x* =";  print r5["x"];
+print "  f* = " + r5["f"] + "   iters = " + r5["iters"];
+
+// ===== PCA =====
+print "";
+print "===== Principal Component Analysis =====";
+// Generate 200 samples from an anisotropic 2-D Gaussian rotated by 30 deg.
+// Variances: 9 along the rotated x-axis, 1 along the rotated y-axis.
+let rng = Rng(11);
+let theta = pi() / 6;     // 30 degrees
+let X = [];
+for (let i = 0; i < 200; i = i + 1) {
+    let u = rng.normal(0, 3);    // big variance
+    let v = rng.normal(0, 1);    // small variance
+    let x =  cos(theta) * u - sin(theta) * v;
+    let y =  sin(theta) * u + cos(theta) * v;
+    push(X, [x, y]);
+}
+let pca = pca_fit(X);
+print "data mean:";  print pca["mean"];
+print "variance explained per PC:";  print pca["var"];
+print "principal axes (columns of V):";  print pca["axes"];
+// First PC's angle should be ~ pi/6 = 30 deg = 0.524 rad.
+let v1 = pca["axes"];
+let pc1_angle = atan2(v1[1][0], v1[0][0]);
+// Wrap to [0, pi).
+if (pc1_angle < 0) { pc1_angle = pc1_angle + pi(); }
+if (pc1_angle > pi() / 2) { pc1_angle = pc1_angle - pi(); }
+print "first-PC angle = " + pc1_angle + " rad  (theory: pi/6 = " + (pi()/6) + ")";
+
+// Transform a fresh point.
+let probe = [[2, 0]];
+print "transform of [2, 0]: ";  print pca_transform(pca, probe);

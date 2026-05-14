@@ -1,0 +1,62 @@
+// neville.calc — Neville's algorithm for polynomial interpolation.
+//
+// Given n data points (x_i, y_i), constructs the unique degree-(n-1)
+// polynomial passing through them and evaluates it at a target x.
+// Neville builds the interpolant as a tableau of successively
+// higher-order interpolations, returning both the value and an
+// error estimate at no extra cost.
+//
+// Reference: Numerical Recipes 3.1.
+//
+// API:
+//   neville_interp(xs, ys, x)
+//      -> {"y": value, "err": estimated_error}
+//
+// Use Neville when you have a few high-quality samples and want both
+// the interpolated value and a built-in error indicator. For dense
+// data, prefer the spline (lib/nr/spline.calc) — Neville's polynomial
+// can oscillate wildly (Runge phenomenon) at high order.
+
+pub fn neville_interp(xs, ys, x) {
+    let n = len(xs);
+    if (n == 0) { throw "neville_interp: empty data"; }
+    if (len(ys) != n) { throw "neville_interp: xs and ys must agree in length"; }
+    // Find the nearest sample for the initial estimate.
+    let nearest = 0;
+    let diff = abs(x - xs[0]);
+    for (let i = 1; i < n; i = i + 1) {
+        let d = abs(x - xs[i]);
+        if (d < diff) { diff = d; nearest = i; }
+    }
+    // C and D arrays — see NR Table 3.1.1.
+    let c = [];
+    let d = [];
+    for (let i = 0; i < n; i = i + 1) { push(c, ys[i]); push(d, ys[i]); }
+    let y = ys[nearest];
+    // NR's polint uses 1-indexed arrays and does ns-- on the y-init line;
+    // translated to 0-indexed, the running ns starts one below the nearest
+    // sample's 0-indexed position.
+    let ns = nearest - 1;
+    let dy = 0;
+    for (let m = 1; m < n; m = m + 1) {
+        for (let i = 0; i < n - m; i = i + 1) {
+            let ho = xs[i] - x;
+            let hp = xs[i + m] - x;
+            let w  = c[i + 1] - d[i];
+            let denom = ho - hp;
+            if (denom == 0) { throw "neville_interp: two xs are equal"; }
+            let factor = w / denom;
+            c[i] = ho * factor;
+            d[i] = hp * factor;
+        }
+        // Move down the tableau by the cheaper path (smaller correction).
+        if (2 * (ns + 1) < n - m) {
+            dy = c[ns + 1];
+        } else {
+            dy = d[ns];
+            ns = ns - 1;
+        }
+        y = y + dy;
+    }
+    return {"y": y, "err": abs(dy)};
+}

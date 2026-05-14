@@ -1,0 +1,91 @@
+// glnodes.calc — generate Gauss-Legendre nodes/weights for arbitrary order.
+//
+// On [-1, 1], the n-point GL nodes are the roots of P_n(x). We find them
+// by Newton iteration starting from the standard Chebyshev-like initial
+// guess  x_k = cos(pi (k - 1/4) / (n + 1/2)). Each Newton step uses
+// Bonnet's recurrence to compute P_n and P_n' simultaneously. Weights
+// are then  w_k = 2 / ((1 - x_k^2) (P_n'(x_k))^2).
+//
+// Reference: Numerical Recipes 4.5 (gauleg routine).
+//
+// API:
+//   gauleg(n, a, b)
+//      -> {"x": [x_1, ..., x_n], "w": [w_1, ..., w_n]}
+//      Nodes and weights for n-point Gauss-Legendre on [a, b].
+//
+//   integrate_gauleg(f, a, b, n)
+//      -> int_a^b f(x) dx via the n-point rule.
+
+priv fn _legendre_pp(n, x) {
+    // Returns [P_n(x), P_n'(x)] using Bonnet's three-term recurrence.
+    let p_prev = 1;
+    let p_curr = x;
+    for (let k = 1; k < n; k = k + 1) {
+        let p_next = ((2 * k + 1) * x * p_curr - k * p_prev) / (k + 1);
+        p_prev = p_curr;
+        p_curr = p_next;
+    }
+    // P_n' = n (x P_n - P_{n-1}) / (x^2 - 1).
+    let denom = x * x - 1;
+    let dp = 0;
+    if (denom != 0) {
+        dp = n * (x * p_curr - p_prev) / denom;
+    }
+    return [p_curr, dp];
+}
+
+pub fn gauleg(n, a, b) {
+    if (n < 1) { throw "gauleg: n must be >= 1"; }
+    let xs = [];
+    let ws = [];
+    for (let i = 0; i < n; i = i + 1) { push(xs, 0); push(ws, 0); }
+    let half = floor((n + 1) / 2);
+    for (let i = 0; i < half; i = i + 1) {
+        // Initial guess (NR's formula).
+        let x = cos(pi() * (i + 0.75) / (n + 0.5));
+        // Newton iteration on P_n.
+        let max_it = 50;
+        let conv = 0;
+        let dp_at = 0;
+        for (let it = 0; it < max_it; it = it + 1) {
+            let pd = _legendre_pp(n, x);
+            let p  = pd[0];
+            let dp = pd[1];
+            if (dp == 0) { break; }
+            let dx = p / dp;
+            x = x - dx;
+            dp_at = dp;
+            if (abs(dx) < 1e-15) { conv = 1; break; }
+        }
+        if (conv == 0) {
+            // Recompute dp_at with the final x just in case.
+            let pd = _legendre_pp(n, x);
+            dp_at = pd[1];
+        }
+        let w = 2 / ((1 - x * x) * dp_at * dp_at);
+        // Symmetric placement on [-1, 1].
+        xs[i]         = -x;
+        xs[n - 1 - i] =  x;
+        ws[i]         =  w;
+        ws[n - 1 - i] =  w;
+    }
+    // Affine transform to [a, b]: scale by (b-a)/2, shift by (a+b)/2;
+    // weights scale by (b-a)/2.
+    let cx = 0.5 * (b - a);
+    let mx = 0.5 * (b + a);
+    let xo = [];
+    let wo = [];
+    for (let i = 0; i < n; i = i + 1) {
+        push(xo, mx + cx * xs[i]);
+        push(wo, cx * ws[i]);
+    }
+    return {"x": xo, "w": wo};
+}
+
+pub fn integrate_gauleg(f, a, b, n) {
+    let nw = gauleg(n, a, b);
+    let xs = nw["x"];  let ws = nw["w"];
+    let s = 0;
+    for (let i = 0; i < n; i = i + 1) { s = s + ws[i] * f(xs[i]); }
+    return s;
+}

@@ -6,7 +6,7 @@ Reverse-chronological. Tracks language- and library-level changes. Bug-fix-only 
 
 ### Numerical-Recipes library (branch `numerical-library`)
 
-Nine tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo9` exercise each.
+Ten tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo10` exercise each.
 
 - Tier 1: `brent` (root finder), `spline` (natural cubic), `special` (gamma/erf), `eigen` (Jacobi).
 - Tier 2: `lu` (Doolittle + partial pivoting), `romberg` (Richardson extrapolation), `rk45` (Cash-Karp adaptive), `poly` (Chebyshev/Legendre/Hermite/Laguerre/Bessel).
@@ -17,6 +17,7 @@ Nine tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo
 - Tier 7: `cholesky` (SPD factorization + solve + log-det + inverse), `cg` (conjugate gradient with optional preconditioner), `anneal` (simulated annealing), `mcmc` (Metropolis-Hastings sampler).
 - Tier 8: `welch` (Welch periodogram PSD), `wavelet` (Haar + Daubechies-4 DWT), `toeplitz` (Levinson-Durbin + Yule-Walker AR estimation), `simplex_lp` (two-phase simplex linear programming).
 - Tier 9: `fft2d` (two-dimensional FFT and inverse), `quad2d` (fixed-order and adaptive 2-D Gauss-Legendre), `power_eigen` (power / inverse iteration), `bspline` (Cox-de Boor basis + least-squares fitting).
+- Tier 10: `neville` (Neville polynomial interpolation), `glnodes` (arbitrary-order Gauss-Legendre nodes/weights), `bfgs` (BFGS quasi-Newton minimizer), `pca` (PCA via SVD).
 
 ### Bug fix: complex arithmetic type inference
 

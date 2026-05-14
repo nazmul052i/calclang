@@ -1684,6 +1684,45 @@ extern fn bspline_clamped_knots(a, b: num, n_interior, k: num): arr;
 
 `k` is the order (k = 4 gives cubics). The Cox-de Boor recurrence evaluates the B-spline basis in O(k) per query. `bspline_fit` builds the design matrix `B[i][j] = B_j(x_i)`, then QR-solves `B c = y` for the least-squares coefficients — handy when you have noisy data and want smooth interpolation. `bspline_clamped_knots` gives the standard clamped uniform knot vector (repeated endpoints) for convenience.
 
+#### `lib/nr/neville.calc` — Neville polynomial interpolation
+
+```calc
+extern fn neville_interp(xs: arr, ys: arr, x: num): map;
+// returns {"y": interpolated value, "err": rough error estimate}
+```
+
+Builds the degree-(n-1) polynomial through n samples and evaluates it at x. The Neville tableau gives both the value and an internal error indicator at no extra cost (NR §3.1). Use this when you have a few high-quality samples and want a built-in error bar; for dense data prefer a cubic spline to dodge the Runge phenomenon at high order.
+
+#### `lib/nr/glnodes.calc` — arbitrary-order Gauss-Legendre nodes/weights
+
+```calc
+extern fn gauleg(n: num, a: num, b: num): map;            // -> {"x", "w"}
+extern fn integrate_gauleg(f: fn, a: num, b: num, n: num): num;
+```
+
+Computes the n-point Gauss-Legendre nodes by Newton iteration on `P_n(x) = 0` starting from the standard Chebyshev-like initial guess; uses Bonnet's three-term recurrence to evaluate `P_n` and `P_n'` simultaneously. Affine-transforms to `[a, b]`. NR §4.5.
+
+For smooth integrands this gives spectral accuracy: `int_0^pi sin(x) dx` reaches machine precision by n = 10.
+
+#### `lib/nr/bfgs.calc` — BFGS quasi-Newton minimization
+
+```calc
+extern fn bfgs_min(f: fn, grad: fn, x0: arr, tol: num, max_iter: num): map;
+```
+
+BFGS maintains a rank-2 inverse-Hessian approximation built from successive (Δx, Δgradient) pairs. After a few steps the approximation gets good enough that convergence becomes superlinear — typically beats Nelder-Mead by an order of magnitude once `n` exceeds ~5. The implementation uses an Armijo back-tracking line search; pass an analytic gradient (or build one with `lib/nr/diff.calc`'s `gradient`). NR §10.7.
+
+The demo solves the standard Rosenbrock function and an extended 5-D variant to f* ~ 1e-25 in fewer than 50 iterations.
+
+#### `lib/nr/pca.calc` — Principal Component Analysis
+
+```calc
+extern fn pca_fit(X: arr): map;            // returns {"mean", "axes", "var", "scores"}
+extern fn pca_transform(model: map, X_new: arr): arr;
+```
+
+Centers the data matrix and SVDs it. The columns of V are the principal directions (sorted by decreasing variance); U·diag(S) gives the projected coordinates. `pca_transform` projects new samples onto an existing model's axes.
+
 #### Building the NR libraries
 
 ```bash
@@ -1696,7 +1735,8 @@ make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
 make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make nr_demo7         # tier 7: Cholesky + CG + simulated annealing + MCMC
 make nr_demo8         # tier 8: Welch PSD + wavelets + Toeplitz + simplex LP
-make nr_demo9         # tier 9: 2-D FFT + 2-D quadrature + power eigen + B-spline
+make nr_demo9         # tier 9:  2-D FFT + 2-D quadrature + power eigen + B-spline
+make nr_demo10        # tier 10: Neville interp + Gauss-Legendre + BFGS + PCA
 ```
 
 ### Building demos
@@ -1724,6 +1764,7 @@ make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-
 make nr_demo7                            # Cholesky + CG + simulated annealing + MCMC
 make nr_demo8                            # Welch PSD + wavelets + Toeplitz + simplex LP
 make nr_demo9                            # 2-D FFT + 2-D quadrature + power eigen + B-spline
+make nr_demo10                           # Neville + arbitrary-order GL + BFGS + PCA
 make demos                               # all of the above
 ```
 
