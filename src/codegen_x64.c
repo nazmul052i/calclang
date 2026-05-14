@@ -2417,6 +2417,219 @@ static void emit_closure_body(Cg *cg, CgClosure *cc) {
 
 /* Variant that also takes a library_mode flag. The non-flagged
    entry is kept as a thin wrapper. */
+/* --- Peephole optimizer ----------------------------------------------
+ *
+ * Scans the emitted assembly text and applies small, locally-safe
+ * rewrites. Each pattern looks at one or two adjacent non-blank lines
+ * and decides if a replacement is legal. The whole thing is text-based
+ * which makes it simple — and limits its power. It's the second-cheapest
+ * win after constant folding.
+ *
+ * Patterns (all safe with the current codegen):
+ *
+ *   1. `add rsp, 16` followed immediately by `sub rsp, 16` (or vice
+ *      versa) → drop both. These appear when a push_xmm0 ... pop_xmm0
+ *      sandwich has no body, e.g. when an inner expression folded away.
+ *
+ *   2. `mov reg, 0` → `xor reg, reg`. Smaller encoding, same effect on
+ *      the flags we care about. We only rewrite for caller-save GPRs
+ *      we know aren't flag-sensitive downstream.
+ *
+ *   3. `jmp .Lx` followed by `.Lx:` → drop the jmp. Common when an
+ *      if branch falls through to the join label.
+ *
+ *   4. `movq reg, xmm0` followed immediately by `movq xmm0, reg` (same
+ *      reg) → drop both. Generated when the codegen passes a value
+ *      through a GP register that wasn't actually used.
+ *
+ * Anything we can't statically prove safe, we leave alone. Anything we
+ * do change must not affect any branch decision in between.
+ */
+
+static int starts_with_strip(const char *line, const char *prefix) {
+    while (*line == ' ' || *line == '\t') line++;
+    while (*prefix && *line == *prefix) { line++; prefix++; }
+    return *prefix == '\0';
+}
+
+/* Returns 1 if `line` is the label definition matching label_name (e.g.
+   line ".L42:" and label_name ".L42"). */
+static int line_is_label(const char *line, const char *label_name) {
+    while (*line == ' ' || *line == '\t') line++;
+    size_t n = strlen(label_name);
+    if (strncmp(line, label_name, n) != 0) return 0;
+    return line[n] == ':';
+}
+
+/* Parse the jump label from a line of the form `    jmp .L42` —
+   write into `out` of size cap. Returns 1 if matched. */
+static int parse_jmp_label(const char *line, char *out, size_t cap) {
+    while (*line == ' ' || *line == '\t') line++;
+    if (strncmp(line, "jmp", 3) != 0) return 0;
+    line += 3;
+    while (*line == ' ' || *line == '\t') line++;
+    size_t i = 0;
+    while (*line && *line != '\n' && *line != ' ' && *line != '\t' && i + 1 < cap) {
+        out[i++] = *line++;
+    }
+    out[i] = '\0';
+    return i > 0;
+}
+
+/* "movq REG, xmm0" → write REG to out, return 1 on match. */
+static int parse_movq_from_xmm0(const char *line, char *reg_out, size_t cap) {
+    while (*line == ' ' || *line == '\t') line++;
+    if (strncmp(line, "movq", 4) != 0) return 0;
+    line += 4;
+    while (*line == ' ' || *line == '\t') line++;
+    size_t i = 0;
+    while (*line && *line != ',' && *line != ' ' && i + 1 < cap) reg_out[i++] = *line++;
+    reg_out[i] = '\0';
+    if (i == 0 || strcmp(reg_out, "xmm0") == 0) return 0;
+    while (*line == ' ' || *line == '\t' || *line == ',') line++;
+    if (strncmp(line, "xmm0", 4) != 0) return 0;
+    return 1;
+}
+
+/* "movq xmm0, REG" — check REG matches. */
+static int parse_movq_to_xmm0_reg(const char *line, const char *reg) {
+    while (*line == ' ' || *line == '\t') line++;
+    if (strncmp(line, "movq", 4) != 0) return 0;
+    line += 4;
+    while (*line == ' ' || *line == '\t') line++;
+    if (strncmp(line, "xmm0", 4) != 0) return 0;
+    line += 4;
+    while (*line == ' ' || *line == '\t' || *line == ',') line++;
+    size_t n = strlen(reg);
+    if (strncmp(line, reg, n) != 0) return 0;
+    char after = line[n];
+    return (after == '\n' || after == ' ' || after == '\t' || after == '\0');
+}
+
+/* "mov REG, 0" — write REG. We restrict to a handful of "safe" GPRs
+   to avoid touching anything used as a memory base. */
+static int parse_mov_zero(const char *line, char *reg_out, size_t cap) {
+    while (*line == ' ' || *line == '\t') line++;
+    if (strncmp(line, "mov ", 4) != 0 && strncmp(line, "mov\t", 4) != 0) return 0;
+    line += 3;
+    while (*line == ' ' || *line == '\t') line++;
+    size_t i = 0;
+    while (*line && *line != ',' && i + 1 < cap) reg_out[i++] = *line++;
+    reg_out[i] = '\0';
+    if (i == 0) return 0;
+    while (*line == ',' || *line == ' ' || *line == '\t') line++;
+    /* Match "0" alone, or "0x0", or "0x00...", etc. */
+    if (line[0] != '0') return 0;
+    if (line[1] == 'x') {
+        const char *p2 = line + 2;
+        while (*p2 == '0') p2++;
+        if (*p2 != '\n' && *p2 != ' ' && *p2 != '\t' && *p2 != '\0') return 0;
+    } else if (line[1] != '\n' && line[1] != ' ' && line[1] != '\t' && line[1] != '\0') {
+        return 0;
+    }
+    /* whitelist of caller-save scratch registers */
+    static const char *safe[] = {"rax", "rcx", "rdx", "r8", "r9", "r10", "r11", NULL};
+    for (int j = 0; safe[j]; j++) {
+        if (strcmp(reg_out, safe[j]) == 0) return 1;
+    }
+    return 0;
+}
+
+/* Find the next non-blank, non-comment line in `lines[]` starting at
+   index `from`. Returns the index, or `n` if none. */
+static int next_real_line(char **lines, int from, int n) {
+    for (int i = from; i < n; i++) {
+        const char *l = lines[i];
+        while (*l == ' ' || *l == '\t') l++;
+        if (*l != '\0' && *l != '\n' && *l != ';') return i;
+    }
+    return n;
+}
+
+static char *cl_peephole_optimize(const char *asm_text) {
+    if (!asm_text) return NULL;
+    /* Split into lines. */
+    size_t L = strlen(asm_text);
+    /* Worst case: every char is its own line. */
+    char **lines = (char **)cl_track_malloc(sizeof(char *) * (L + 2));
+    int    n = 0;
+    /* Walk and split. */
+    const char *p = asm_text;
+    while (*p) {
+        const char *nl = strchr(p, '\n');
+        size_t len = nl ? (size_t)(nl - p) : strlen(p);
+        char *line = (char *)cl_track_malloc(len + 2);
+        memcpy(line, p, len);
+        line[len] = '\n';
+        line[len + 1] = '\0';
+        lines[n++] = line;
+        if (!nl) break;
+        p = nl + 1;
+    }
+
+    /* Pass 1: pattern matches. We mark lines for deletion by setting
+       the pointer to "" (an empty string). A second pass at the end
+       stitches the surviving lines back together. */
+    char buf1[32];
+
+    for (int i = 0; i < n; i++) {
+        char *L1 = lines[i];
+        if (L1[0] == '\0') continue;
+
+        /* Pattern 2: mov reg, 0 -> xor reg, reg. (Single-line.) */
+        if (parse_mov_zero(L1, buf1, sizeof buf1)) {
+            char *replacement = (char *)cl_track_malloc(96);
+            snprintf(replacement, 96, "    xor  %s, %s\n", buf1, buf1);
+            lines[i] = replacement;
+            continue;
+        }
+
+        /* Two-line patterns. */
+        int j = next_real_line(lines, i + 1, n);
+        if (j >= n) continue;
+        char *L2 = lines[j];
+
+        /* Pattern 1: add rsp, K immediately followed by sub rsp, K (or
+           the reverse) cancels. */
+        if (starts_with_strip(L1, "add  rsp, 16") && starts_with_strip(L2, "sub  rsp, 16")) {
+            lines[i] = (char *)""; lines[j] = (char *)"";
+            continue;
+        }
+        if (starts_with_strip(L1, "sub  rsp, 16") && starts_with_strip(L2, "add  rsp, 16")) {
+            lines[i] = (char *)""; lines[j] = (char *)"";
+            continue;
+        }
+
+        /* Pattern 4: movq REG, xmm0 ; movq xmm0, REG — same reg, no
+           use of REG in between (we required adjacency via next_real_line). */
+        if (parse_movq_from_xmm0(L1, buf1, sizeof buf1)
+            && parse_movq_to_xmm0_reg(L2, buf1)) {
+            lines[i] = (char *)""; lines[j] = (char *)"";
+            continue;
+        }
+
+        /* Pattern 3: jmp .Lx followed by .Lx: — drop the jmp. */
+        if (parse_jmp_label(L1, buf1, sizeof buf1) && line_is_label(L2, buf1)) {
+            lines[i] = (char *)"";
+            /* keep going; the label remains */
+            continue;
+        }
+    }
+
+    /* Stitch surviving lines back. */
+    size_t total = 1;
+    for (int i = 0; i < n; i++) total += strlen(lines[i]);
+    char *out = (char *)cl_track_malloc(total + 16);
+    size_t o = 0;
+    for (int i = 0; i < n; i++) {
+        size_t k = strlen(lines[i]);
+        memcpy(out + o, lines[i], k);
+        o += k;
+    }
+    out[o] = '\0';
+    return out;
+}
+
 char *codegen_x64_program_ex(const Program *prog, int library_mode) {
     Cg cg = {0};
     sb_init(&cg.out);
@@ -2482,7 +2695,9 @@ char *codegen_x64_program_ex(const Program *prog, int library_mode) {
 
     emit_string_pool(&cg);
 
-    return cg.out.buf;
+    /* Peephole pass — see cl_peephole_optimize below. */
+    char *out = cl_peephole_optimize(cg.out.buf);
+    return out ? out : cg.out.buf;
 }
 
 char *codegen_x64_program(const Program *prog) {

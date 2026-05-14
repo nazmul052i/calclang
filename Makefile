@@ -5,7 +5,7 @@ SRC := src
 
 COMMON := $(SRC)/common.c
 CALCLIB := $(SRC)/calclib.c
-COMMON_FRONTEND := $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/symbol_table.c $(SRC)/codegen.c $(SRC)/type_infer.c
+COMMON_FRONTEND := $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/symbol_table.c $(SRC)/codegen.c $(SRC)/type_infer.c $(SRC)/optimizer.c
 
 .PHONY: all clean example test
 
@@ -26,8 +26,8 @@ $(BUILD)/calcld: $(BUILD) $(COMMON) $(SRC)/calcld.c include/common.h include/ins
 $(BUILD)/calcvm: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/calcvm.c include/common.h include/insn.h include/calclib.h
 	$(CC) $(CFLAGS) $(COMMON) $(CALCLIB) $(SRC)/calcvm.c -o $@
 
-$(BUILD)/calcnat: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/calcnat.c include/*.h
-	$(CC) $(CFLAGS) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/calcnat.c -o $@
+$(BUILD)/calcnat: $(BUILD) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcnat.c include/*.h
+	$(CC) $(CFLAGS) $(COMMON) $(CALCLIB) $(SRC)/lexer.c $(SRC)/ast.c $(SRC)/parser.c $(SRC)/codegen_x64.c $(SRC)/type_infer.c $(SRC)/optimizer.c $(SRC)/calcnat.c -o $@
 
 example: all
 	$(BUILD)/calcc examples/demo.calc $(BUILD)/demo.casm

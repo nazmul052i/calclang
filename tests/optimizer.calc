@@ -1,0 +1,61 @@
+// optimizer.calc — exercises the AST-rewriting optimizer.
+//
+// Each line is a value the optimizer should be able to compute at
+// compile time. We don't observe the assembly directly (that's the
+// optimizer's job); we just verify the program produces the right
+// answers, which it must whether or not folding happens.
+
+// Constant folding — numbers
+print 2 + 3 * 4;                  // 14
+print (10 - 4) * 2;               // 12
+print 100 % 7;                    // 2
+print -5 + 8;                     // 3
+
+// Constant folding — strings
+print "hello" + " " + "world";    // hello world
+print "x = " + 42;                // x = 42
+print 7 + " items";               // 7 items
+
+// Constant folding — comparison
+print 5 < 10;                     // 1
+print 5 == 5;                     // 1
+print 5 != 5;                     // 0
+
+// Constant folding — bitwise
+print 0xFF & 0x0F;                // 15
+print 1 << 10;                    // 1024
+print ~0 & 0xFFFF;                // 65535
+
+// Unary fold
+print -(2 + 3);                   // -5
+print !0;                         // 1
+print ~5;                         // -6
+
+// Algebraic simplification (these still need to work even if the
+// optimizer rewrites `x + 0` to `x`)
+let x = 7;
+print x + 0;                      // 7
+print 0 + x;                      // 7
+print x - 0;                      // 7
+print x * 1;                      // 7
+print 1 * x;                      // 7
+print x | 0;                      // 7
+print x ^ 0;                      // 7
+print x << 0;                     // 7
+print x >> 0;                     // 7
+
+// Dead-branch elimination
+if (0) { print "never"; }
+if (1) { print "always"; }
+if (5 > 3) { print "five wins"; } else { print "three wins"; }
+
+// while (0) — entire loop should vanish (the print inside must NOT run)
+while (0) { print "unreached"; }
+
+// Ternary with constant
+print 1 ? "yes" : "no";           // yes
+print 0 ? "yes" : "no";           // no
+
+// Short-circuit constant logical
+print 0 && undefined_var();       // 0 — RHS must not be evaluated
+print 1 || undefined_var();       // 1 — same

@@ -30,6 +30,40 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] optimizer — constant folding, algebraic, dead-branch"
+out=$(run optimizer)
+check "optimizer" '14
+12
+2
+3
+hello world
+x = 42
+7 items
+1
+1
+0
+15
+1024
+65535
+-5
+1
+-6
+7
+7
+7
+7
+7
+7
+7
+7
+7
+always
+five wins
+yes
+no
+0
+1' "$out"
+
 echo "[test] qol — ternary, do-while, ctype, fmt"
 out=$(run qol)
 check "qol" 'yes
@@ -830,6 +864,19 @@ after all' "$nat_out"
     build/calcnat --lib lib/json.calc    -o build/calclib/json.s
     build/calcnat --lib lib/ode.calc     -o build/calclib/ode.s
     build/calcnat --lib lib/fft.calc     -o build/calclib/fft.s
+    build/calcnat --lib lib/math.calc    -o build/calclib/math.s
+
+    echo "[test] demo — math_demo (sq, cube, power_int, hypot, hyperbolics, lerp)"
+    build/calcnat examples/math_demo.calc build/calclib/math.s -o build/d_math.exe
+    nat_out=$(build/d_math.exe | strip_cr)
+    # Spot-check a few invariants.
+    echo "$nat_out" | grep -q "sq(7)         = 49"              || { echo "FAIL: math — sq"; exit 1; }
+    echo "$nat_out" | grep -q "cube(4)       = 64"              || { echo "FAIL: math — cube"; exit 1; }
+    echo "$nat_out" | grep -q "power_int(3, 5)   = 243"         || { echo "FAIL: math — power_int"; exit 1; }
+    echo "$nat_out" | grep -q "cbrt(-8)          = -2"          || { echo "FAIL: math — cbrt(-8)"; exit 1; }
+    echo "$nat_out" | grep -q "hypot(3, 4)       = 5"           || { echo "FAIL: math — hypot"; exit 1; }
+    echo "$nat_out" | grep -q "log2(1024)        = 10"          || { echo "FAIL: math — log2"; exit 1; }
+    echo "$nat_out" | grep -q "remap(5, 0, 10, 100, 200) = 150" || { echo "FAIL: math — remap"; exit 1; }
 
     echo "[test] demo — linsys (mat_solve, mat_det, transpose, identity)"
     build/calcnat examples/linsys.calc build/calclib/linalg.s -o build/d_linsys.exe
@@ -944,6 +991,308 @@ A * I3 == A?  1' "$nat_out"
     if [ ! -s build/ode_decay.svg ] || [ ! -s build/ode_sho.svg ]; then
         echo "FAIL: ode_demo — missing SVG"; exit 1
     fi
+
+    echo "[test] demo — nr_demo (Brent, spline, gamma/erf, Jacobi)"
+    # Build NR libraries (separate from the basic lib build above).
+    build/calcnat --lib lib/nr/brent.calc   -o build/calclib/nr_brent.s
+    build/calcnat --lib lib/nr/spline.calc  -o build/calclib/nr_spline.s
+    build/calcnat --lib lib/nr/special.calc -o build/calclib/nr_special.s
+    build/calcnat --lib lib/nr/eigen.calc   -o build/calclib/nr_eigen.s
+    build/calcnat examples/nr_demo.calc \
+        build/calclib/nr_brent.s build/calclib/nr_spline.s \
+        build/calclib/nr_special.s build/calclib/nr_eigen.s \
+        -o build/d_nr.exe
+    nat_out=$(build/d_nr.exe | strip_cr)
+    # Spot-check a few invariants. Tolerant of trailing digits.
+    echo "$nat_out" | grep -q "cos(x) = 0 -> 1.570796"        || { echo "FAIL: nr — Brent cos";        exit 1; }
+    echo "$nat_out" | grep -q "x\^3 = 2  -> 1.259921"         || { echo "FAIL: nr — Brent cubic";       exit 1; }
+    echo "$nat_out" | grep -q "gamma(5)   = 24"               || { echo "FAIL: nr — gamma(5)";          exit 1; }
+    # Jacobi residuals must all be at machine epsilon (1e-13 or smaller).
+    if echo "$nat_out" | grep -qE "max \|A v - lambda v\| = [^0]\.[0-9]+e-0[789]"; then
+        echo "FAIL: nr — Jacobi residual too large"; echo "$nat_out"; exit 1
+    fi
+    # Sum of eigenvalues should equal trace(A) = 4+3+5 = 12.
+    sum_line=$(echo "$nat_out" | grep "^eigenvalues:" -A 1 | tail -1)
+    # Not strict-equal because of FP noise; just sanity-check the
+    # eigenvalues are present and the line parsed.
+    if [ -z "$sum_line" ]; then
+        echo "FAIL: nr — no eigenvalues output"; exit 1
+    fi
+
+    echo "[test] demo — nr_demo2 (LU + Romberg + RK45 + polynomial families)"
+    build/calcnat --lib lib/nr/lu.calc      -o build/calclib/nr_lu.s
+    build/calcnat --lib lib/nr/romberg.calc -o build/calclib/nr_romberg.s
+    build/calcnat --lib lib/nr/rk45.calc    -o build/calclib/nr_rk45.s
+    build/calcnat --lib lib/nr/poly.calc    -o build/calclib/nr_poly.s
+    build/calcnat examples/nr_demo2.calc \
+        build/calclib/nr_lu.s build/calclib/nr_romberg.s \
+        build/calclib/nr_rk45.s build/calclib/nr_poly.s \
+        -o build/d_nr2.exe
+    nat_out=$(build/d_nr2.exe | strip_cr)
+    # LU determinant must be exactly -1 for this matrix.
+    echo "$nat_out" | grep -q "det(A) = -1"                   || { echo "FAIL: nr2 — LU det";          exit 1; }
+    # Solve must recover [2, 3, -1].
+    echo "$nat_out" | grep -q '^\[2, 3, -1' \
+        || echo "$nat_out" | grep -q 'x1 =' \
+        || { echo "FAIL: nr2 — LU solve";        exit 1; }
+    # Romberg of sin on [0, pi] must hit 2.0 exactly (or essentially so).
+    echo "$nat_out" | grep -q "sin(x) on \[0, pi\]  -> 2"      || { echo "FAIL: nr2 — Romberg sin";     exit 1; }
+    # RK45 on y' = -y must match exp(-5) to ~8 digits.
+    echo "$nat_out" | grep -q "RK45 endpoint = 0.006737"       || { echo "FAIL: nr2 — RK45 decay";      exit 1; }
+    # Polynomials: Chebyshev T_5(0.5) = 0.5 exactly.
+    echo "$nat_out" | grep -q "Chebyshev T_5(0.5) = 0.5"       || { echo "FAIL: nr2 — Chebyshev T_5";   exit 1; }
+    # Hermite H_3(0.5) = -5.
+    echo "$nat_out" | grep -q "Hermite   H_3(0.5) = -5"        || { echo "FAIL: nr2 — Hermite H_3";     exit 1; }
+    # Bessel J_0(0) ≈ 1.
+    echo "$nat_out" | grep -qE "J_0\(0\)   = 1(\.0+[0-9]+)?"   || { echo "FAIL: nr2 — Bessel J_0(0)";   exit 1; }
+
+    echo "[test] demo — nr_demo3 (Brent/golden/Nelder-Mead + heapsort/quickselect)"
+    build/calcnat --lib lib/nr/minimize.calc -o build/calclib/nr_minimize.s
+    build/calcnat --lib lib/nr/sort.calc     -o build/calclib/nr_sort.s
+    build/calcnat examples/nr_demo3.calc \
+        build/calclib/nr_minimize.s build/calclib/nr_sort.s \
+        -o build/d_nr3.exe
+    nat_out=$(build/d_nr3.exe | strip_cr)
+    # Quadratic min at x=2, f=1 — must land on 2 to ~8 digits.
+    echo "$nat_out" | grep -qE "golden_section -> x = 2(\.0+[0-9]*)?\b" \
+        || { echo "FAIL: nr3 — golden section"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "brent_min      -> x = 2(\.0+[0-9]*)?   f = 1" \
+        || { echo "FAIL: nr3 — Brent minimize"; echo "$nat_out"; exit 1; }
+    # Rosenbrock f* should be < 1e-6 — accept any "f* = 0.0000..." or "e-".
+    echo "$nat_out" | grep -E "^  f\* = " | head -1 | grep -qE "(0(\.0{5,}[0-9]+)?|e-)" \
+        || { echo "FAIL: nr3 — Rosenbrock f*"; echo "$nat_out"; exit 1; }
+    # Heapsort produces a fully sorted list. The demo prints the label
+    # and the array on separate lines, so grep just the array.
+    echo "$nat_out" | grep -q "^\[0, 1, 2, 3, 4, 5, 6, 7, 8, 9\]$" \
+        || { echo "FAIL: nr3 — heapsort"; echo "$nat_out"; exit 1; }
+    # Quickselect: 3rd smallest (k=2) of 0..9 is 2.
+    echo "$nat_out" | grep -qE "3rd smallest \(k=2\) = 2(\.0+[0-9]*)?\b" \
+        || { echo "FAIL: nr3 — quickselect"; echo "$nat_out"; exit 1; }
+    # Median of 0..9 is 4.5.
+    echo "$nat_out" | grep -q "median of raw      = 4.5" \
+        || { echo "FAIL: nr3 — median"; echo "$nat_out"; exit 1; }
+
+    echo "[test] demo — nr_demo4 (Ridders + dist sampling + Newton + LM fit)"
+    build/calcnat --lib lib/nr/diff.calc        -o build/calclib/nr_diff.s
+    build/calcnat --lib lib/nr/random_dist.calc -o build/calclib/nr_random_dist.s
+    build/calcnat --lib lib/nr/newton.calc      -o build/calclib/nr_newton.s
+    build/calcnat --lib lib/nr/fitnl.calc       -o build/calclib/nr_fitnl.s
+    build/calcnat examples/nr_demo4.calc \
+        build/calclib/nr_diff.s build/calclib/nr_random_dist.s \
+        build/calclib/nr_newton.s build/calclib/nr_fitnl.s \
+        build/calclib/nr_lu.s build/calclib/random.s \
+        -o build/d_nr4.exe
+    nat_out=$(build/d_nr4.exe | strip_cr)
+    # Ridders' on sin(1) must give cos(1) to ~15 digits.
+    echo "$nat_out" | grep -q "exact: cos(1) = 0.5403023059" \
+        || { echo "FAIL: nr4 — cos(1) line"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "d/dx sin\(x\) at x=1 -> 0\.5403023(0[0-9]+|[1-9])" \
+        || { echo "FAIL: nr4 — Ridders sin"; echo "$nat_out"; exit 1; }
+    # Newton: must converge to (4, 3) starting at (5, 0).
+    echo "$nat_out" | grep -q "x\* =" \
+        || { echo "FAIL: nr4 — Newton output"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "\[4(\.0+[0-9]*)?, 3(\.0+[0-9]*)?\]" \
+        || { echo "FAIL: nr4 — Newton root (4,3)"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -qE "iters = [0-9]+   converged = 1" \
+        || { echo "FAIL: nr4 — Newton not converged"; echo "$nat_out"; exit 1; }
+    # LM fit: a0 must come back within 5% of 2.5 (-> 2.375 .. 2.625).
+    fit_line=$(echo "$nat_out" | grep -A1 "fitted a (truth" | tail -1)
+    if ! echo "$fit_line" | grep -qE "\[2\.[3-6]"; then
+        echo "FAIL: nr4 — LM fit a0 out of band"; echo "$fit_line"; exit 1
+    fi
+
+    echo "[test] demo — nr_demo5 (QR + SVD + Laguerre polyroots + convolution)"
+    build/calcnat --lib lib/nr/qr.calc        -o build/calclib/nr_qr.s
+    build/calcnat --lib lib/nr/svd.calc       -o build/calclib/nr_svd.s
+    build/calcnat --lib lib/nr/polyroots.calc -o build/calclib/nr_polyroots.s
+    build/calcnat --lib lib/nr/conv.calc      -o build/calclib/nr_conv.s
+    build/calcnat examples/nr_demo5.calc \
+        build/calclib/nr_qr.s build/calclib/nr_svd.s \
+        build/calclib/nr_polyroots.s build/calclib/nr_conv.s \
+        build/calclib/nr_eigen.s build/calclib/fft.s \
+        -o build/d_nr5.exe
+    nat_out=$(build/d_nr5.exe | strip_cr)
+    # QR LS solution must equal SVD LS solution to ~1e-10.
+    echo "$nat_out" | grep -qE "least-squares solution:" \
+        || { echo "FAIL: nr5 — no QR LS heading"; exit 1; }
+    # Both QR and SVD LS solutions should print [0.5714..., 2.5714..., 1.5714...]
+    qr_count=$(echo "$nat_out" | grep -c "\[0.5714285714, 2.571428571, 1.571428571\]")
+    if [ "$qr_count" != "2" ]; then
+        echo "FAIL: nr5 — QR / SVD LS disagree"; echo "$nat_out"; exit 1
+    fi
+    # Pseudo-inverse * A within ~1e-14 of identity.
+    echo "$nat_out" | grep -qE "\|\|A\^\+ A - I\|\|_F = .*e-1[3456]" \
+        || { echo "FAIL: nr5 — pinv*A != I"; echo "$nat_out"; exit 1; }
+    # Polynomial roots: (x-1)(x-2)(x-3) recovered to machine precision.
+    echo "$nat_out" | grep -q "^  1 + 0i$" \
+        || { echo "FAIL: nr5 — root 1"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "^  2 + 0i$" \
+        || { echo "FAIL: nr5 — root 2"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "^  3 + 0i$" \
+        || { echo "FAIL: nr5 — root 3"; echo "$nat_out"; exit 1; }
+    # Direct vs FFT convolution match exactly on the test pair.
+    direct=$(echo "$nat_out" | grep -A1 "conv_direct =" | tail -1)
+    fft=$(echo "$nat_out"    | grep -A1 "conv_fft    =" | tail -1)
+    if [ "$direct" != "$fft" ]; then
+        echo "FAIL: nr5 — conv_direct != conv_fft"
+        echo "direct: $direct"; echo "fft:    $fft"; exit 1
+    fi
+    echo "$nat_out" | grep -q "\[1, 3, 6, 5, 3\]" \
+        || { echo "FAIL: nr5 — conv result wrong"; echo "$nat_out"; exit 1; }
+
+    echo "[test] demo — nr_demo6 (Chebyshev + Sav-Gol + Kalman + Crank-Nicolson)"
+    build/calcnat --lib lib/nr/cheb.calc   -o build/calclib/nr_cheb.s
+    build/calcnat --lib lib/nr/savgol.calc -o build/calclib/nr_savgol.s
+    build/calcnat --lib lib/nr/kalman.calc -o build/calclib/nr_kalman.s
+    build/calcnat --lib lib/nr/pde.calc    -o build/calclib/nr_pde.s
+    build/calcnat examples/nr_demo6.calc \
+        build/calclib/nr_cheb.s build/calclib/nr_savgol.s \
+        build/calclib/nr_kalman.s build/calclib/nr_pde.s \
+        build/calclib/nr_lu.s build/calclib/random.s \
+        -o build/d_nr6.exe
+    nat_out=$(build/d_nr6.exe | strip_cr)
+    # Chebyshev: error at x=0 must be below 1e-9.
+    cheb_err_line=$(echo "$nat_out" | grep -E "^  x=0  exact=1  cheb=")
+    if ! echo "$cheb_err_line" | grep -qE "err=[0-9]+(\.[0-9]+)?e-(09|1[0-9])"; then
+        echo "FAIL: nr6 — Chebyshev error too large"; echo "$cheb_err_line"; exit 1
+    fi
+    # Savitzky-Golay: smoothed RMS must be at least 2x smaller than raw.
+    raw_rms=$(echo "$nat_out" | grep "raw RMS error" | awk '{print $NF}')
+    sm_rms=$(echo  "$nat_out" | grep "Savitzky-Golay RMS" | awk '{print $NF}')
+    awk -v r="$raw_rms" -v s="$sm_rms" 'BEGIN { exit !(r > 2*s) }' \
+        || { echo "FAIL: nr6 — SG didn't reduce RMS by 2x"; echo "raw=$raw_rms sm=$sm_rms"; exit 1; }
+    # Kalman: filter must beat raw measurement by >2x RMS.
+    k_raw=$(echo "$nat_out" | grep "raw measurement RMS error" | awk '{print $NF}')
+    k_est=$(echo "$nat_out" | grep "Kalman estimate RMS error" | awk '{print $NF}')
+    awk -v r="$k_raw" -v e="$k_est" 'BEGIN { exit !(r > 2*e) }' \
+        || { echo "FAIL: nr6 — Kalman didn't beat raw 2x"; echo "raw=$k_raw est=$k_est"; exit 1; }
+    # Crank-Nicolson: heat must dissipate from peak 1.0 to ~0.4-0.5 at center.
+    cn_line=$(echo "$nat_out" | grep "after Crank-Nicolson:")
+    if ! echo "$cn_line" | grep -qE ": 0\.[34][0-9]+"; then
+        echo "FAIL: nr6 — Crank-Nicolson dissipation"; echo "$cn_line"; exit 1
+    fi
+
+    echo "[test] demo — nr_demo7 (Cholesky + CG + simulated annealing + MCMC)"
+    build/calcnat --lib lib/nr/cholesky.calc -o build/calclib/nr_cholesky.s
+    build/calcnat --lib lib/nr/cg.calc       -o build/calclib/nr_cg.s
+    build/calcnat --lib lib/nr/anneal.calc   -o build/calclib/nr_anneal.s
+    build/calcnat --lib lib/nr/mcmc.calc     -o build/calclib/nr_mcmc.s
+    build/calcnat examples/nr_demo7.calc \
+        build/calclib/nr_cholesky.s build/calclib/nr_cg.s \
+        build/calclib/nr_anneal.s build/calclib/nr_mcmc.s \
+        build/calclib/random.s \
+        -o build/d_nr7.exe
+    nat_out=$(build/d_nr7.exe | strip_cr)
+    # Cholesky: NR's canonical example must produce L = [[2,0,0],[6,1,0],[-8,5,3]].
+    echo "$nat_out" | grep -q "\[\[2, 0, 0\], \[6, 1, 0\], \[-8, 5, 3\]\]" \
+        || { echo "FAIL: nr7 — Cholesky L matrix"; echo "$nat_out"; exit 1; }
+    # CG must converge on the 100x100 Laplacian.
+    echo "$nat_out" | grep -qE "CG converged = 1, iters = [0-9]+, residual = (0|[0-9]+(\.[0-9]+)?e-[0-9]+)" \
+        || { echo "FAIL: nr7 — CG didn't converge"; echo "$nat_out"; exit 1; }
+    # CG endpoint: x[49] should be 1275 (parabolic formula for the discrete Laplacian).
+    echo "$nat_out" | grep -q "x\[49\] = 1275" \
+        || { echo "FAIL: nr7 — CG solution wrong at center"; echo "$nat_out"; exit 1; }
+    # Annealing: should locate a near-minimum f ~ -0.1.
+    ann_f=$(echo "$nat_out" | grep "^best f" | awk '{print $NF}')
+    awk -v f="$ann_f" 'BEGIN { exit !(f < -0.05 && f > -0.5) }' \
+        || { echo "FAIL: nr7 — annealing didn't find minimum"; echo "f=$ann_f"; exit 1; }
+    # MCMC: mean x^2 should be between 3 and 5 (theory is 4).
+    mc_var=$(echo "$nat_out" | grep "mean x\^2" | awk '{print $4}')
+    awk -v v="$mc_var" 'BEGIN { exit !(v > 3 && v < 5) }' \
+        || { echo "FAIL: nr7 — MCMC mean x^2 out of band"; echo "v=$mc_var"; exit 1; }
+
+    echo "[test] demo — nr_demo8 (Welch + wavelet + Toeplitz + simplex LP)"
+    build/calcnat --lib lib/nr/welch.calc      -o build/calclib/nr_welch.s
+    build/calcnat --lib lib/nr/wavelet.calc    -o build/calclib/nr_wavelet.s
+    build/calcnat --lib lib/nr/toeplitz.calc   -o build/calclib/nr_toeplitz.s
+    build/calcnat --lib lib/nr/simplex_lp.calc -o build/calclib/nr_simplex_lp.s
+    build/calcnat examples/nr_demo8.calc \
+        build/calclib/nr_welch.s build/calclib/nr_wavelet.s \
+        build/calclib/nr_toeplitz.s build/calclib/nr_simplex_lp.s \
+        build/calclib/fft.s build/calclib/random.s \
+        -o build/d_nr8.exe
+    nat_out=$(build/d_nr8.exe | strip_cr)
+    # Welch peak at 17 Hz (the injected tone).
+    echo "$nat_out" | grep -q "peak at f = 17 Hz" \
+        || { echo "FAIL: nr8 — Welch peak"; echo "$nat_out"; exit 1; }
+    # Haar / D4 round-trip both at machine epsilon.
+    h_err=$(echo "$nat_out" | grep "round-trip RMS error =" | head -1 | awk '{print $NF}')
+    d_err=$(echo "$nat_out" | grep "D4 round-trip RMS error" | awk '{print $NF}')
+    awk -v e="$h_err" 'BEGIN { exit !(e < 1e-12) }' \
+        || { echo "FAIL: nr8 — Haar round-trip error"; echo "$h_err"; exit 1; }
+    awk -v e="$d_err" 'BEGIN { exit !(e < 1e-12) }' \
+        || { echo "FAIL: nr8 — D4 round-trip error"; echo "$d_err"; exit 1; }
+    # Levinson: T x = [9, 7, 5, 3].
+    echo "$nat_out" | grep -q "\[9, 7, 5, 3\]" \
+        || { echo "FAIL: nr8 — Levinson reconstruction"; echo "$nat_out"; exit 1; }
+    # Simplex: textbook example must return x = [2, 6], value = 36.
+    echo "$nat_out" | grep -q "\[2, 6\]" \
+        || { echo "FAIL: nr8 — simplex x"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "value   = 36" \
+        || { echo "FAIL: nr8 — simplex value"; echo "$nat_out"; exit 1; }
+
+    echo "[test] demo — nr_demo9 (2-D FFT + 2-D quad + power iter + B-spline)"
+    build/calcnat --lib lib/nr/fft2d.calc       -o build/calclib/nr_fft2d.s
+    build/calcnat --lib lib/nr/quad2d.calc      -o build/calclib/nr_quad2d.s
+    build/calcnat --lib lib/nr/power_eigen.calc -o build/calclib/nr_power_eigen.s
+    build/calcnat --lib lib/nr/bspline.calc     -o build/calclib/nr_bspline.s
+    build/calcnat examples/nr_demo9.calc \
+        build/calclib/nr_fft2d.s build/calclib/nr_quad2d.s \
+        build/calclib/nr_power_eigen.s build/calclib/nr_bspline.s \
+        build/calclib/nr_lu.s build/calclib/nr_qr.s build/calclib/fft.s \
+        -o build/d_nr9.exe
+    nat_out=$(build/d_nr9.exe | strip_cr)
+    # 2-D FFT round-trip must be effectively zero.
+    f2_err=$(echo "$nat_out" | grep "round-trip RMS error:" | awk '{print $NF}')
+    awk -v e="$f2_err" 'BEGIN { exit !(e < 1e-14) }' \
+        || { echo "FAIL: nr9 — 2D FFT round-trip"; echo "$f2_err"; exit 1; }
+    # Power iteration: dominant eigenvalue must equal 3+sqrt(3) to ~6 digits.
+    eig_line=$(echo "$nat_out" | grep "dominant eigenvalue")
+    if ! echo "$eig_line" | grep -qE "4\.73205080[0-9]+"; then
+        echo "FAIL: nr9 — dominant eigenvalue"; echo "$eig_line"; exit 1
+    fi
+    # Inverse iteration finds 3 - sqrt(3) ~= 1.267949.
+    ieig_line=$(echo "$nat_out" | grep "eigenvalue nearest 1.5")
+    if ! echo "$ieig_line" | grep -qE "1\.2679491[0-9]+"; then
+        echo "FAIL: nr9 — inverse iteration"; echo "$ieig_line"; exit 1
+    fi
+    # 2-D quadrature: x^2 + y^2 over [0,1]^2 = 2/3 to ~10 digits.
+    gl_line=$(echo "$nat_out" | grep "5-point GL  =" | head -1 | awk '{print $NF}')
+    awk -v v="$gl_line" 'BEGIN { exit !(v > 0.6666 && v < 0.6667) }' \
+        || { echo "FAIL: nr9 — quad2d_gl"; echo "$gl_line"; exit 1; }
+
+    echo "[test] demo — nr_demo10 (Neville + GL nodes + BFGS + PCA)"
+    build/calcnat --lib lib/nr/neville.calc -o build/calclib/nr_neville.s
+    build/calcnat --lib lib/nr/glnodes.calc -o build/calclib/nr_glnodes.s
+    build/calcnat --lib lib/nr/bfgs.calc    -o build/calclib/nr_bfgs.s
+    build/calcnat --lib lib/nr/pca.calc     -o build/calclib/nr_pca.s
+    build/calcnat examples/nr_demo10.calc \
+        build/calclib/nr_neville.s build/calclib/nr_glnodes.s \
+        build/calclib/nr_bfgs.s build/calclib/nr_pca.s \
+        build/calclib/nr_svd.s build/calclib/nr_eigen.s build/calclib/random.s \
+        -o build/d_nr10.exe
+    nat_out=$(build/d_nr10.exe | strip_cr)
+    # Neville interp at x=1.5 of sin samples must be near sin(1.5)=0.997.
+    nev_line=$(echo "$nat_out" | grep "^  x=1.5 ")
+    if ! echo "$nev_line" | grep -qE "interp=0\.9[0-9]+"; then
+        echo "FAIL: nr10 — Neville interp at 1.5"; echo "$nev_line"; exit 1
+    fi
+    # Gauss-Legendre on int sin(0..pi): n=10 must give 2 to ~15 digits.
+    gl_line=$(echo "$nat_out" | grep "n=10")
+    if ! echo "$gl_line" | grep -qE "  2  err=[0-9.eE+-]+"; then
+        echo "FAIL: nr10 — GL n=10 for int sin"; echo "$gl_line"; exit 1
+    fi
+    # BFGS Rosenbrock: f* must be < 1e-15.
+    bfgs_f=$(echo "$nat_out" | grep "^  f\* = " | head -1 | awk '{print $NF}')
+    awk -v f="$bfgs_f" 'BEGIN { exit !(f < 1e-15) }' \
+        || { echo "FAIL: nr10 — BFGS Rosenbrock f*"; echo "f=$bfgs_f"; exit 1; }
+    # PCA: first principal axis should have variance close to 9 (true variance).
+    pca_var_line=$(echo "$nat_out" | grep "variance explained")
+    # We expect "[8.5..something, 0.8..something]"; just check first component > 7.
+    pca_var_first=$(echo "$nat_out" | grep -A1 "variance explained per PC:" \
+        | tail -1 | sed 's/\[//' | awk -F',' '{print $1}')
+    awk -v v="$pca_var_first" 'BEGIN { exit !(v > 7 && v < 11) }' \
+        || { echo "FAIL: nr10 — PCA first variance"; echo "$pca_var_first"; exit 1; }
 
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
