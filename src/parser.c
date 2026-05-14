@@ -366,30 +366,172 @@ static AST *parse_assignment_after_ident(Parser *p, Token name) {
         ast_binop(binop, ast_var(name.text), rhs));
 }
 
-/* Parse the (init; cond; step) part of a `for` plus its body. Each of
-   init, cond, step may be omitted (empty), which is encoded as a NULL
-   child in the AST so codegen can skip it. */
+/* Build a fresh helper name like "__for3_it" so nested loops don't
+   alias their temporaries. The names are illegal-looking on purpose:
+   double-underscore + counter, so they won't collide with user vars. */
+static int g_for_in_counter = 0;
+static void fresh_name(char *buf, size_t buflen, int id, const char *suffix) {
+    snprintf(buf, buflen, "__for%d_%s", id, suffix);
+}
+
+/* Desugar a `for x in iter { body }` into nested standard constructs.
+   `iter` is one of:
+     - a range expression  (start..end / start..=end) — handled by the
+       caller, which passes start, end, and `inclusive`.
+     - an arr/str expression — pass start=NULL.
+   The result is a NODE_BLOCK that introduces helper bindings in a
+   private scope. */
+static AST *build_for_in_range(const char *var, AST *start, AST *end, int inclusive, AST *body) {
+    int id = ++g_for_in_counter;
+    char end_name[64];
+    fresh_name(end_name, sizeof end_name, id, "end");
+
+    AST *block = ast_block();
+    /* let __forN_end = end; */
+    ast_block_add(block, ast_let(end_name, TYPE_ANY, end));
+    /* for (let var = start; var <{=} __forN_end; var = var + 1) body */
+    AST *init = ast_let(var, TYPE_ANY, start);
+    AST *cond = ast_binop(inclusive ? TOK_LE : TOK_LT, ast_var(var), ast_var(end_name));
+    AST *step = ast_assign(var, ast_binop(TOK_PLUS, ast_var(var), ast_number(1)));
+    ast_block_add(block, ast_for(init, cond, step, body));
+    return block;
+}
+
+static AST *build_for_in_iter(const char *var, AST *iter, AST *body) {
+    int id = ++g_for_in_counter;
+    char it_name[64], n_name[64], i_name[64];
+    fresh_name(it_name, sizeof it_name, id, "it");
+    fresh_name(n_name,  sizeof n_name,  id, "n");
+    fresh_name(i_name,  sizeof i_name,  id, "i");
+
+    AST *outer = ast_block();
+    /* let __forN_it = iter; */
+    ast_block_add(outer, ast_let(it_name, TYPE_ANY, iter));
+    /* let __forN_n  = len(__forN_it); */
+    AST *call_len = ast_call("len");
+    ast_call_add_arg(call_len, ast_var(it_name));
+    ast_block_add(outer, ast_let(n_name, TYPE_ANY, call_len));
+
+    /* for (let __forN_i = 0; __forN_i < __forN_n; __forN_i = __forN_i + 1) {
+           let var = __forN_it[__forN_i];
+           body...
+       } */
+    AST *inner = ast_block();
+    ast_block_add(inner, ast_let(var, TYPE_ANY,
+        ast_index(ast_var(it_name), ast_var(i_name))));
+    /* Splice the body in. If it's already a block, fold its statements
+       into `inner` so we don't create a redundant nesting level. */
+    if (body->kind == NODE_BLOCK) {
+        for (int k = 0; k < body->as.block.count; k++) {
+            ast_block_add(inner, body->as.block.stmts[k]);
+        }
+    } else {
+        ast_block_add(inner, body);
+    }
+
+    AST *init = ast_let(i_name, TYPE_ANY, ast_number(0));
+    AST *cond = ast_binop(TOK_LT, ast_var(i_name), ast_var(n_name));
+    AST *step = ast_assign(i_name,
+        ast_binop(TOK_PLUS, ast_var(i_name), ast_number(1)));
+    ast_block_add(outer, ast_for(init, cond, step, inner));
+    return outer;
+}
+
+/* Parse a for-in header *after* the loop variable identifier has been
+   consumed. Caller passes the variable name and whether the head was
+   wrapped in parens (so we know whether to expect `)` at the end). */
+static AST *parse_for_in_after_name(Parser *p, const char *var, int has_parens) {
+    expect(p, TOK_IN);
+    AST *first = parse_expr(p);
+    AST *iter_or_start = first;
+    AST *range_end = NULL;
+    int inclusive = 0;
+    if (p->current.type == TOK_DOTDOT || p->current.type == TOK_DOTDOTEQ) {
+        inclusive = (p->current.type == TOK_DOTDOTEQ);
+        next(p);
+        range_end = parse_expr(p);
+    }
+    if (has_parens) expect(p, TOK_RPAREN);
+    AST *body = parse_stmt(p);
+    if (range_end) {
+        return build_for_in_range(var, iter_or_start, range_end, inclusive, body);
+    }
+    return build_for_in_iter(var, iter_or_start, body);
+}
+
+/* Parse the header and body of a `for`. Supports three forms:
+     for (let i = 0; i < n; i = i + 1) body         // classic C-style
+     for (let? x in iter) body                       // for-in, with parens
+     for x in iter body                              // Rust-style, no parens
+   `iter` may be a range (start..end / start..=end) or any array / string
+   expression. Maps don't work directly — use `for k in keys(m)`. */
 static AST *parse_for_header_and_body(Parser *p) {
+    /* No-paren Rust-style: `for x in xs { body }`. The loop variable
+       can't be a `let` here (`let` outside parens reads ambiguously),
+       so we just expect an identifier directly. */
+    if (p->current.type != TOK_LPAREN) {
+        Token name = expect(p, TOK_IDENTIFIER);
+        return parse_for_in_after_name(p, name.text, /*has_parens=*/0);
+    }
+
     expect(p, TOK_LPAREN);
+
+    /* Inside parens: distinguish for-in (`[let] IDENT in ...`) from
+       classic (`[let] IDENT = ... ; ... ; ...`). We always need to
+       look at what comes after the optional `let` + ident. */
+    int has_let = 0;
+    if (p->current.type == TOK_LET) {
+        has_let = 1;
+        next(p);
+        Token name = expect(p, TOK_IDENTIFIER);
+        /* Optional type annotation, only valid in classic form. */
+        TypeAnnot t = TYPE_ANY;
+        if (p->current.type == TOK_COLON) {
+            next(p);
+            t = parse_type(p);
+        }
+        if (p->current.type == TOK_IN) {
+            /* for-in with `let`: `for (let x in iter) body`. */
+            (void)t;
+            return parse_for_in_after_name(p, name.text, /*has_parens=*/1);
+        }
+        /* Classic: continue parsing `= expr; cond; step`. */
+        expect(p, TOK_EQUAL);
+        AST *e = parse_expr(p);
+        AST *init = ast_let(name.text, t, e);
+        expect(p, TOK_SEMICOLON);
+
+        AST *cond = NULL;
+        if (p->current.type != TOK_SEMICOLON) cond = parse_expr(p);
+        expect(p, TOK_SEMICOLON);
+
+        AST *step = NULL;
+        if (p->current.type != TOK_RPAREN) {
+            if (p->current.type == TOK_IDENTIFIER) {
+                Token n2 = p->current;
+                next(p);
+                step = parse_assignment_after_ident(p, n2);
+            } else {
+                fprintf(stderr, "parse error at %d:%d: expected assignment in for-step\n",
+                    p->current.line, p->current.col);
+                exit(1);
+            }
+        }
+        expect(p, TOK_RPAREN);
+        AST *body = parse_stmt(p);
+        return ast_for(init, cond, step, body);
+    }
+    (void)has_let;
 
     AST *init = NULL;
     if (p->current.type != TOK_SEMICOLON) {
-        if (p->current.type == TOK_LET) {
-            next(p);
-            Token name = expect(p, TOK_IDENTIFIER);
-            /* `for (let i: num = 0; ...)` — same annotation grammar
-               as plain `let`. */
-            TypeAnnot t = TYPE_ANY;
-            if (p->current.type == TOK_COLON) {
-                next(p);
-                t = parse_type(p);
-            }
-            expect(p, TOK_EQUAL);
-            AST *e = parse_expr(p);
-            init = ast_let(name.text, t, e);
-        } else if (p->current.type == TOK_IDENTIFIER) {
+        if (p->current.type == TOK_IDENTIFIER) {
             Token name = p->current;
             next(p);
+            if (p->current.type == TOK_IN) {
+                /* for-in without `let`: `for (x in iter) body`. */
+                return parse_for_in_after_name(p, name.text, /*has_parens=*/1);
+            }
             init = parse_assignment_after_ident(p, name);
         } else {
             fprintf(stderr, "parse error at %d:%d: expected 'let' or assignment in for-init\n",

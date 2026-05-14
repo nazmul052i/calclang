@@ -656,24 +656,40 @@ for (i = 0; i < 10; i = i + 1) {
 print i;           // 5
 ```
 
-CalcLang doesn't have a `for-each` form. To iterate an array, use a numeric `for`:
+#### `for-in` over arrays, strings, and ranges
+
+CalcLang also has the Rust-style `for x in iter` form. The iterable can be an array, a string (one character per step), or a range expression. Braces are required on the body.
 
 ```calc
-let xs = [10, 20, 30, 40];
-for (let i = 0; i < len(xs); i = i + 1) {
-    print xs[i];
+for x in [10, 20, 30, 40] {
+    print x;
+}
+
+for ch in "hello" {
+    print ch;          // h, e, l, l, o
 }
 ```
 
-For maps, iterate the keys:
+Ranges use `start..end` (exclusive) or `start..=end` (inclusive). The bounds can be any numeric expression:
 
 ```calc
-let m = {"alice": 90, "bob": 75};
-let ks = keys(m);
-for (let i = 0; i < len(ks); i = i + 1) {
-    print ks[i] + " -> " + m[ks[i]];
+for i in 0..5    { print i; }     // 0, 1, 2, 3, 4
+for i in 1..=3   { print i; }     // 1, 2, 3
+
+let n = 10;
+for i in 0..n    { ... }
+```
+
+Maps don't iterate directly — wrap them in `keys(m)`:
+
+```calc
+let scores = {"alice": 90, "bob": 75};
+for name in keys(scores) {
+    print name + " -> " + scores[name];
 }
 ```
+
+The parens-around-the-head form works too if you prefer the C-style framing — `for (x in xs) { ... }` and `for (let x in xs) { ... }` are accepted equivalents. Pick whichever reads better.
 
 #### Common loop patterns
 
@@ -681,7 +697,7 @@ for (let i = 0; i < len(ks); i = i + 1) {
 
 ```calc
 let xs = [];
-for (let i = 0; i < 100; i = i + 1) { push(xs, i * 0.1); }
+for i in 0..100 { push(xs, i * 0.1); }
 // xs is now [0, 0.1, 0.2, ..., 9.9]
 ```
 
@@ -696,7 +712,7 @@ let xs = array_range(0, 100);    // [0, 1, ..., 99]
 ```calc
 fn average(xs) {
     let s = 0;
-    for (let i = 0; i < len(xs); i = i + 1) { s += xs[i]; }
+    for x in xs { s += x; }
     return s / len(xs);
 }
 ```
@@ -706,34 +722,41 @@ fn average(xs) {
 ```calc
 fn count_if(xs, pred) {
     let c = 0;
-    for (let i = 0; i < len(xs); i = i + 1) {
-        if (pred(xs[i])) { c += 1; }
+    for x in xs {
+        if (pred(x)) { c += 1; }
     }
     return c;
 }
 print count_if([1, -2, 3, -4, 5], fn(x) { return x > 0; });  // 3
 ```
 
-**Reverse iteration:**
+**Reverse iteration** (use the C-style form since `for-in` is forward-only):
 
 ```calc
 let xs = [10, 20, 30];
 for (let i = len(xs) - 1; i >= 0; i = i - 1) {
     print xs[i];
 }
-// 30
-// 20
-// 10
+// 30, 20, 10
 ```
 
 **Nested loops** (matrix walk):
 
 ```calc
 let m = [[1, 2, 3], [4, 5, 6]];
-for (let r = 0; r < len(m); r = r + 1) {
-    for (let c = 0; c < len(m[r]); c = c + 1) {
-        print "m[" + r + "][" + c + "] = " + m[r][c];
+for row in m {
+    for v in row {
+        print v;
     }
+}
+```
+
+When you need the index *and* the value, mix the forms:
+
+```calc
+let xs = ["a", "b", "c"];
+for i in 0..len(xs) {
+    print i + ": " + xs[i];
 }
 ```
 
