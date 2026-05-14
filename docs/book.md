@@ -335,6 +335,95 @@ if (cfg["verbose"] && len(messages) > 0) {
 }
 ```
 
+### Bitwise operators
+
+CalcLang has the full C set of bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift — arithmetic, sign-extending). The compound forms `&=`, `|=`, `^=`, `<<=`, `>>=` work too.
+
+```calc
+print 5 & 3;        // 1
+print 5 | 3;        // 7
+print 5 ^ 3;        // 6
+print ~5;           // -6
+print 1 << 4;       // 16
+print 256 >> 2;     // 64
+print -8 >> 1;      // -4  (arithmetic shift)
+```
+
+Operands are converted to 64-bit signed integers (truncating toward zero), the op runs, and the result is converted back to a num. Non-numeric operands raise at runtime. Shift counts are masked to the low 6 bits to match hardware behaviour (no UB for `1 << 100`).
+
+#### Hex and binary literals
+
+Numeric literals can be written in hex (`0x...`) or binary (`0b...`) form. Underscores anywhere in the digits are treated as separators for readability:
+
+```calc
+print 0xFF;             // 255
+print 0xCAFE_BABE;      // 3405691582
+print 0b1010;           // 10
+print 0b1111_0000;      // 240
+```
+
+These are pure lexical forms — once parsed they're indistinguishable from a decimal literal of the same value.
+
+#### Bitwise precedence
+
+CalcLang follows C-style precedence. From tightest to loosest in the relevant range:
+
+```
+*  /  %                      (multiplicative)
++  -                         (additive)
+<<  >>                       (shift)
+<  <=  >  >=                 (relational)
+==  !=                       (equality)
+&                            (bitwise AND)
+^                            (bitwise XOR)
+|                            (bitwise OR)
+&&                           (logical AND)
+||                           (logical OR)
+```
+
+Worth memorizing: `&` binds tighter than `^`, which binds tighter than `|`. So `a | b & c` is `a | (b & c)`. Use parentheses freely when the intent isn't obvious.
+
+#### Classic bit-twiddling patterns
+
+```calc
+// Set bit n
+let flags = 0;
+flags |= 1 << 3;            // set bit 3
+flags |= 1 << 5;            // set bit 5
+
+// Test bit n
+if ((flags & (1 << 3)) != 0) { print "bit 3 is set"; }
+
+// Clear bit n
+flags &= ~(1 << 3);
+
+// Toggle bit n
+flags ^= 1 << 5;
+
+// Mask out low byte
+let low = value & 0xFF;
+
+// Pack two 16-bit numbers into 32 bits
+let packed = (hi << 16) | lo;
+let hi2 = (packed >> 16) & 0xFFFF;
+let lo2 = packed & 0xFFFF;
+```
+
+#### Popcount (count set bits)
+
+```calc
+fn popcount(n) {
+    let c = 0;
+    while (n != 0) {
+        c = c + (n & 1);
+        n = n >> 1;
+    }
+    return c;
+}
+print popcount(0xFF);   // 8
+print popcount(0x55);   // 4
+```
+
 ### Order of evaluation and precedence
 
 CalcLang uses C-style precedence. From tightest binding to loosest:

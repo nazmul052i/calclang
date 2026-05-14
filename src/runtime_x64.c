@@ -452,6 +452,34 @@ Value cl_op_neg(Value a) {
     return (Value)0;
 }
 
+/* Bitwise polymorphic helpers. Both operands are coerced to int64
+   (truncating toward zero, matching the VM's (int64_t) cast). Non-num
+   operands raise a clear runtime error. */
+Value cl_op_band(Value a, Value b) {
+    if (!cl_is_num(a) || !cl_is_num(b)) cl_die_rt("'&' requires numeric operands");
+    return cl_from_num((double)((int64_t)cl_as_num(a) & (int64_t)cl_as_num(b)));
+}
+Value cl_op_bor(Value a, Value b) {
+    if (!cl_is_num(a) || !cl_is_num(b)) cl_die_rt("'|' requires numeric operands");
+    return cl_from_num((double)((int64_t)cl_as_num(a) | (int64_t)cl_as_num(b)));
+}
+Value cl_op_bxor(Value a, Value b) {
+    if (!cl_is_num(a) || !cl_is_num(b)) cl_die_rt("'^' requires numeric operands");
+    return cl_from_num((double)((int64_t)cl_as_num(a) ^ (int64_t)cl_as_num(b)));
+}
+Value cl_op_shl(Value a, Value b) {
+    if (!cl_is_num(a) || !cl_is_num(b)) cl_die_rt("'<<' requires numeric operands");
+    return cl_from_num((double)((int64_t)cl_as_num(a) << ((int64_t)cl_as_num(b) & 63)));
+}
+Value cl_op_shr(Value a, Value b) {
+    if (!cl_is_num(a) || !cl_is_num(b)) cl_die_rt("'>>' requires numeric operands");
+    return cl_from_num((double)((int64_t)cl_as_num(a) >> ((int64_t)cl_as_num(b) & 63)));
+}
+Value cl_op_bnot(Value a) {
+    if (!cl_is_num(a)) cl_die_rt("'~' requires a numeric operand");
+    return cl_from_num((double)(~(int64_t)cl_as_num(a)));
+}
+
 /* Forward decl: cl_throw uses format_value to print an uncaught
    exception, but format_value is defined later in the file. */
 static void format_value(Value v, int nested);

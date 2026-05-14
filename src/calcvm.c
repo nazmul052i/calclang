@@ -409,6 +409,38 @@ int main(int argc, char **argv) {
                 if (sp <= 0) cl_die("stack underflow");
                 stack[sp - 1] = val_num(val_truthy(stack[sp-1]) ? 0.0 : 1.0);
                 break;
+            case OP_BAND:
+            case OP_BOR:
+            case OP_BXOR:
+            case OP_SHL:
+            case OP_SHR: {
+                if (sp < 2) cl_die("stack underflow");
+                const char *name = "&";
+                if (in.op == OP_BOR)  name = "|";
+                if (in.op == OP_BXOR) name = "^";
+                if (in.op == OP_SHL)  name = "<<";
+                if (in.op == OP_SHR)  name = ">>";
+                if (stack[sp-2].tag != VAL_NUM || stack[sp-1].tag != VAL_NUM) type_error(name);
+                int64_t a = (int64_t)stack[sp-2].as.num;
+                int64_t b = (int64_t)stack[sp-1].as.num;
+                int64_t r = 0;
+                switch (in.op) {
+                    case OP_BAND: r = a & b;  break;
+                    case OP_BOR:  r = a | b;  break;
+                    case OP_BXOR: r = a ^ b;  break;
+                    /* Shifts: mask the count to [0, 63] to match the
+                       hardware behaviour and avoid UB. */
+                    case OP_SHL:  r = a << (b & 63); break;
+                    case OP_SHR:  r = a >> (b & 63); break;  /* arithmetic — sign-extends */
+                }
+                stack[sp - 2] = val_num((double)r); sp--;
+                break;
+            }
+            case OP_BNOT:
+                if (sp <= 0) cl_die("stack underflow");
+                if (stack[sp-1].tag != VAL_NUM) type_error("~");
+                stack[sp - 1] = val_num((double)(~(int64_t)stack[sp-1].as.num));
+                break;
             case OP_PRINT:
                 if (sp <= 0) cl_die("stack underflow");
                 print_value_top(stack[--sp]);

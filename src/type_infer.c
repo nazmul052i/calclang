@@ -283,6 +283,12 @@ static TypeSet infer_binop(AST *n, TiEnv *env) {
      || op == TOK_AND  || op == TOK_OR) {
         return TS_NUM_BIT;
     }
+    /* Bitwise ops always produce a num. Both operands are coerced to
+       int64 internally; non-num operands raise at runtime. */
+    if (op == TOK_AMP   || op == TOK_PIPE  || op == TOK_CARET
+     || op == TOK_LSHIFT || op == TOK_RSHIFT) {
+        return TS_NUM_BIT;
+    }
     /* Arithmetic (-, *, /, %): result type follows the operand type set.
        num op num -> num; cpx anywhere -> cpx (which lives outside the
        inference lattice and shows up as TS_ANY_MASK). If either operand

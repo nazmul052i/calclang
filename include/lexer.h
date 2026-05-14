@@ -57,6 +57,19 @@ typedef enum {
     TOK_OR,       /* || */
     TOK_BANG,     /* !  */
 
+    /* bitwise */
+    TOK_AMP,        /* &  */
+    TOK_PIPE,       /* |  */
+    TOK_CARET,      /* ^  */
+    TOK_TILDE,      /* ~  */
+    TOK_LSHIFT,     /* << */
+    TOK_RSHIFT,     /* >> */
+    TOK_AMP_EQ,     /* &= */
+    TOK_PIPE_EQ,    /* |= */
+    TOK_CARET_EQ,   /* ^= */
+    TOK_LSHIFT_EQ,  /* <<= */
+    TOK_RSHIFT_EQ,  /* >>= */
+
     /* punctuation */
     TOK_SEMICOLON,
     TOK_COLON,

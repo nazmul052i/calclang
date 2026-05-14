@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include <stdint.h>
 
 static char cur(Lexer *lx) { return lx->src[lx->pos]; }
 
@@ -167,6 +168,50 @@ Token lexer_next(Lexer *lx) {
     if (isdigit((unsigned char)c) || (c == '.' && isdigit((unsigned char)peek(lx)))) {
         char b[CL_MAX_TEXT];
         int  i = 0, dots = 0;
+
+        /* Hex (0x...) and binary (0b...) literals. Consume digits up to
+           CL_MAX_TEXT-1, then convert to a decimal string for the rest
+           of the pipeline. */
+        if (c == '0' && (peek(lx) == 'x' || peek(lx) == 'X')) {
+            adv(lx);  /* 0 */
+            adv(lx);  /* x */
+            uint64_t v = 0;
+            int any = 0;
+            while (1) {
+                char ch = cur(lx);
+                int d = -1;
+                if (ch >= '0' && ch <= '9') d = ch - '0';
+                else if (ch >= 'a' && ch <= 'f') d = 10 + (ch - 'a');
+                else if (ch >= 'A' && ch <= 'F') d = 10 + (ch - 'A');
+                else if (ch == '_') { adv(lx); continue; }   /* digit separator */
+                else break;
+                v = (v << 4) | (uint64_t)d;
+                any = 1;
+                adv(lx);
+            }
+            if (!any) cl_die_at(line, col, "hex literal needs at least one digit after 0x");
+            snprintf(b, sizeof b, "%lld", (long long)(int64_t)v);
+            return tok(TOK_NUMBER, b, line, col);
+        }
+        if (c == '0' && (peek(lx) == 'b' || peek(lx) == 'B')) {
+            adv(lx);  /* 0 */
+            adv(lx);  /* b */
+            uint64_t v = 0;
+            int any = 0;
+            while (1) {
+                char ch = cur(lx);
+                if (ch == '0' || ch == '1') {
+                    v = (v << 1) | (uint64_t)(ch - '0');
+                    any = 1;
+                    adv(lx);
+                } else if (ch == '_') {
+                    adv(lx);
+                } else break;
+            }
+            if (!any) cl_die_at(line, col, "binary literal needs at least one digit after 0b");
+            snprintf(b, sizeof b, "%lld", (long long)(int64_t)v);
+            return tok(TOK_NUMBER, b, line, col);
+        }
         while (isdigit((unsigned char)cur(lx)) || cur(lx) == '.') {
             if (cur(lx) == '.') dots++;
             if (dots > 1) cl_die_at(line, col, "invalid number with multiple decimal points");
@@ -254,6 +299,23 @@ Token lexer_next(Lexer *lx) {
     if (c == '/' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_SLASH_EQ,   "/=", line, col); }
     if (c == '%' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_PERCENT_EQ, "%=", line, col); }
 
+    /* Bitwise shifts and compound-shifts: <<, <<=, >>, >>=. Must come
+       before the <= / >= checks above? No — <= and >= already required
+       single-char follow. Here we check the doubled forms. */
+    if (c == '<' && peek(lx) == '<') {
+        adv(lx); adv(lx);
+        if (cur(lx) == '=') { adv(lx); return tok(TOK_LSHIFT_EQ, "<<=", line, col); }
+        return tok(TOK_LSHIFT, "<<", line, col);
+    }
+    if (c == '>' && peek(lx) == '>') {
+        adv(lx); adv(lx);
+        if (cur(lx) == '=') { adv(lx); return tok(TOK_RSHIFT_EQ, ">>=", line, col); }
+        return tok(TOK_RSHIFT, ">>", line, col);
+    }
+    if (c == '&' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_AMP_EQ,    "&=", line, col); }
+    if (c == '|' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_PIPE_EQ,   "|=", line, col); }
+    if (c == '^' && peek(lx) == '=') { adv(lx); adv(lx); return tok(TOK_CARET_EQ,  "^=", line, col); }
+
     adv(lx);
     switch (c) {
         case '+': return tok(TOK_PLUS,      "+", line, col);
@@ -275,8 +337,10 @@ Token lexer_next(Lexer *lx) {
         case '}': return tok(TOK_RBRACE,    "}", line, col);
         case '[': return tok(TOK_LBRACKET,  "[", line, col);
         case ']': return tok(TOK_RBRACKET,  "]", line, col);
-        case '&': cl_die_at(line, col, "use '&&' for logical AND (single '&' is not supported)");
-        case '|': cl_die_at(line, col, "use '||' for logical OR (single '|' is not supported)");
+        case '&': return tok(TOK_AMP,       "&", line, col);
+        case '|': return tok(TOK_PIPE,      "|", line, col);
+        case '^': return tok(TOK_CARET,     "^", line, col);
+        case '~': return tok(TOK_TILDE,     "~", line, col);
         default:  cl_die_at(line, col, "unknown character '%c'", c);
     }
     return tok(TOK_EOF, "", line, col); /* unreachable */

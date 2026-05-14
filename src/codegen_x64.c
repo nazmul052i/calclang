@@ -514,7 +514,8 @@ static TInfer infer_type(Cg *cg, AST *n) {
         case NODE_STRING: return TI_STR;
         case NODE_UNOP: {
             TokenType op = n->as.unop.op;
-            if (op == TOK_BANG) return TI_NUM;  /* always 0.0 / 1.0 */
+            if (op == TOK_BANG)  return TI_NUM;  /* always 0.0 / 1.0 */
+            if (op == TOK_TILDE) return TI_NUM;  /* always num (int64 cast) */
             /* TOK_MINUS: result is num iff operand is num. */
             TInfer t = infer_type(cg, n->as.unop.operand);
             return (t == TI_NUM) ? TI_NUM : TI_UNKNOWN;
@@ -539,6 +540,11 @@ static TInfer infer_type(Cg *cg, AST *n) {
                 TInfer l = infer_type(cg, n->as.binop.left);
                 TInfer r = infer_type(cg, n->as.binop.right);
                 return (l == TI_NUM && r == TI_NUM) ? TI_NUM : TI_UNKNOWN;
+            }
+            /* Bitwise ops always produce num (after int64 coercion). */
+            if (op == TOK_AMP   || op == TOK_PIPE  || op == TOK_CARET
+             || op == TOK_LSHIFT || op == TOK_RSHIFT) {
+                return TI_NUM;
             }
             /* Comparisons and logical ops always produce 0.0 / 1.0. */
             return TI_NUM;
@@ -766,6 +772,11 @@ static void gen_binop(Cg *cg, AST *n) {
             case TOK_STAR:    helper = "cl_op_mul";   break;
             case TOK_SLASH:   helper = "cl_op_div";   break;
             case TOK_PERCENT: helper = "cl_op_mod";   break;
+            case TOK_AMP:     helper = "cl_op_band";  break;
+            case TOK_PIPE:    helper = "cl_op_bor";   break;
+            case TOK_CARET:   helper = "cl_op_bxor";  break;
+            case TOK_LSHIFT:  helper = "cl_op_shl";   break;
+            case TOK_RSHIFT:  helper = "cl_op_shr";   break;
             default: break;
         }
         if (helper) {
@@ -851,6 +862,27 @@ static void gen_binop(Cg *cg, AST *n) {
             e(cg, "add  rsp, 32");
             return;
         }
+        case TOK_AMP:
+        case TOK_PIPE:
+        case TOK_CARET:
+        case TOK_LSHIFT:
+        case TOK_RSHIFT: {
+            /* Bitwise: convert both doubles to int64, do the op, convert
+               back. cvttsd2si truncates toward zero (matching the VM's
+               (int64_t) cast). */
+            e(cg, "cvttsd2si rax, xmm0");        /* left  -> rax */
+            e(cg, "cvttsd2si rcx, xmm1");        /* right -> rcx */
+            switch (n->as.binop.op) {
+                case TOK_AMP:    e(cg, "and rax, rcx"); break;
+                case TOK_PIPE:   e(cg, "or  rax, rcx"); break;
+                case TOK_CARET:  e(cg, "xor rax, rcx"); break;
+                case TOK_LSHIFT: e(cg, "shl rax, cl");  break;  /* shift count in cl */
+                case TOK_RSHIFT: e(cg, "sar rax, cl");  break;  /* arithmetic; sign-ext */
+                default: cl_die("unreachable");
+            }
+            e(cg, "cvtsi2sd xmm0, rax");
+            return;
+        }
         case TOK_EQEQ:
         case TOK_NEQ:
         case TOK_LT:
@@ -915,6 +947,22 @@ static void gen_unop(Cg *cg, AST *n) {
         e(cg, "and  al, cl");
         e(cg, "movzx eax, al");
         e(cg, "cvtsi2sd xmm0, eax");
+        return;
+    }
+    if (n->as.unop.op == TOK_TILDE) {
+        TInfer t = infer_type(cg, n->as.unop.operand);
+        gen_expr(cg, n->as.unop.operand);
+        if (t == TI_NUM) {
+            e(cg, "cvttsd2si rax, xmm0");
+            e(cg, "not rax");
+            e(cg, "cvtsi2sd xmm0, rax");
+        } else {
+            e(cg, "movq rcx, xmm0");
+            e(cg, "sub  rsp, 32");
+            e(cg, "call cl_op_bnot");
+            e(cg, "add  rsp, 32");
+            e(cg, "movq xmm0, rax");
+        }
         return;
     }
     cl_die("native codegen: unsupported unary op");
@@ -1647,6 +1695,23 @@ static void gen_stmt(Cg *cg, AST *n) {
                         e(cg, "sub  rsp, 32");
                         e(cg, "call fmod");
                         e(cg, "add  rsp, 32");
+                        break;
+                    case TOK_AMP:
+                    case TOK_PIPE:
+                    case TOK_CARET:
+                    case TOK_LSHIFT:
+                    case TOK_RSHIFT:
+                        e(cg, "cvttsd2si rax, xmm0");
+                        e(cg, "cvttsd2si rcx, xmm1");
+                        switch (n->as.index_opassign.op) {
+                            case TOK_AMP:    e(cg, "and rax, rcx"); break;
+                            case TOK_PIPE:   e(cg, "or  rax, rcx"); break;
+                            case TOK_CARET:  e(cg, "xor rax, rcx"); break;
+                            case TOK_LSHIFT: e(cg, "shl rax, cl");  break;
+                            case TOK_RSHIFT: e(cg, "sar rax, cl");  break;
+                            default: cl_die("unreachable");
+                        }
+                        e(cg, "cvtsi2sd xmm0, rax");
                         break;
                     default:
                         cl_die("unknown index-opassign op");
