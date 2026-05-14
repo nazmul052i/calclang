@@ -1,0 +1,130 @@
+// polyroots.calc — find all roots of a polynomial by Laguerre's method.
+//
+// Given coefficients c = [c_0, c_1, ..., c_n] representing
+//   P(x) = c_0 + c_1 x + c_2 x^2 + ... + c_n x^n,
+// returns an array of n complex roots.
+//
+// Algorithm: Laguerre's method (NR §9.5). Cubic convergence from almost
+// any starting point, even for multiple roots. After each root is found
+// we deflate the polynomial by synthetic division and continue; a polish
+// pass re-runs Laguerre on the original polynomial starting from each
+// found root to clean up deflation roundoff.
+
+priv fn _cpx(z) {
+    if (type_of(z) == "cpx") { return z; }
+    return complex(z, 0);
+}
+
+priv fn _cabs(z) {
+    let r = real(z);  let i = imag(z);
+    return sqrt(r * r + i * i);
+}
+
+priv fn _csqrt(z) {
+    let a = real(z);
+    let b = imag(z);
+    let r = sqrt(a * a + b * b);
+    let re = sqrt((r + a) / 2);
+    let im_mag = sqrt((r - a) / 2);
+    let im = im_mag;
+    if (b < 0) { im = -im_mag; }
+    return complex(re, im);
+}
+
+// Horner evaluation of P and its first two derivatives at x.
+// Returns [P, P', P''].
+priv fn _phorner(coefs, x) {
+    let n = len(coefs) - 1;
+    let p   = _cpx(coefs[n]);
+    let dp  = complex(0, 0);
+    let ddp = complex(0, 0);
+    for (let i = n - 1; i >= 0; i = i - 1) {
+        ddp = ddp * x + dp;
+        dp  = dp  * x + p;
+        p   = p   * x + _cpx(coefs[i]);
+    }
+    ddp = ddp * 2;
+    return [p, dp, ddp];
+}
+
+// One Laguerre iteration toward a root of P starting from x_in. Mirrors
+// NR3 §9.5 `laguer`.
+priv fn _laguerre_one(coefs, x_in) {
+    let MR = 8;
+    let MT = 10;
+    let MAX = MR * MT;
+    let EPS = 1e-14;
+    let frac = [0.5, 0.25, 0.75, 0.13, 0.38, 1.0, 0.0, 0.0];
+    let n = len(coefs) - 1;
+    let x = _cpx(x_in);
+    for (let iter = 1; iter <= MAX; iter = iter + 1) {
+        let vals = _phorner(coefs, x);
+        let P   = vals[0];
+        let dP  = vals[1];
+        let ddP = vals[2];
+        let absP = _cabs(P);
+        if (absP <= EPS * (1 + _cabs(x))) { return x; }
+        let G  = dP / P;
+        let G2 = G * G;
+        let H  = G2 - ddP / P;
+        let sq = _csqrt(complex(n - 1, 0) * (complex(n, 0) * H - G2));
+        let den_p = G + sq;
+        let den_m = G - sq;
+        let den = den_p;
+        if (_cabs(den_m) > _cabs(den_p)) { den = den_m; }
+        let dx = complex(0, 0);
+        if (_cabs(den) == 0) {
+            let mag = 1 + _cabs(x);
+            dx = complex(mag * cos(iter), mag * sin(iter));
+        } else {
+            dx = complex(n, 0) / den;
+        }
+        let x1 = x - dx;
+        if (real(x) == real(x1) && imag(x) == imag(x1)) { return x; }
+        if (iter % MT != 0) {
+            x = x1;
+        } else {
+            let idx = floor(iter / MT) - 1;
+            if (idx < 0) { idx = 0; }
+            if (idx >= len(frac)) { idx = len(frac) - 1; }
+            x = x - complex(frac[idx], 0) * dx;
+        }
+    }
+    return x;
+}
+
+// Synthetic division: divide coefs by (x - root). Returns the quotient.
+priv fn _deflate(coefs, root) {
+    let n = len(coefs) - 1;
+    let out = [];
+    for (let i = 0; i <= n; i = i + 1) { push(out, complex(0, 0)); }
+    out[n] = _cpx(coefs[n]);
+    for (let i = n - 1; i >= 0; i = i - 1) {
+        out[i] = _cpx(coefs[i]) + root * out[i + 1];
+    }
+    let q = [];
+    for (let i = 1; i <= n; i = i + 1) { push(q, out[i]); }
+    return q;
+}
+
+// Find all roots of P(x) = sum_{i} coefs[i] x^i. Returns `degree` complex
+// roots (multiplicity included).
+pub fn poly_roots(coefs_in) {
+    let n = len(coefs_in) - 1;
+    if (n < 1) { throw "poly_roots: degree must be >= 1"; }
+    let work = [];
+    for (let i = 0; i <= n; i = i + 1) { push(work, _cpx(coefs_in[i])); }
+    let roots = [];
+    for (let k = 0; k < n; k = k + 1) {
+        let r = _laguerre_one(work, complex(0, 0));
+        push(roots, r);
+        work = _deflate(work, r);
+    }
+    // Polish each root on the original polynomial to trim deflation drift.
+    let orig = [];
+    for (let i = 0; i <= n; i = i + 1) { push(orig, _cpx(coefs_in[i])); }
+    for (let k = 0; k < n; k = k + 1) {
+        roots[k] = _laguerre_one(orig, roots[k]);
+    }
+    return roots;
+}

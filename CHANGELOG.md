@@ -4,6 +4,24 @@ Reverse-chronological. Tracks language- and library-level changes. Bug-fix-only 
 
 ## Unreleased
 
+### Numerical-Recipes library (branch `numerical-library`)
+
+Five tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo5` exercise each.
+
+- Tier 1: `brent` (root finder), `spline` (natural cubic), `special` (gamma/erf), `eigen` (Jacobi).
+- Tier 2: `lu` (Doolittle + partial pivoting), `romberg` (Richardson extrapolation), `rk45` (Cash-Karp adaptive), `poly` (Chebyshev/Legendre/Hermite/Laguerre/Bessel).
+- Tier 3: `minimize` (golden section, Brent 1-D, Nelder-Mead), `sort` (heapsort, quickselect, median).
+- Tier 4: `diff` (Ridders'), `random_dist` (gamma/chi²/beta/t/Cauchy/binomial), `newton` (NR for nonlinear systems), `fitnl` (Levenberg-Marquardt).
+- Tier 5: `qr` (Householder), `svd` (Jacobi-based + pseudo-inverse), `polyroots` (Laguerre + deflation), `conv` (direct & FFT convolution / correlation).
+
+### Bug fix: complex arithmetic type inference
+
+`infer_binop` previously returned `TS_NUM_BIT` for every non-`+` arithmetic op regardless of operand types. This wrongly tagged complex-valued expressions as numeric, and the codegen subsequently emitted hardware `divsd` / `mulsd` on NaN-tagged complex bit-patterns — producing silent NaN corruption. Now the inference widens to `TS_ANY_MASK` whenever either operand isn't statically `num`, forcing dispatch through the polymorphic runtime helpers.
+
+### Lexer: scientific-notation literals
+
+`1.5e-7`, `2.3e+4`, `.5e2` etc. parse as numeric literals. Bare `e` (the constant) still tokenizes as an identifier when not preceded by digits.
+
 ### Engineering stdlib expansion (tier 2)
 
 - New `lib/json.calc` — JSON parser + encoder with escape decoding and the standard subset of types.

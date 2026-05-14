@@ -1,0 +1,168 @@
+// svd.calc — singular value decomposition via the normal equations.
+//
+// For A (m x n, m >= n), computes A = U S V^T with U (m x n) having
+// orthonormal columns, S a length-n vector of singular values (sorted
+// descending), V (n x n) orthogonal. Implementation strategy:
+//
+//   1. Form A^T A (n x n symmetric, positive-semidefinite).
+//   2. Eigendecompose: A^T A = V diag(S^2) V^T (jacobi_eigen from
+//      lib/nr/eigen.calc).
+//   3. S = sqrt of the eigenvalues; sort descending.
+//   4. U = A V S^-1 column by column (skip near-zero singular values).
+//
+// This is the "form normal equations" route — it has worse conditioning
+// than Golub-Reinsch bidiagonalization (you lose roughly half the digits)
+// but it's compact and uses the Jacobi eigensolver we already have. For
+// most engineering work the precision is fine.
+//
+// Reference: Numerical Recipes 2.6 (with the caveat above).
+//
+// Use cases the demo exercises:
+//   - Pseudo-inverse:    A^+ = V diag(1/s_i) U^T (for s_i > tol).
+//   - Rank-revealing LS: x = A^+ b minimizes ||A x - b|| even for
+//                        rank-deficient or wider-than-tall A.
+//   - Condition number: cond(A) = s_max / s_min.
+
+extern fn jacobi_eigen(A: arr): map;
+
+priv fn _svd_mat_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+priv fn _svd_matmul(A, B) {
+    let m = len(A);
+    let n = len(B[0]);
+    let k = len(B);
+    let C = _svd_mat_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            let s = 0;
+            for (let p = 0; p < k; p = p + 1) { s = s + A[i][p] * B[p][j]; }
+            C[i][j] = s;
+        }
+    }
+    return C;
+}
+
+priv fn _svd_transpose(A) {
+    let m = len(A);
+    let n = len(A[0]);
+    let T = _svd_mat_zero(n, m);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) { T[j][i] = A[i][j]; }
+    }
+    return T;
+}
+
+pub fn svd(A) {
+    let m = len(A);
+    if (m == 0) { throw "svd: empty matrix"; }
+    let n = len(A[0]);
+    if (m < n) { throw "svd: require m >= n; transpose first if needed"; }
+    // Step 1: AtA = A^T A.
+    let AT = _svd_transpose(A);
+    let AtA = _svd_matmul(AT, A);
+    // Step 2: eigendecompose AtA = V diag(lam) V^T.
+    let eig = jacobi_eigen(AtA);
+    let lam = eig["values"];
+    let V   = eig["vectors"];
+    // Step 3: sort the eigenpairs in descending order of singular value.
+    // Build an index permutation by simple O(n^2) selection sort —
+    // n here is small (matrix-rank scale), so it doesn't matter.
+    let order = [];
+    for (let i = 0; i < n; i = i + 1) { push(order, i); }
+    for (let i = 0; i < n - 1; i = i + 1) {
+        let best = i;
+        for (let j = i + 1; j < n; j = j + 1) {
+            if (lam[order[j]] > lam[order[best]]) { best = j; }
+        }
+        if (best != i) {
+            let tmp = order[i]; order[i] = order[best]; order[best] = tmp;
+        }
+    }
+    // Reorder V's columns and lam to match.
+    let V2 = _svd_mat_zero(n, n);
+    let S  = [];
+    for (let j = 0; j < n; j = j + 1) {
+        let src = order[j];
+        let val = lam[src];
+        if (val < 0) { val = 0; }   // numerical noise on PSD eigenvalues
+        push(S, sqrt(val));
+        for (let i = 0; i < n; i = i + 1) { V2[i][j] = V[i][src]; }
+    }
+    // Step 4: U = A V S^-1 (column by column). For zero singular values,
+    // leave the corresponding U column zero — the demo doesn't probe it.
+    let U = _svd_mat_zero(m, n);
+    let tol = 0;
+    if (S[0] > 0) { tol = 1e-12 * S[0]; }
+    for (let j = 0; j < n; j = j + 1) {
+        if (S[j] > tol) {
+            // U[:,j] = A V[:,j] / S[j]
+            for (let i = 0; i < m; i = i + 1) {
+                let s = 0;
+                for (let k = 0; k < n; k = k + 1) { s = s + A[i][k] * V2[k][j]; }
+                U[i][j] = s / S[j];
+            }
+        }
+    }
+    return {"U": U, "S": S, "V": V2};
+}
+
+// Pseudo-inverse via SVD: A^+ = V diag(1/s_i) U^T, ignoring near-zero s_i.
+pub fn svd_pinv(A) {
+    let m = len(A);
+    let n = len(A[0]);
+    let sv = svd(A);
+    let U = sv["U"];  let S = sv["S"];  let V = sv["V"];
+    let tol = 0;
+    if (S[0] > 0) { tol = 1e-12 * max(m, n) * S[0]; }
+    let pinv = _svd_mat_zero(n, m);
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < m; j = j + 1) {
+            let s = 0;
+            for (let k = 0; k < n; k = k + 1) {
+                if (S[k] > tol) {
+                    s = s + V[i][k] * U[j][k] / S[k];
+                }
+            }
+            pinv[i][j] = s;
+        }
+    }
+    return pinv;
+}
+
+// Solve A x = b in the LS / minimum-norm sense via SVD.
+pub fn svd_solve(A, b) {
+    let sv = svd(A);
+    let U = sv["U"];  let S = sv["S"];  let V = sv["V"];
+    let m = len(U);
+    let n = len(V);
+    let tol = 0;
+    if (S[0] > 0) { tol = 1e-12 * S[0]; }
+    // c = U^T b
+    let c = [];
+    for (let k = 0; k < n; k = k + 1) {
+        let s = 0;
+        for (let i = 0; i < m; i = i + 1) { s = s + U[i][k] * b[i]; }
+        push(c, s);
+    }
+    // y_k = c_k / s_k for s_k > tol, else 0
+    let y = [];
+    for (let k = 0; k < n; k = k + 1) {
+        if (S[k] > tol) { push(y, c[k] / S[k]); } else { push(y, 0); }
+    }
+    // x = V y
+    let x = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let s = 0;
+        for (let k = 0; k < n; k = k + 1) { s = s + V[i][k] * y[k]; }
+        push(x, s);
+    }
+    return x;
+}

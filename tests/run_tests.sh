@@ -980,6 +980,45 @@ A * I3 == A?  1' "$nat_out"
         echo "FAIL: nr4 — LM fit a0 out of band"; echo "$fit_line"; exit 1
     fi
 
+    echo "[test] demo — nr_demo5 (QR + SVD + Laguerre polyroots + convolution)"
+    build/calcnat --lib lib/nr/qr.calc        -o build/calclib/nr_qr.s
+    build/calcnat --lib lib/nr/svd.calc       -o build/calclib/nr_svd.s
+    build/calcnat --lib lib/nr/polyroots.calc -o build/calclib/nr_polyroots.s
+    build/calcnat --lib lib/nr/conv.calc      -o build/calclib/nr_conv.s
+    build/calcnat examples/nr_demo5.calc \
+        build/calclib/nr_qr.s build/calclib/nr_svd.s \
+        build/calclib/nr_polyroots.s build/calclib/nr_conv.s \
+        build/calclib/nr_eigen.s build/calclib/fft.s \
+        -o build/d_nr5.exe
+    nat_out=$(build/d_nr5.exe | strip_cr)
+    # QR LS solution must equal SVD LS solution to ~1e-10.
+    echo "$nat_out" | grep -qE "least-squares solution:" \
+        || { echo "FAIL: nr5 — no QR LS heading"; exit 1; }
+    # Both QR and SVD LS solutions should print [0.5714..., 2.5714..., 1.5714...]
+    qr_count=$(echo "$nat_out" | grep -c "\[0.5714285714, 2.571428571, 1.571428571\]")
+    if [ "$qr_count" != "2" ]; then
+        echo "FAIL: nr5 — QR / SVD LS disagree"; echo "$nat_out"; exit 1
+    fi
+    # Pseudo-inverse * A within ~1e-14 of identity.
+    echo "$nat_out" | grep -qE "\|\|A\^\+ A - I\|\|_F = .*e-1[3456]" \
+        || { echo "FAIL: nr5 — pinv*A != I"; echo "$nat_out"; exit 1; }
+    # Polynomial roots: (x-1)(x-2)(x-3) recovered to machine precision.
+    echo "$nat_out" | grep -q "^  1 + 0i$" \
+        || { echo "FAIL: nr5 — root 1"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "^  2 + 0i$" \
+        || { echo "FAIL: nr5 — root 2"; echo "$nat_out"; exit 1; }
+    echo "$nat_out" | grep -q "^  3 + 0i$" \
+        || { echo "FAIL: nr5 — root 3"; echo "$nat_out"; exit 1; }
+    # Direct vs FFT convolution match exactly on the test pair.
+    direct=$(echo "$nat_out" | grep -A1 "conv_direct =" | tail -1)
+    fft=$(echo "$nat_out"    | grep -A1 "conv_fft    =" | tail -1)
+    if [ "$direct" != "$fft" ]; then
+        echo "FAIL: nr5 — conv_direct != conv_fft"
+        echo "direct: $direct"; echo "fft:    $fft"; exit 1
+    fi
+    echo "$nat_out" | grep -q "\[1, 3, 6, 5, 3\]" \
+        || { echo "FAIL: nr5 — conv result wrong"; echo "$nat_out"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

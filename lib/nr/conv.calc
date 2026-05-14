@@ -1,0 +1,109 @@
+// conv.calc — convolution and correlation, direct and FFT-based.
+//
+// Direct: O(n m). Use when at least one signal is short.
+// FFT:    O((n+m) log(n+m)). Use for long signals against long kernels.
+//
+// Reference: Numerical Recipes 13.1 (convolution), 13.2 (correlation).
+//
+// API:
+//   conv_direct(a, b)         — full linear convolution, length n+m-1
+//   corr_direct(a, b)         — full linear correlation, length n+m-1
+//                               (corr[k] = sum_i a[i] b[i+k-m+1])
+//   conv_fft(a, b)            — same as conv_direct but FFT-backed
+//   correlate_fft(a, b)       — same as corr_direct but FFT-backed
+//
+// The FFT-backed routines zero-pad both signals to a length >= n+m-1
+// that's a power of two (CalcLang's fft requires power-of-two N).
+
+extern fn fft(x: arr): arr;
+extern fn ifft(X: arr): arr;
+
+priv fn _next_pow2(n) {
+    let p = 1;
+    while (p < n) { p = p * 2; }
+    return p;
+}
+
+// ===== Direct linear convolution =====
+pub fn conv_direct(a, b) {
+    let n = len(a);
+    let m = len(b);
+    let out_len = n + m - 1;
+    let out = [];
+    for (let i = 0; i < out_len; i = i + 1) { push(out, 0); }
+    for (let i = 0; i < n; i = i + 1) {
+        for (let j = 0; j < m; j = j + 1) {
+            out[i + j] = out[i + j] + a[i] * b[j];
+        }
+    }
+    return out;
+}
+
+// ===== Direct cross-correlation =====
+// corr[k] for k = 0 .. n+m-2 corresponds to sliding b past a:
+//   corr[k] = sum over valid i of a[i] * b[i - (k - m + 1)]
+// This matches the FFT-based formula below.
+pub fn corr_direct(a, b) {
+    let n = len(a);
+    let m = len(b);
+    let out_len = n + m - 1;
+    let out = [];
+    for (let i = 0; i < out_len; i = i + 1) { push(out, 0); }
+    // Equivalent to conv(a, reverse(b)).
+    let br = [];
+    for (let i = m - 1; i >= 0; i = i - 1) { push(br, b[i]); }
+    return conv_direct(a, br);
+}
+
+priv fn _zero_pad(x, N) {
+    let out = [];
+    for (let i = 0; i < N; i = i + 1) {
+        if (i < len(x)) { push(out, x[i]); } else { push(out, 0); }
+    }
+    return out;
+}
+
+// ===== FFT-based convolution =====
+pub fn conv_fft(a, b) {
+    let n = len(a);
+    let m = len(b);
+    let L = n + m - 1;
+    let N = _next_pow2(L);
+    let ap = _zero_pad(a, N);
+    let bp = _zero_pad(b, N);
+    let A = fft(ap);
+    let B = fft(bp);
+    // Pointwise product.
+    let C = [];
+    for (let i = 0; i < N; i = i + 1) { push(C, A[i] * B[i]); }
+    let c = ifft(C);
+    // Take the real part of the first L samples.
+    let out = [];
+    for (let i = 0; i < L; i = i + 1) { push(out, real(c[i])); }
+    return out;
+}
+
+// ===== FFT-based correlation =====
+pub fn correlate_fft(a, b) {
+    let n = len(a);
+    let m = len(b);
+    let L = n + m - 1;
+    let N = _next_pow2(L);
+    let ap = _zero_pad(a, N);
+    let bp = _zero_pad(b, N);
+    let A = fft(ap);
+    let B = fft(bp);
+    // A(f) * conj(B(f)).
+    let C = [];
+    for (let i = 0; i < N; i = i + 1) {
+        push(C, A[i] * conj(B[i]));
+    }
+    let c = ifft(C);
+    // Roll by m-1 so output indexing matches corr_direct.
+    let out = [];
+    for (let i = 0; i < L; i = i + 1) {
+        let src = (i + N - (m - 1)) % N;
+        push(out, real(c[src]));
+    }
+    return out;
+}

@@ -80,6 +80,10 @@ nr_libs: all
 	$(BUILD)/calcnat --lib lib/nr/random_dist.calc -o $(CALCLIB)/nr_random_dist.s
 	$(BUILD)/calcnat --lib lib/nr/newton.calc      -o $(CALCLIB)/nr_newton.s
 	$(BUILD)/calcnat --lib lib/nr/fitnl.calc       -o $(CALCLIB)/nr_fitnl.s
+	$(BUILD)/calcnat --lib lib/nr/qr.calc          -o $(CALCLIB)/nr_qr.s
+	$(BUILD)/calcnat --lib lib/nr/svd.calc         -o $(CALCLIB)/nr_svd.s
+	$(BUILD)/calcnat --lib lib/nr/polyroots.calc   -o $(CALCLIB)/nr_polyroots.s
+	$(BUILD)/calcnat --lib lib/nr/conv.calc        -o $(CALCLIB)/nr_conv.s
 
 sine_plot: libs
 	$(BUILD)/calcnat examples/sine_plot.calc $(CALCLIB)/plot.s -o $(BUILD)/sine_plot
@@ -145,8 +149,15 @@ nr_demo4: nr_libs libs
 	    $(CALCLIB)/nr_lu.s $(CALCLIB)/random.s -o $(BUILD)/nr_demo4
 	$(BUILD)/nr_demo4
 
+nr_demo5: nr_libs libs
+	$(BUILD)/calcnat examples/nr_demo5.calc \
+	    $(CALCLIB)/nr_qr.s $(CALCLIB)/nr_svd.s \
+	    $(CALCLIB)/nr_polyroots.s $(CALCLIB)/nr_conv.s \
+	    $(CALCLIB)/nr_eigen.s $(CALCLIB)/fft.s -o $(BUILD)/nr_demo5
+	$(BUILD)/nr_demo5
+
 demos: sine_plot regression linsys numerical monte_carlo csv_demo \
-       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4
+       multi_plot json_demo ode_demo fft_demo nr_demo nr_demo2 nr_demo3 nr_demo4 nr_demo5
 
 test: all
 	sh tests/run_tests.sh

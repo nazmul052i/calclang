@@ -86,6 +86,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/random_dist.calc`** — gamma (Marsaglia–Tsang), chi², beta, Student's t, Cauchy, binomial, geometric, and triangular sampling on top of `Rng`.
 - **`nr/newton.calc`** — Newton-Raphson for nonlinear systems with Armijo line search; analytic or numerical Jacobian.
 - **`nr/fitnl.calc`** — Levenberg-Marquardt nonlinear least squares with parameter covariance estimate.
+- **`nr/qr.calc`** — QR decomposition via Householder reflections; solves square and over-determined least-squares systems.
+- **`nr/svd.calc`** — singular value decomposition (via A^T A + Jacobi); pseudo-inverse and rank-revealing LS solve.
+- **`nr/polyroots.calc`** — all roots of a real or complex polynomial via Laguerre's method with synthetic-division deflation and a polish pass.
+- **`nr/conv.calc`** — direct and FFT-based linear convolution and cross-correlation.
 
 ## Hello world
 

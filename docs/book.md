@@ -1462,6 +1462,59 @@ print fit["covar"];      // parameter covariance matrix
 
 The `dyda` array is the gradient with respect to a — supplying it directly (rather than finite-differencing) is faster and more accurate.
 
+#### `lib/nr/qr.calc` — QR decomposition (Householder)
+
+For A (m × n with m ≥ n), `qr_decompose` returns `{"Q", "R"}` where Q is m × m orthogonal and R is m × n upper triangular. `qr_solve` then handles both square systems and overdetermined least-squares problems via back-substitution on R. Householder reflections are the numerically-stable canonical choice (NR §2.10).
+
+```calc
+extern fn qr_decompose(A: arr): map;
+extern fn qr_solve(qr: map, b: arr): arr;
+
+let A = [[1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+let qr = qr_decompose(A);
+let x = qr_solve(qr, [3, 2, 4, 5]);   // 4 x 3 LS, x in R^3
+```
+
+#### `lib/nr/svd.calc` — singular value decomposition
+
+For A (m × n with m ≥ n), `svd(A)` returns `{"U", "S", "V"}` with U (m × n) having orthonormal columns, S the n singular values sorted descending, V (n × n) orthogonal. Implementation forms A^T A and Jacobi-eigendecomposes it — about half the precision of Golub-Reinsch but ~80 lines of CalcLang. `svd_solve` does rank-revealing LS / minimum-norm solve; `svd_pinv` returns the Moore-Penrose pseudo-inverse. NR §2.6.
+
+```calc
+extern fn svd(A: arr): map;
+extern fn svd_solve(A: arr, b: arr): arr;
+extern fn svd_pinv(A: arr): arr;
+
+let r = svd(B);
+print r["S"];     // singular values, biggest first
+```
+
+#### `lib/nr/polyroots.calc` — Laguerre polynomial roots
+
+`poly_roots(coefs)` returns all `n = degree` complex roots of P(x) = Σ coefs[i] x^i. Laguerre's method has cubic convergence from almost any starting point and handles repeated / complex roots gracefully. After each root is found we deflate by synthetic division; a final polish pass re-runs Laguerre on the original polynomial to wipe out deflation roundoff. NR §9.5.
+
+```calc
+extern fn poly_roots(coefs: arr): arr;
+
+// (x - 1)(x - 2)(x - 3) = x^3 - 6 x^2 + 11 x - 6.
+// Coefficient convention: coefs[i] multiplies x^i.
+let roots = poly_roots([-6, 11, -6, 1]);
+for (let i = 0; i < len(roots); i = i + 1) { print roots[i]; }
+// 1, 2, 3 — exact.
+```
+
+Each root is returned as a CalcLang complex value; real roots come back with imaginary part essentially zero.
+
+#### `lib/nr/conv.calc` — convolution / correlation
+
+```calc
+extern fn conv_direct(a: arr, b: arr): arr;
+extern fn conv_fft(a: arr, b: arr): arr;
+extern fn corr_direct(a: arr, b: arr): arr;
+extern fn correlate_fft(a: arr, b: arr): arr;
+```
+
+Direct is O(nm); use it for short signals or short kernels. FFT-backed variants run in O((n+m) log(n+m)) — zero-pad to the next power of two, transform both, multiply (or multiply by the conjugate, for correlation), and inverse-transform. Built on `lib/fft.calc`. NR §13.1–13.2.
+
 #### Building the NR libraries
 
 ```bash
@@ -1470,6 +1523,7 @@ make nr_demo          # tier 1: Brent + spline + special + Jacobi
 make nr_demo2         # tier 2: LU + Romberg + RK45 + polynomial families
 make nr_demo3         # tier 3: minimization + sort/select
 make nr_demo4         # tier 4: Ridders' + distributions + Newton + LM fit
+make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
 ```
 
 ### Building demos
@@ -1492,6 +1546,7 @@ make nr_demo                             # Brent + spline + special fns + Jacobi
 make nr_demo2                            # LU + Romberg + RK45 + polynomial families
 make nr_demo3                            # 1-D / N-D minimization + sort/select
 make nr_demo4                            # Ridders' + distributions + Newton + LM fit
+make nr_demo5                            # QR + SVD + Laguerre polyroots + convolution
 make demos                               # all of the above
 ```
 
