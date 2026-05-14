@@ -836,6 +836,64 @@ static void gen_stmt(AST *n, SymbolTable *st, StrBuf *out) {
             symtab_pop_scope(st);
             break;
         }
+        case NODE_SWITCH: {
+            /* Stash the discriminant in a fresh hidden local. Each case
+               reloads it, compares, and jumps to the body on match.
+               `break` inside a case jumps to L_end via the loop stack. */
+            int n_cases = n->as.switch_stmt.case_count;
+            int has_default = (n->as.switch_stmt.default_body != NULL);
+            char lend[32], ldefault[32];
+            make_label(lend, sizeof(lend));
+            if (has_default) make_label(ldefault, sizeof(ldefault));
+            else             cl_strncpy_z(ldefault, lend, sizeof(ldefault));
+
+            /* Allocate one hidden local for the discriminant.
+               The function-level ENTER preallocates all locals; we just
+               declare the slot and use it. */
+            symtab_push_scope(st);
+            char disc_name[32];
+            snprintf(disc_name, sizeof disc_name, "__sw_disc_%d", g_loop_depth);
+            SymInfo disc_info = symtab_declare(st, disc_name, TYPE_ANY);
+            gen_expr(n->as.switch_stmt.discriminant, st, out);
+            if (disc_info.kind == SYM_LOCAL) {
+                sb_printf(out, "STORE_LOCAL %d\n", disc_info.slot);
+            } else {
+                sb_printf(out, "STORE %d\n", disc_info.slot);
+            }
+
+            /* Build per-case labels. */
+            char (*lcases)[32] = (char (*)[32])cl_track_malloc(sizeof(char[32]) * (size_t)(n_cases > 0 ? n_cases : 1));
+            for (int i = 0; i < n_cases; i++) make_label(lcases[i], sizeof(lcases[i]));
+
+            /* Dispatch chain. */
+            for (int i = 0; i < n_cases; i++) {
+                if (disc_info.kind == SYM_LOCAL) {
+                    sb_printf(out, "LOAD_LOCAL %d\n", disc_info.slot);
+                } else {
+                    sb_printf(out, "LOAD %d\n", disc_info.slot);
+                }
+                gen_expr(n->as.switch_stmt.case_values[i], st, out);
+                sb_printf(out, "EQ\n");
+                sb_printf(out, "JNZ %s\n", lcases[i]);
+            }
+            sb_printf(out, "JMP %s\n", ldefault);
+
+            /* Case bodies (break -> lend). */
+            push_loop(lend, lend);   /* continue is a no-op inside switch — re-use lend */
+            for (int i = 0; i < n_cases; i++) {
+                sb_printf(out, "%s:\n", lcases[i]);
+                gen_stmt(n->as.switch_stmt.case_bodies[i], st, out);
+                sb_printf(out, "JMP %s\n", lend);
+            }
+            if (has_default) {
+                sb_printf(out, "%s:\n", ldefault);
+                gen_stmt(n->as.switch_stmt.default_body, st, out);
+            }
+            pop_loop();
+            sb_printf(out, "%s:\n", lend);
+            symtab_pop_scope(st);
+            break;
+        }
         case NODE_BREAK:
             if (g_loop_depth == 0) cl_die("'break' outside a loop");
             sb_printf(out, "JMP %s\n", g_loops[g_loop_depth - 1].break_label);

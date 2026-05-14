@@ -1544,6 +1544,65 @@ static void gen_stmt(Cg *cg, AST *n) {
         case NODE_IF:    gen_if(cg, n);    return;
         case NODE_WHILE: gen_while(cg, n); return;
         case NODE_FOR:   gen_for(cg, n);   return;
+        case NODE_SWITCH: {
+            /* Evaluate discriminant, save to a stack slot. For each case,
+               compare against the case value via cl_op_eq (polymorphic —
+               so numbers and strings both work as labels). On match, jump
+               to the case body; cases run sequentially and each falls
+               through to the switch end (no C-style fall-through).
+               `break` inside a case body jumps to the switch end too. */
+            int n_cases = n->as.switch_stmt.case_count;
+            int has_default = (n->as.switch_stmt.default_body != NULL);
+            int L_end = fresh_label(cg);
+            int *L_case = (int *)cl_track_malloc(sizeof(int) * (size_t)(n_cases > 0 ? n_cases : 1));
+            for (int i = 0; i < n_cases; i++) L_case[i] = fresh_label(cg);
+            int L_default = has_default ? fresh_label(cg) : L_end;
+
+            /* Evaluate discriminant; push onto the stack (16-byte slot). */
+            gen_expr(cg, n->as.switch_stmt.discriminant);
+            push_xmm0(cg);
+
+            /* Dispatch: for each case, reload disc, eval case value,
+               compare, jump if equal. */
+            for (int i = 0; i < n_cases; i++) {
+                /* xmm0 = case value */
+                gen_expr(cg, n->as.switch_stmt.case_values[i]);
+                /* rdx = xmm0 (case value), rcx = [rsp] (discriminant) */
+                e(cg, "movq rdx, xmm0");
+                e(cg, "mov  rcx, [rsp]");
+                e(cg, "sub  rsp, 32");
+                e(cg, "call cl_op_eq");
+                e(cg, "add  rsp, 32");
+                /* rax = num 1.0 if equal, num 0.0 otherwise. */
+                e(cg, "movq xmm0, rax");
+                e(cg, "xorpd xmm1, xmm1");
+                e(cg, "ucomisd xmm0, xmm1");
+                ef(cg, "jp   .L%d_skip%d", L_end, i);   /* PF set → NaN → skip */
+                ef(cg, "jne  .L%d", L_case[i]);
+                ef(cg, ".L%d_skip%d:", L_end, i);
+            }
+            /* No case matched — go to default (or end). */
+            ef(cg, "jmp  .L%d", L_default);
+
+            /* Each case body. Use break_label so `break` works inside. */
+            int saved_break = cg->break_label;
+            cg->break_label = L_end;
+            for (int i = 0; i < n_cases; i++) {
+                label(cg, L_case[i]);
+                gen_stmt(cg, n->as.switch_stmt.case_bodies[i]);
+                ef(cg, "jmp  .L%d", L_end);
+            }
+            if (has_default) {
+                label(cg, L_default);
+                gen_stmt(cg, n->as.switch_stmt.default_body);
+                /* fall through to L_end */
+            }
+            cg->break_label = saved_break;
+            label(cg, L_end);
+            /* Pop the discriminant slot. */
+            e(cg, "add rsp, 16");
+            return;
+        }
         case NODE_BREAK:
             if (cg->break_label < 0) cl_die("`break` outside loop");
             ef(cg, "jmp  .L%d", cg->break_label);

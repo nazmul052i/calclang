@@ -765,6 +765,60 @@ while (r < len(haystack) && !found) {
 
 Option 1 is almost always clearer.
 
+### `switch`
+
+Multi-way dispatch on a value, with **no C-style fall-through** — each case is implicitly terminated, so you never need a trailing `break;` just to stop. (You *can* use `break` inside a multi-statement case body for early exit.)
+
+```calc
+fn day_name(d) {
+    switch (d) {
+        case 0: return "Sun";
+        case 1: return "Mon";
+        case 2: return "Tue";
+        case 3: return "Wed";
+        case 4: return "Thu";
+        case 5: return "Fri";
+        case 6: return "Sat";
+        default: return "?";
+    }
+}
+print day_name(3);     // Wed
+print day_name(10);    // ?
+```
+
+Rules:
+
+- The discriminant can be any expression. Case values can be too (they're not restricted to literals, though that's the common case).
+- Equality is checked with the same semantics as `==` — numbers, strings, and complex values all work.
+- `default:` is optional. If no case matches and no default is given, the switch does nothing and execution continues after.
+- Cases match in order (top-to-bottom). The first match wins.
+- Each case body is its own scope; `let` declarations inside a case don't leak out.
+- `break` inside a case body exits the switch immediately. Inside an enclosing loop, `break` continues to mean "break the innermost loop or switch."
+
+#### Switch on strings
+
+```calc
+fn op_arity(op) {
+    switch (op) {
+        case "+": return 2;
+        case "-": return 2;
+        case "neg": return 1;
+        case "if": return 3;
+        default: return 0;
+    }
+}
+print op_arity("+");      // 2
+```
+
+That's about three times more readable than the chained `if (op == "+") ... else if (op == "-") ...` form.
+
+#### When to use switch vs. if-chain
+
+- `switch` is the right choice when you're dispatching on the value of *one* expression to *equal* cases.
+- `if`/`else if` is the right choice when each branch tests a different condition (`if (x > 0)`, `else if (s == "foo")`, etc.).
+
+If your cases need ranges (`case 0..9`), pattern matching, or guard conditions, fall back to `if`/`else if` — CalcLang doesn't have those features yet.
+
 ### Block scope
 
 Every `{ ... }` is a fresh scope. Inner `let` declarations shadow outer ones; assignment without `let` reaches outward to the nearest binding:

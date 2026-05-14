@@ -451,6 +451,17 @@ static void infer_stmt(AST *n, TiEnv *env) {
         case NODE_BREAK:
         case NODE_CONTINUE:
             return;
+        case NODE_SWITCH: {
+            infer_expr(n->as.switch_stmt.discriminant, env);
+            for (int i = 0; i < n->as.switch_stmt.case_count; i++) {
+                infer_expr(n->as.switch_stmt.case_values[i], env);
+                infer_stmt(n->as.switch_stmt.case_bodies[i], env);
+            }
+            if (n->as.switch_stmt.default_body) {
+                infer_stmt(n->as.switch_stmt.default_body, env);
+            }
+            return;
+        }
         case NODE_CALL:
             infer_expr(n, env);
             return;
@@ -525,6 +536,14 @@ static void walk_for_inner_fns(AST *n) {
             walk_for_inner_fns(n->as.for_stmt.cond);
             walk_for_inner_fns(n->as.for_stmt.step);
             walk_for_inner_fns(n->as.for_stmt.body);
+            return;
+        case NODE_SWITCH:
+            walk_for_inner_fns(n->as.switch_stmt.discriminant);
+            for (int i = 0; i < n->as.switch_stmt.case_count; i++) {
+                walk_for_inner_fns(n->as.switch_stmt.case_values[i]);
+                walk_for_inner_fns(n->as.switch_stmt.case_bodies[i]);
+            }
+            walk_for_inner_fns(n->as.switch_stmt.default_body);
             return;
         case NODE_LET:    walk_for_inner_fns(n->as.let_stmt.expr); return;
         case NODE_ASSIGN: walk_for_inner_fns(n->as.assign_stmt.expr); return;

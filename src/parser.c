@@ -468,6 +468,50 @@ static AST *parse_stmt(Parser *p) {
         AST *handler = parse_block(p);
         return ast_try(body, name.text, handler);
     }
+    if (p->current.type == TOK_SWITCH) {
+        /* switch (expr) {
+               case v1:
+                   stmts*
+               case v2:
+                   stmts*
+               default:
+                   stmts*
+           }
+           Cases run top to bottom; `break;` exits the switch. There is
+           no fall-through (each case body is terminated by the start of
+           the next case label, the `default` keyword, or the closing
+           brace). */
+        next(p);
+        expect(p, TOK_LPAREN);
+        AST *disc = parse_expr(p);
+        expect(p, TOK_RPAREN);
+        expect(p, TOK_LBRACE);
+        AST *sw = ast_switch(disc);
+        while (p->current.type == TOK_CASE || p->current.type == TOK_DEFAULT) {
+            int is_default = (p->current.type == TOK_DEFAULT);
+            next(p);
+            AST *val = NULL;
+            if (!is_default) {
+                val = parse_expr(p);
+            }
+            expect(p, TOK_COLON);
+            /* Collect statements until the next case/default/} into a block. */
+            AST *body = ast_block();
+            while (p->current.type != TOK_CASE
+                && p->current.type != TOK_DEFAULT
+                && p->current.type != TOK_RBRACE
+                && p->current.type != TOK_EOF) {
+                ast_block_add(body, parse_stmt(p));
+            }
+            if (is_default) {
+                ast_switch_set_default(sw, body);
+            } else {
+                ast_switch_add_case(sw, val, body);
+            }
+        }
+        expect(p, TOK_RBRACE);
+        return sw;
+    }
     if (p->current.type == TOK_LBRACE) {
         return parse_block(p);
     }

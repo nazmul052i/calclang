@@ -30,6 +30,21 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] switch statement (num and str cases, default, break)"
+out=$(run switch_stmt)
+check "switch_stmt" 'Sun
+Mon
+Tue
+Wed
+Thu
+Fri
+Sat
+?
+2
+1
+0
+1104' "$out"
+
 echo "[test] bitwise ops + hex/binary literals"
 out=$(run bitwise)
 check "bitwise" '1

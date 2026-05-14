@@ -280,6 +280,9 @@ Token lexer_next(Lexer *lx) {
         if (strcmp(b, "try")      == 0) return tok(TOK_TRY,      b, line, col);
         if (strcmp(b, "catch")    == 0) return tok(TOK_CATCH,    b, line, col);
         if (strcmp(b, "throw")    == 0) return tok(TOK_THROW,    b, line, col);
+        if (strcmp(b, "switch")   == 0) return tok(TOK_SWITCH,   b, line, col);
+        if (strcmp(b, "case")     == 0) return tok(TOK_CASE,     b, line, col);
+        if (strcmp(b, "default")  == 0) return tok(TOK_DEFAULT,  b, line, col);
         return tok(TOK_IDENTIFIER, b, line, col);
     }
 
