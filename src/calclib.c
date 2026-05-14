@@ -74,6 +74,21 @@ static const BuiltinDef table[] = {
     { "has_key",         2, BI_HAS_KEY,         T_NUM },
     { "del",             2, BI_DEL,             T_NUM },
 
+    /* ctype helpers — operate on single-character strings */
+    { "is_digit",        1, BI_IS_DIGIT,        T_NUM },
+    { "is_alpha",        1, BI_IS_ALPHA,        T_NUM },
+    { "is_alnum",        1, BI_IS_ALNUM,        T_NUM },
+    { "is_space",        1, BI_IS_SPACE,        T_NUM },
+    { "is_upper",        1, BI_IS_UPPER,        T_NUM },
+    { "is_lower",        1, BI_IS_LOWER,        T_NUM },
+    { "char_to_upper",   1, BI_CHAR_TO_UPPER,   T_STR },
+    { "char_to_lower",   1, BI_CHAR_TO_LOWER,   T_STR },
+    { "char_code",       1, BI_CHAR_CODE,       T_NUM },
+    { "char_from",       1, BI_CHAR_FROM,       T_STR },
+
+    /* printf-style formatting: fmt(format, [args]) -> str */
+    { "fmt",             2, BI_FMT,             T_STR },
+
     { NULL, 0, 0, 0 }
 };
 

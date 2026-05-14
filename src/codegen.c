@@ -582,6 +582,19 @@ static void gen_expr(AST *n, SymbolTable *st, StrBuf *out) {
                 default:          cl_die("unknown binary op");
             }
             break;
+        case NODE_TERNARY: {
+            char lelse[32], lend[32];
+            make_label(lelse, sizeof(lelse));
+            make_label(lend,  sizeof(lend));
+            gen_expr(n->as.ternary.cond, st, out);
+            sb_printf(out, "JZ %s\n", lelse);
+            gen_expr(n->as.ternary.then_expr, st, out);
+            sb_printf(out, "JMP %s\n", lend);
+            sb_printf(out, "%s:\n", lelse);
+            gen_expr(n->as.ternary.else_expr, st, out);
+            sb_printf(out, "%s:\n", lend);
+            break;
+        }
         case NODE_CALL: {
             if (n->as.call.callee) {
                 /* Indirect call: `(expr)(args)`, `obj.method(args)`,
@@ -811,6 +824,23 @@ static void gen_stmt(AST *n, SymbolTable *st, StrBuf *out) {
             gen_stmt(n->as.while_stmt.body, st, out);
             pop_loop();
             sb_printf(out, "JMP %s\n", lstart);
+            sb_printf(out, "%s:\n", lend);
+            break;
+        }
+        case NODE_DO_WHILE: {
+            /* do { body } while (cond);
+               body runs at least once; continue jumps to the cond check. */
+            char lstart[32], lcont[32], lend[32];
+            make_label(lstart, sizeof(lstart));
+            make_label(lcont,  sizeof(lcont));
+            make_label(lend,   sizeof(lend));
+            sb_printf(out, "%s:\n", lstart);
+            push_loop(lcont, lend);
+            gen_stmt(n->as.while_stmt.body, st, out);
+            pop_loop();
+            sb_printf(out, "%s:\n", lcont);
+            gen_expr(n->as.while_stmt.cond, st, out);
+            sb_printf(out, "JNZ %s\n", lstart);
             sb_printf(out, "%s:\n", lend);
             break;
         }

@@ -283,6 +283,22 @@ void ast_switch_set_default(AST *sw, AST *body) {
     sw->as.switch_stmt.default_body = body;
 }
 
+AST *ast_ternary(AST *cond, AST *then_expr, AST *else_expr) {
+    AST *n = make(NODE_TERNARY);
+    n->as.ternary.cond      = cond;
+    n->as.ternary.then_expr = then_expr;
+    n->as.ternary.else_expr = else_expr;
+    return n;
+}
+
+AST *ast_do_while(AST *body, AST *cond) {
+    /* Reuse while_stmt fields; the kind distinguishes do-while from while. */
+    AST *n = make(NODE_DO_WHILE);
+    n->as.while_stmt.cond = cond;
+    n->as.while_stmt.body = body;
+    return n;
+}
+
 void ast_map_lit_add(AST *m, AST *key, AST *value) {
     if (m->as.map_lit.count >= m->as.map_lit.cap) {
         int nc = m->as.map_lit.cap == 0 ? 4 : m->as.map_lit.cap * 2;
@@ -437,6 +453,17 @@ void ast_print_debug(AST *n, int indent) {
                 ast_print_debug(n->as.switch_stmt.default_body, indent + 2);
             }
             break;
+        case NODE_TERNARY:
+            printf("Ternary\n");
+            ast_print_debug(n->as.ternary.cond,      indent + 2);
+            ast_print_debug(n->as.ternary.then_expr, indent + 2);
+            ast_print_debug(n->as.ternary.else_expr, indent + 2);
+            break;
+        case NODE_DO_WHILE:
+            printf("DoWhile\n");
+            ast_print_debug(n->as.while_stmt.body, indent + 2);
+            ast_print_debug(n->as.while_stmt.cond, indent + 2);
+            break;
     }
 }
 
@@ -532,6 +559,15 @@ static void free_node(AST *n) {
                 free_node(n->as.switch_stmt.case_bodies[i]);
             }
             free_node(n->as.switch_stmt.default_body);
+            break;
+        case NODE_TERNARY:
+            free_node(n->as.ternary.cond);
+            free_node(n->as.ternary.then_expr);
+            free_node(n->as.ternary.else_expr);
+            break;
+        case NODE_DO_WHILE:
+            free_node(n->as.while_stmt.body);
+            free_node(n->as.while_stmt.cond);
             break;
         case NODE_NUMBER:
         case NODE_STRING:

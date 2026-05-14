@@ -1,0 +1,48 @@
+// qol.calc — quality-of-life features: ternary, do-while, ctype, fmt.
+
+// ===== Ternary =====
+print 5 > 3 ? "yes" : "no";           // yes
+print 5 < 3 ? "yes" : "no";           // no
+
+// Chained
+fn grade(s) {
+    return s >= 90 ? "A"
+         : s >= 80 ? "B"
+         : s >= 70 ? "C" : "F";
+}
+print grade(95);                       // A
+print grade(72);                       // C
+print grade(40);                       // F
+
+// ===== do-while =====
+let i = 0;
+do {
+    i = i + 1;
+} while (i < 5);
+print i;                               // 5
+
+// Body runs at least once even if cond is initially false
+let j = 100;
+do { j = j + 1; } while (j < 10);
+print j;                               // 101
+
+// ===== ctype =====
+print is_digit("7");                   // 1
+print is_digit("x");                   // 0
+print is_alpha("Z");                   // 1
+print is_alnum("9");                   // 1
+print is_space("\t");                  // 1
+print is_upper("A");                   // 1
+print is_lower("a");                   // 1
+print char_to_upper("a");              // A
+print char_to_lower("A");              // a
+print char_code("A");                  // 65
+print char_from(48);                   // 0
+
+// ===== fmt =====
+print fmt("%s = %d", ["x", 42]);                       // x = 42
+print fmt("pi = %.4f", [pi()]);                        // pi = 3.1416
+print fmt("%5d|%-5d|%05d", [1, 2, 3]);                 //     1|2    |00003
+print fmt("0x%x", [255]);                              // 0xff
+print fmt("%b", [10]);                                 // 1010
+print fmt("%s + %s = %d", ["one", "two", 3]);          // one + two = 3
