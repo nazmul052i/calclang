@@ -102,6 +102,10 @@ Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), 
 - **`nr/wavelet.calc`** — discrete wavelet transforms: Haar and Daubechies-4 forward and inverse; periodic boundary handling.
 - **`nr/toeplitz.calc`** — Levinson-Durbin recursion for symmetric Toeplitz systems in O(n²) and the Yule-Walker AR estimator built on top.
 - **`nr/simplex_lp.calc`** — two-phase simplex method for `max c^T x s.t. A x <= b, x >= 0`; reports optimal / unbounded / infeasible.
+- **`nr/fft2d.calc`** — two-dimensional FFT and inverse via row-then-column transforms (built on `lib/fft.calc`).
+- **`nr/quad2d.calc`** — 2-D Gauss-Legendre quadrature (orders 2-5) and adaptive recursive 2-D integration.
+- **`nr/power_eigen.calc`** — power iteration for the dominant eigenvalue and inverse iteration for the eigenvalue closest to a shift.
+- **`nr/bspline.calc`** — B-spline basis evaluation (Cox-de Boor), spline evaluation, and least-squares curve fitting on arbitrary knot vectors.
 
 ## Hello world
 

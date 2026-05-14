@@ -1,0 +1,87 @@
+// quad2d.calc — fixed-order 2-D Gauss-Legendre quadrature, plus an
+// adaptive version that subdivides until each sub-rectangle's
+// estimate stabilizes.
+//
+// Reference: Numerical Recipes 4.5 (NR's `quad3d` is the 3-D analogue).
+//
+// API:
+//   quad2d_gl(f, ax, bx, ay, by, n)
+//      -> int int f(x, y) dy dx with n-point Gauss-Legendre rule in each axis.
+//   quad2d_adaptive(f, ax, bx, ay, by, tol)
+//      -> adaptive 2-D integration via recursive bisection along the
+//         longer side. Tolerance is on the absolute error of the
+//         estimate (compared to a child-cell sum).
+
+// Pre-tabulated Gauss-Legendre nodes / weights for n in {2, 3, 4, 5}
+// on the canonical interval [-1, 1]. For n=5 the values come from NR
+// Table 4.5.1.
+
+priv fn _gl_table(n) {
+    if (n == 2) {
+        let r = 1 / sqrt(3);
+        return [[-r, r], [1, 1]];
+    }
+    if (n == 3) {
+        let r = sqrt(0.6);
+        return [[-r, 0, r], [5.0/9, 8.0/9, 5.0/9]];
+    }
+    if (n == 4) {
+        let r1 = sqrt((3 - 2 * sqrt(6.0/5)) / 7);
+        let r2 = sqrt((3 + 2 * sqrt(6.0/5)) / 7);
+        let w1 = (18 + sqrt(30)) / 36;
+        let w2 = (18 - sqrt(30)) / 36;
+        return [[-r2, -r1, r1, r2], [w2, w1, w1, w2]];
+    }
+    if (n == 5) {
+        let r1 = sqrt(5 - 2 * sqrt(10.0/7)) / 3;
+        let r2 = sqrt(5 + 2 * sqrt(10.0/7)) / 3;
+        let w1 = (322 + 13 * sqrt(70)) / 900;
+        let w2 = (322 - 13 * sqrt(70)) / 900;
+        return [[-r2, -r1, 0, r1, r2], [w2, w1, 128.0/225, w1, w2]];
+    }
+    throw "_gl_table: only n in {2, 3, 4, 5} supported";
+}
+
+pub fn quad2d_gl(f, ax, bx, ay, by, n) {
+    let tbl = _gl_table(n);
+    let xs = tbl[0];
+    let ws = tbl[1];
+    let cx = 0.5 * (bx - ax);
+    let mx = 0.5 * (bx + ax);
+    let cy = 0.5 * (by - ay);
+    let my = 0.5 * (by + ay);
+    let s = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        let x = mx + cx * xs[i];
+        for (let j = 0; j < n; j = j + 1) {
+            let y = my + cy * xs[j];
+            s = s + ws[i] * ws[j] * f(x, y);
+        }
+    }
+    return cx * cy * s;
+}
+
+// Adaptive: estimate the whole rectangle with a 5-point rule, then
+// subdivide into 4 quadrants and sum their 5-point estimates. If they
+// agree to `tol`, accept; otherwise recurse into each quadrant.
+priv fn _q2d_recurse(f, ax, bx, ay, by, tol, depth) {
+    let whole = quad2d_gl(f, ax, bx, ay, by, 5);
+    if (depth >= 12) { return whole; }
+    let mx = 0.5 * (ax + bx);
+    let my = 0.5 * (ay + by);
+    let q1 = quad2d_gl(f, ax, mx, ay, my, 5);
+    let q2 = quad2d_gl(f, mx, bx, ay, my, 5);
+    let q3 = quad2d_gl(f, ax, mx, my, by, 5);
+    let q4 = quad2d_gl(f, mx, bx, my, by, 5);
+    let sub = q1 + q2 + q3 + q4;
+    if (abs(sub - whole) < tol * (1 + abs(sub))) { return sub; }
+    let t = tol * 0.25;
+    return _q2d_recurse(f, ax, mx, ay, my, t, depth + 1)
+         + _q2d_recurse(f, mx, bx, ay, my, t, depth + 1)
+         + _q2d_recurse(f, ax, mx, my, by, t, depth + 1)
+         + _q2d_recurse(f, mx, bx, my, by, t, depth + 1);
+}
+
+pub fn quad2d_adaptive(f, ax, bx, ay, by, tol) {
+    return _q2d_recurse(f, ax, bx, ay, by, tol, 0);
+}

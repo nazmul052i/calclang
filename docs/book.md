@@ -1646,6 +1646,44 @@ extern fn simplex_lp(c: arr, A: arr, b: arr): map;
 
 Two-phase simplex method with big-M handling for negative RHS entries. Returns `{"status", "x", "value"}` where status ∈ {0=optimal, 1=unbounded, 2=infeasible}. NR §10.8. Cast minimization problems by negating `c`; cast `>=` constraints by negating the row.
 
+#### `lib/nr/fft2d.calc` — two-dimensional FFT
+
+```calc
+extern fn fft2(X: arr): arr;
+extern fn ifft2(Y: arr): arr;
+```
+
+Both dimensions must be powers of two. The implementation is straightforward separable: FFT each row, then FFT each column. NR §12.4.
+
+#### `lib/nr/quad2d.calc` — two-dimensional quadrature
+
+```calc
+extern fn quad2d_gl(f: fn, ax, bx, ay, by, n: num): num;
+extern fn quad2d_adaptive(f: fn, ax, bx, ay, by, tol: num): num;
+```
+
+`quad2d_gl` evaluates an n-point Gauss-Legendre tensor product (n ∈ {2, 3, 4, 5}). The fixed rule is exact for polynomials up to degree 2n-1 in each variable — beautiful for smooth integrands, poor for sharply peaked ones. `quad2d_adaptive` recursively bisects until each cell's estimate matches the sum of its four sub-cell estimates within tol — handles peaks gracefully. NR §4.5.
+
+#### `lib/nr/power_eigen.calc` — power and inverse iteration
+
+```calc
+extern fn power_iterate(A: arr, x0: arr, tol: num, max_iter: num): map;
+extern fn inverse_iterate(A: arr, sigma: num, x0: arr, tol: num, max_iter: num): map;
+```
+
+`power_iterate` finds the dominant eigenvalue (largest in absolute value) by repeatedly multiplying by A and renormalizing. The Rayleigh quotient at each step gives a quadratically-convergent estimate of the eigenvalue. `inverse_iterate` solves `(A - σI) y = x` each step (via LU once, reused thereafter) — converges to the eigenvalue nearest σ. Together they cover the "I want one specific eigenvalue" use case that the full Jacobi solver overshoots for. NR §11.7.
+
+#### `lib/nr/bspline.calc` — B-spline evaluation and fitting
+
+```calc
+extern fn bspline_basis(knots: arr, k: num, x: num): arr;
+extern fn bspline_eval(knots: arr, k: num, c: arr, x: num): num;
+extern fn bspline_fit(xs: arr, ys: arr, knots: arr, k: num): arr;
+extern fn bspline_clamped_knots(a, b: num, n_interior, k: num): arr;
+```
+
+`k` is the order (k = 4 gives cubics). The Cox-de Boor recurrence evaluates the B-spline basis in O(k) per query. `bspline_fit` builds the design matrix `B[i][j] = B_j(x_i)`, then QR-solves `B c = y` for the least-squares coefficients — handy when you have noisy data and want smooth interpolation. `bspline_clamped_knots` gives the standard clamped uniform knot vector (repeated endpoints) for convenience.
+
 #### Building the NR libraries
 
 ```bash
@@ -1658,6 +1696,7 @@ make nr_demo5         # tier 5: QR + SVD + Laguerre polyroots + convolution
 make nr_demo6         # tier 6: Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make nr_demo7         # tier 7: Cholesky + CG + simulated annealing + MCMC
 make nr_demo8         # tier 8: Welch PSD + wavelets + Toeplitz + simplex LP
+make nr_demo9         # tier 9: 2-D FFT + 2-D quadrature + power eigen + B-spline
 ```
 
 ### Building demos
@@ -1684,6 +1723,7 @@ make nr_demo5                            # QR + SVD + Laguerre polyroots + convo
 make nr_demo6                            # Chebyshev + Sav-Gol + Kalman + Crank-Nicolson
 make nr_demo7                            # Cholesky + CG + simulated annealing + MCMC
 make nr_demo8                            # Welch PSD + wavelets + Toeplitz + simplex LP
+make nr_demo9                            # 2-D FFT + 2-D quadrature + power eigen + B-spline
 make demos                               # all of the above
 ```
 

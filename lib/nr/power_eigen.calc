@@ -1,0 +1,109 @@
+// power_eigen.calc — power and inverse iteration for eigenvalues.
+//
+// Power iteration finds the dominant eigenvalue (largest in modulus)
+// and its eigenvector. Inverse iteration finds the eigenvalue nearest
+// to a given shift sigma — useful for finding any specific eigenvalue
+// when you have a rough estimate. NR §11.7.
+//
+// For symmetric matrices, the Jacobi solver in lib/nr/eigen.calc gives
+// the full spectrum at once. Power iteration is the tool when you only
+// need one eigenvalue, when the matrix is huge and sparse (matrix-free
+// application via a callable), or when the matrix is non-symmetric.
+//
+// API:
+//   power_iterate(A, x0, tol, max_iter)
+//      -> {"value", "vector", "iters", "converged"}
+//
+//   inverse_iterate(A, sigma, x0, tol, max_iter)
+//      -> {"value", "vector", "iters", "converged"}
+//      Finds the eigenvalue closest to sigma by repeatedly solving
+//      (A - sigma I) y = x_k and renormalizing.
+
+extern fn lu_decompose(A: arr): map;
+extern fn lu_solve(lu: map, b: arr): arr;
+
+priv fn _norm(v) {
+    let s = 0;
+    for (let i = 0; i < len(v); i = i + 1) { s = s + v[i] * v[i]; }
+    return sqrt(s);
+}
+
+priv fn _matvec(A, x) {
+    let m = len(A);
+    let n = len(x);
+    let y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let s = 0;
+        for (let j = 0; j < n; j = j + 1) { s = s + A[i][j] * x[j]; }
+        push(y, s);
+    }
+    return y;
+}
+
+priv fn _dot(a, b) {
+    let s = 0;
+    for (let i = 0; i < len(a); i = i + 1) { s = s + a[i] * b[i]; }
+    return s;
+}
+
+priv fn _normalize(v) {
+    let nv = _norm(v);
+    if (nv == 0) { throw "_normalize: zero vector"; }
+    let out = [];
+    for (let i = 0; i < len(v); i = i + 1) { push(out, v[i] / nv); }
+    return out;
+}
+
+pub fn power_iterate(A, x0, tol, max_iter) {
+    let x = _normalize(x0);
+    let lambda_old = 0;
+    for (let it = 1; it <= max_iter; it = it + 1) {
+        let y = _matvec(A, x);
+        let lambda = _dot(x, y);     // Rayleigh quotient on unit x
+        let xn = _normalize(y);
+        if (it > 1 && abs(lambda - lambda_old) < tol * (1 + abs(lambda))) {
+            return {"value": lambda, "vector": xn, "iters": it, "converged": 1};
+        }
+        lambda_old = lambda;
+        x = xn;
+    }
+    let y = _matvec(A, x);
+    let lambda = _dot(x, y);
+    return {"value": lambda, "vector": x, "iters": max_iter, "converged": 0};
+}
+
+priv fn _shift_matrix(A, sigma) {
+    let n = len(A);
+    let B = [];
+    for (let i = 0; i < n; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < n; j = j + 1) {
+            let v = A[i][j];
+            if (i == j) { v = v - sigma; }
+            push(row, v);
+        }
+        push(B, row);
+    }
+    return B;
+}
+
+pub fn inverse_iterate(A, sigma, x0, tol, max_iter) {
+    let B = _shift_matrix(A, sigma);
+    let lu = lu_decompose(B);
+    let x = _normalize(x0);
+    let lambda_old = 0;
+    for (let it = 1; it <= max_iter; it = it + 1) {
+        let y = lu_solve(lu, x);
+        let xn = _normalize(y);
+        // Rayleigh quotient on the ORIGINAL A: lambda = x^T A x.
+        let Ax = _matvec(A, xn);
+        let lambda = _dot(xn, Ax);
+        if (it > 1 && abs(lambda - lambda_old) < tol * (1 + abs(lambda))) {
+            return {"value": lambda, "vector": xn, "iters": it, "converged": 1};
+        }
+        lambda_old = lambda;
+        x = xn;
+    }
+    let Ax = _matvec(A, x);
+    return {"value": _dot(x, Ax), "vector": x, "iters": max_iter, "converged": 0};
+}

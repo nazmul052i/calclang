@@ -1,0 +1,83 @@
+// fft2d.calc — two-dimensional FFT by row-then-column transforms.
+//
+// For a real or complex matrix X of size M x N (both powers of two),
+// returns X transformed. Cost: O(MN log(MN)).
+//
+// Reference: Numerical Recipes 12.4.
+//
+// API:
+//   fft2(X)         -> 2D forward transform (matrix of complex)
+//   ifft2(Y)        -> 2D inverse transform (matrix of complex)
+//
+// Caller is responsible for power-of-two dimensions.
+
+extern fn fft(x: arr): arr;
+extern fn ifft(x: arr): arr;
+
+priv fn _f2_cols(X) {
+    let m = len(X);
+    let n = len(X[0]);
+    // Out: complex matrix m x n with each column FFT'd.
+    let Y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < n; j = j + 1) { push(row, complex(0, 0)); }
+        push(Y, row);
+    }
+    for (let j = 0; j < n; j = j + 1) {
+        let col = [];
+        for (let i = 0; i < m; i = i + 1) { push(col, X[i][j]); }
+        let C = fft(col);
+        for (let i = 0; i < m; i = i + 1) { Y[i][j] = C[i]; }
+    }
+    return Y;
+}
+
+priv fn _f2_rows(X) {
+    let m = len(X);
+    let n = len(X[0]);
+    let Y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let R = fft(X[i]);
+        push(Y, R);
+    }
+    return Y;
+}
+
+priv fn _f2_cols_inv(X) {
+    let m = len(X);
+    let n = len(X[0]);
+    let Y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < n; j = j + 1) { push(row, complex(0, 0)); }
+        push(Y, row);
+    }
+    for (let j = 0; j < n; j = j + 1) {
+        let col = [];
+        for (let i = 0; i < m; i = i + 1) { push(col, X[i][j]); }
+        let C = ifft(col);
+        for (let i = 0; i < m; i = i + 1) { Y[i][j] = C[i]; }
+    }
+    return Y;
+}
+
+priv fn _f2_rows_inv(X) {
+    let m = len(X);
+    let Y = [];
+    for (let i = 0; i < m; i = i + 1) {
+        let R = ifft(X[i]);
+        push(Y, R);
+    }
+    return Y;
+}
+
+pub fn fft2(X) {
+    let row_xformed = _f2_rows(X);
+    return _f2_cols(row_xformed);
+}
+
+pub fn ifft2(Y) {
+    let row_back = _f2_rows_inv(Y);
+    return _f2_cols_inv(row_back);
+}

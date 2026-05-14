@@ -1110,6 +1110,36 @@ A * I3 == A?  1' "$nat_out"
     echo "$nat_out" | grep -q "value   = 36" \
         || { echo "FAIL: nr8 — simplex value"; echo "$nat_out"; exit 1; }
 
+    echo "[test] demo — nr_demo9 (2-D FFT + 2-D quad + power iter + B-spline)"
+    build/calcnat --lib lib/nr/fft2d.calc       -o build/calclib/nr_fft2d.s
+    build/calcnat --lib lib/nr/quad2d.calc      -o build/calclib/nr_quad2d.s
+    build/calcnat --lib lib/nr/power_eigen.calc -o build/calclib/nr_power_eigen.s
+    build/calcnat --lib lib/nr/bspline.calc     -o build/calclib/nr_bspline.s
+    build/calcnat examples/nr_demo9.calc \
+        build/calclib/nr_fft2d.s build/calclib/nr_quad2d.s \
+        build/calclib/nr_power_eigen.s build/calclib/nr_bspline.s \
+        build/calclib/nr_lu.s build/calclib/nr_qr.s build/calclib/fft.s \
+        -o build/d_nr9.exe
+    nat_out=$(build/d_nr9.exe | strip_cr)
+    # 2-D FFT round-trip must be effectively zero.
+    f2_err=$(echo "$nat_out" | grep "round-trip RMS error:" | awk '{print $NF}')
+    awk -v e="$f2_err" 'BEGIN { exit !(e < 1e-14) }' \
+        || { echo "FAIL: nr9 — 2D FFT round-trip"; echo "$f2_err"; exit 1; }
+    # Power iteration: dominant eigenvalue must equal 3+sqrt(3) to ~6 digits.
+    eig_line=$(echo "$nat_out" | grep "dominant eigenvalue")
+    if ! echo "$eig_line" | grep -qE "4\.73205080[0-9]+"; then
+        echo "FAIL: nr9 — dominant eigenvalue"; echo "$eig_line"; exit 1
+    fi
+    # Inverse iteration finds 3 - sqrt(3) ~= 1.267949.
+    ieig_line=$(echo "$nat_out" | grep "eigenvalue nearest 1.5")
+    if ! echo "$ieig_line" | grep -qE "1\.2679491[0-9]+"; then
+        echo "FAIL: nr9 — inverse iteration"; echo "$ieig_line"; exit 1
+    fi
+    # 2-D quadrature: x^2 + y^2 over [0,1]^2 = 2/3 to ~10 digits.
+    gl_line=$(echo "$nat_out" | grep "5-point GL  =" | head -1 | awk '{print $NF}')
+    awk -v v="$gl_line" 'BEGIN { exit !(v > 0.6666 && v < 0.6667) }' \
+        || { echo "FAIL: nr9 — quad2d_gl"; echo "$gl_line"; exit 1; }
+
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
     build/calcnat examples/fft_demo.calc \

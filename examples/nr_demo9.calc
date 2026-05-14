@@ -1,0 +1,116 @@
+// Tier-9 NR demo: 2-D FFT, 2-D quadrature, power iteration, B-splines.
+
+extern fn fft2(X: arr): arr;
+extern fn ifft2(Y: arr): arr;
+
+extern fn quad2d_gl(f: fn, ax: num, bx: num, ay: num, by: num, n: num): num;
+extern fn quad2d_adaptive(f: fn, ax: num, bx: num, ay: num, by: num, tol: num): num;
+
+extern fn power_iterate(A: arr, x0: arr, tol: num, max_iter: num): map;
+extern fn inverse_iterate(A: arr, sigma: num, x0: arr, tol: num, max_iter: num): map;
+
+extern fn bspline_basis(knots: arr, k: num, x: num): arr;
+extern fn bspline_eval(knots: arr, k: num, c: arr, x: num): num;
+extern fn bspline_fit(xs: arr, ys: arr, knots: arr, k: num): arr;
+extern fn bspline_clamped_knots(a: num, b: num, n_interior: num, k: num): arr;
+
+// ===== 2-D FFT =====
+print "===== 2-D FFT round-trip =====";
+// Build a 4x4 test matrix: 2-D sinusoid.
+let M = 4;  let N = 4;
+let X = [];
+for (let i = 0; i < M; i = i + 1) {
+    let row = [];
+    for (let j = 0; j < N; j = j + 1) {
+        push(row, sin(2 * pi() * (i + 2 * j) / M));
+    }
+    push(X, row);
+}
+let F = fft2(X);
+let Xr = ifft2(F);
+// Compute round-trip RMS error on the real parts.
+let err = 0;
+for (let i = 0; i < M; i = i + 1) {
+    for (let j = 0; j < N; j = j + 1) {
+        let d = real(Xr[i][j]) - X[i][j];
+        err = err + d * d;
+    }
+}
+print "round-trip RMS error: " + sqrt(err / (M * N));
+
+// ===== 2-D quadrature =====
+print "";
+print "===== 2-D Gauss-Legendre quadrature =====";
+// int_0^1 int_0^1 (x^2 + y^2) dy dx = 2/3.
+let f = fn(x, y) { return x * x + y * y; };
+print "int_0^1 int_0^1 (x^2 + y^2) dy dx";
+print "  5-point GL  = " + quad2d_gl(f, 0, 1, 0, 1, 5);
+print "  adaptive    = " + quad2d_adaptive(f, 0, 1, 0, 1, 1e-10);
+print "  exact       = " + (2.0 / 3.0);
+
+// A peakier integrand where adaptive should outperform fixed-order:
+//   int_0^1 int_0^1 exp(-100 ((x-0.5)^2 + (y-0.5)^2)) dy dx
+// — exact value approx pi / 100 = 0.0314159265 (integrating a 2-D Gaussian).
+let bump = fn(x, y) {
+    let dx = x - 0.5;
+    let dy = y - 0.5;
+    return exp(-100 * (dx * dx + dy * dy));
+};
+print "";
+print "Gaussian bump centered at (0.5, 0.5), exact ~ pi/100:";
+print "  5-point GL  = " + quad2d_gl(bump, 0, 1, 0, 1, 5);
+print "  adaptive    = " + quad2d_adaptive(bump, 0, 1, 0, 1, 1e-10);
+print "  exact       = " + (pi() / 100);
+
+// ===== Power iteration =====
+print "";
+print "===== Power iteration for the dominant eigenvalue =====";
+// Symmetric matrix; characteristic poly is (lambda - 3)(lambda^2 - 6 lambda + 6).
+// So eigenvalues are 3 + sqrt(3), 3, 3 - sqrt(3) -> ~4.732, 3, ~1.268.
+let A = [[ 4,  1,  0],
+         [ 1,  3,  1],
+         [ 0,  1,  2]];
+let r = power_iterate(A, [1, 1, 1], 1e-12, 200);
+print "dominant eigenvalue = " + r["value"] + "   (exact: 3 + sqrt(3) = " + (3 + sqrt(3)) + ")";
+print "eigenvector         = ";  print r["vector"];
+print "iters               = " + r["iters"];
+
+let r2 = inverse_iterate(A, 1.5, [1, 1, 1], 1e-12, 100);
+print "eigenvalue nearest 1.5 = " + r2["value"] + "   (exact: 3 - sqrt(3) = " + (3 - sqrt(3)) + ")";
+print "  iters                = " + r2["iters"];
+
+// ===== B-spline fitting =====
+print "";
+print "===== B-spline least-squares fit of sin(x) =====";
+// Sample noisy sin(x) on [0, 2 pi] with 80 points.
+let xs = [];
+let ys = [];
+for (let i = 0; i < 80; i = i + 1) {
+    let x = i * 2 * pi() / 79;
+    push(xs, x);
+    push(ys, sin(x));
+}
+// Cubic B-splines (k = 4) with 5 interior knots → 9 basis functions.
+let knots = bspline_clamped_knots(0, 2 * pi(), 5, 4);
+let coef  = bspline_fit(xs, ys, knots, 4);
+print "fitted coefficient count: " + len(coef);
+
+// Evaluate the fit at a few probe points.
+let probes = [0, 0.5, 1.5, pi(), 4.7, 6.28];
+print "x  |  spline  |  exact sin(x)  |  diff";
+for (let i = 0; i < len(probes); i = i + 1) {
+    let x = probes[i];
+    let yhat = bspline_eval(knots, 4, coef, x);
+    let yexact = sin(x);
+    print "  " + x + "  ->  " + yhat + "  vs  " + yexact
+        + "  diff=" + (yhat - yexact);
+}
+
+// RMS error over the fit range.
+let rms = 0;
+for (let i = 0; i < len(xs); i = i + 1) {
+    let yhat = bspline_eval(knots, 4, coef, xs[i]);
+    rms = rms + (yhat - ys[i]) * (yhat - ys[i]);
+}
+rms = sqrt(rms / len(xs));
+print "RMS fit error (no noise): " + rms;

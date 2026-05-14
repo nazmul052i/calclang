@@ -1,0 +1,103 @@
+// bspline.calc — B-spline basis evaluation and curve fitting.
+//
+// B-splines are the standard local-support polynomial basis for fitting,
+// smoothing, and CAD. Order k means each basis function is non-zero on
+// at most k consecutive knot intervals; cubic splines are k = 4.
+//
+// Reference: de Boor's "A Practical Guide to Splines". NR §3.3 covers
+// the special case of the natural cubic spline interpolant; this file
+// adds the general B-spline machinery.
+//
+// API:
+//   bspline_basis(knots, k, x)     -> [B_0(x), B_1(x), ..., B_{n-1}(x)]
+//                                     where n = len(knots) - k.
+//   bspline_eval(knots, k, c, x)   -> sum_i c_i B_i(x)  via Cox-de Boor.
+//   bspline_fit(xs, ys, knots, k)  -> least-squares coefficients c
+//                                     that best-fit (xs, ys).
+//
+// Knot vector convention: ascending, with k repeated knots at each end
+// for clamped curves (the standard arrangement so the first and last
+// basis functions evaluate to 1 at the endpoints).
+
+extern fn qr_decompose(A: arr): map;
+extern fn qr_solve(qr: map, b: arr): arr;
+
+priv fn _bs_zero(rows, cols) {
+    let m = [];
+    for (let i = 0; i < rows; i = i + 1) {
+        let row = [];
+        for (let j = 0; j < cols; j = j + 1) { push(row, 0); }
+        push(m, row);
+    }
+    return m;
+}
+
+// Cox-de Boor recursion for the i-th B-spline basis of order k.
+// Order k means polynomial degree k - 1. Returns the value at x.
+pub fn bspline_basis_one(knots, k, i, x) {
+    if (k == 1) {
+        if (knots[i] <= x && x < knots[i + 1]) { return 1; }
+        // Right-endpoint inclusion to keep the curve closed.
+        if (i + 1 == len(knots) - 1 && x == knots[i + 1]) { return 1; }
+        return 0;
+    }
+    let a = 0;
+    let denom_a = knots[i + k - 1] - knots[i];
+    if (denom_a != 0) {
+        a = (x - knots[i]) / denom_a * bspline_basis_one(knots, k - 1, i, x);
+    }
+    let b = 0;
+    let denom_b = knots[i + k] - knots[i + 1];
+    if (denom_b != 0) {
+        b = (knots[i + k] - x) / denom_b * bspline_basis_one(knots, k - 1, i + 1, x);
+    }
+    return a + b;
+}
+
+// Evaluate the full basis at x.
+pub fn bspline_basis(knots, k, x) {
+    let n = len(knots) - k;
+    let out = [];
+    for (let i = 0; i < n; i = i + 1) {
+        push(out, bspline_basis_one(knots, k, i, x));
+    }
+    return out;
+}
+
+// Evaluate the spline sum_i c_i B_i(x) at x.
+pub fn bspline_eval(knots, k, c, x) {
+    let n = len(knots) - k;
+    if (len(c) != n) { throw "bspline_eval: |c| must equal len(knots) - k"; }
+    let s = 0;
+    for (let i = 0; i < n; i = i + 1) {
+        s = s + c[i] * bspline_basis_one(knots, k, i, x);
+    }
+    return s;
+}
+
+// Least-squares fit: build the design matrix B[ij] = B_j(xs[i]) and
+// solve B c = ys via QR. The caller picks the knot vector and order.
+pub fn bspline_fit(xs, ys, knots, k) {
+    let m = len(xs);
+    let n = len(knots) - k;
+    if (m < n) { throw "bspline_fit: more basis functions than data points"; }
+    let B = _bs_zero(m, n);
+    for (let i = 0; i < m; i = i + 1) {
+        for (let j = 0; j < n; j = j + 1) {
+            B[i][j] = bspline_basis_one(knots, k, j, xs[i]);
+        }
+    }
+    let qr = qr_decompose(B);
+    return qr_solve(qr, ys);
+}
+
+// Convenience: clamped uniform knot vector for n_interior interior knots
+// (i.e. n_interior + 1 polynomial pieces). Total knots = n_interior + 2k.
+pub fn bspline_clamped_knots(a, b, n_interior, k) {
+    let knots = [];
+    for (let i = 0; i < k; i = i + 1) { push(knots, a); }
+    let dx = (b - a) / (n_interior + 1);
+    for (let i = 1; i <= n_interior; i = i + 1) { push(knots, a + i * dx); }
+    for (let i = 0; i < k; i = i + 1) { push(knots, b); }
+    return knots;
+}
