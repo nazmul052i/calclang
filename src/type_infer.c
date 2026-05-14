@@ -277,9 +277,20 @@ static TypeSet infer_binop(AST *n, TiEnv *env) {
         /* Any other combination — could be either depending on runtime. */
         return TS_NUM_BIT | TS_STR_BIT;
     }
-    /* All other arithmetic and comparison ops produce numbers. */
-    (void)l; (void)r;
-    return TS_NUM_BIT;
+    /* Comparison ops always produce 0/1. */
+    if (op == TOK_EQEQ || op == TOK_NEQ || op == TOK_LT
+     || op == TOK_LE   || op == TOK_GT  || op == TOK_GE
+     || op == TOK_AND  || op == TOK_OR) {
+        return TS_NUM_BIT;
+    }
+    /* Arithmetic (-, *, /, %): result type follows the operand type set.
+       num op num -> num; cpx anywhere -> cpx (which lives outside the
+       inference lattice and shows up as TS_ANY_MASK). If either operand
+       isn't statically proven num, widen to ANY so downstream code
+       dispatches through the polymorphic runtime path instead of
+       emitting a hardware FP op on possibly-NaN-tagged complex bits. */
+    if (l == TS_NUM_BIT && r == TS_NUM_BIT) return TS_NUM_BIT;
+    return TS_ANY_MASK;
 }
 
 static TypeSet infer_index(AST *n, TiEnv *env) {
