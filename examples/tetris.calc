@@ -1,0 +1,390 @@
+// Tetris — terminal version.
+//
+//   build/calcnat examples/tetris.calc -o build/tetris.exe
+//   build/tetris.exe
+//
+// Controls:
+//   ← / →   move
+//   ↑       rotate clockwise
+//   ↓       soft drop (one step)
+//   space   hard drop (slam to bottom)
+//   q / Esc quit
+//
+// The terminal must support ANSI escape codes. Windows Terminal,
+// modern cmd.exe, and any Linux/macOS shell all qualify.
+
+import "random";
+
+// Board is 20 rows × 10 cols (the classic Tetris dimensions). Frame
+// pacing aims for ~30 fps. These show up enough that inlining the
+// literals at every use site would be noisy — see the helpers and
+// Game struct below.
+
+struct Piece {
+    color: str,         // ANSI escape that sets the block bg color
+    rotations: arr,     // 4 rotations, each = [[dx, dy], [dx, dy], ...]
+}
+
+// Build the seven standard tetrominoes. Each rotation lists the four
+// occupied cells as [col_offset, row_offset] relative to the piece's
+// anchor. Done as a function so the data hangs off the Game instance
+// (top-level fns can't see top-level `let` bindings).
+fn make_pieces() {
+    return [
+        // I — cyan
+        Piece("\e[46m", [
+            [[0,1],[1,1],[2,1],[3,1]],
+            [[2,0],[2,1],[2,2],[2,3]],
+            [[0,2],[1,2],[2,2],[3,2]],
+            [[1,0],[1,1],[1,2],[1,3]],
+        ]),
+        // O — yellow (same in every rotation)
+        Piece("\e[43m", [
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[2,1]],
+        ]),
+        // T — magenta
+        Piece("\e[45m", [
+            [[1,0],[0,1],[1,1],[2,1]],
+            [[1,0],[1,1],[2,1],[1,2]],
+            [[0,1],[1,1],[2,1],[1,2]],
+            [[1,0],[0,1],[1,1],[1,2]],
+        ]),
+        // S — green
+        Piece("\e[42m", [
+            [[1,0],[2,0],[0,1],[1,1]],
+            [[1,0],[1,1],[2,1],[2,2]],
+            [[1,1],[2,1],[0,2],[1,2]],
+            [[0,0],[0,1],[1,1],[1,2]],
+        ]),
+        // Z — red
+        Piece("\e[41m", [
+            [[0,0],[1,0],[1,1],[2,1]],
+            [[2,0],[1,1],[2,1],[1,2]],
+            [[0,1],[1,1],[1,2],[2,2]],
+            [[1,0],[0,1],[1,1],[0,2]],
+        ]),
+        // J — blue
+        Piece("\e[44m", [
+            [[0,0],[0,1],[1,1],[2,1]],
+            [[1,0],[2,0],[1,1],[1,2]],
+            [[0,1],[1,1],[2,1],[2,2]],
+            [[1,0],[1,1],[0,2],[1,2]],
+        ]),
+        // L — orange (8-bit color 208)
+        Piece("\e[48;5;208m", [
+            [[2,0],[0,1],[1,1],[2,1]],
+            [[1,0],[1,1],[1,2],[2,2]],
+            [[0,1],[1,1],[2,1],[0,2]],
+            [[0,0],[1,0],[1,1],[1,2]],
+        ]),
+    ];
+}
+
+struct Game {
+    board: arr,         // 20 rows × 10 cols, each cell is "" or a color string
+    pieces: arr,        // 7 Piece records
+    piece_idx: num,     // index into pieces
+    rot: num,           // 0..3
+    px: num,            // piece anchor column
+    py: num,            // piece anchor row
+    next_idx: num,
+    rng: any,           // Rng instance
+    score: num,
+    lines: num,
+    level: num,
+    over: num,          // 0 or 1
+    last_drop: num,     // time_ms of last gravity step
+}
+
+fn empty_board() {
+    let b = [];
+    for r in 0..20 {
+        let row = [];
+        for c in 0..10 { push(row, ""); }
+        push(b, row);
+    }
+    return b;
+}
+
+fn drop_interval_ms(level) {
+    // Standard Tetris-ish curve: starts ~800ms, gets faster every level.
+    let v = 800 - 70 * level;
+    if (v < 80) { v = 80; }
+    return v;
+}
+
+fn random_piece_idx(rng) {
+    return floor(rng.uniform01() * 7);
+}
+
+// =====================================================================
+// Collision / placement
+// =====================================================================
+
+fn piece_cells(g, piece_idx, rot, px, py) {
+    let cells = g.pieces[piece_idx].rotations[rot];
+    let out = [];
+    for cell in cells {
+        push(out, [px + cell[0], py + cell[1]]);
+    }
+    return out;
+}
+
+fn collides(g, piece_idx, rot, px, py) {
+    let cells = piece_cells(g, piece_idx, rot, px, py);
+    for cell in cells {
+        let x = cell[0];
+        let y = cell[1];
+        if (x < 0 || x >= 10 || y >= 20) { return 1; }
+        if (y >= 0 && g.board[y][x] != "") { return 1; }
+    }
+    return 0;
+}
+
+fn lock_piece(g) {
+    let cells = piece_cells(g, g.piece_idx, g.rot, g.px, g.py);
+    let color = g.pieces[g.piece_idx].color;
+    for cell in cells {
+        let x = cell[0];
+        let y = cell[1];
+        if (y >= 0 && y < 20 && x >= 0 && x < 10) {
+            g.board[y][x] = color;
+        }
+    }
+}
+
+fn clear_full_lines(g) {
+    let cleared = 0;
+    let new_board = [];
+    for r in 0..20 {
+        let full = 1;
+        for c in 0..10 {
+            if (g.board[r][c] == "") { full = 0; }
+        }
+        if (full) {
+            cleared = cleared + 1;
+        } else {
+            push(new_board, g.board[r]);
+        }
+    }
+    // Pad missing rows back at the top.
+    for i in 0..cleared {
+        let row = [];
+        for c in 0..10 { push(row, ""); }
+        new_board = array_concat([row], new_board);
+    }
+    g.board = new_board;
+    g.lines = g.lines + cleared;
+    if (cleared > 0) {
+        // Standard Tetris bonus: 100/300/500/800 × (level+1).
+        let bonus = [0, 100, 300, 500, 800];
+        g.score = g.score + bonus[cleared] * (g.level + 1);
+        g.level = floor(g.lines / 10);
+    }
+}
+
+// =====================================================================
+// Spawning + movement
+// =====================================================================
+
+fn spawn_next(g) {
+    g.piece_idx = g.next_idx;
+    g.next_idx = random_piece_idx(g.rng);
+    g.rot = 0;
+    g.px = 3;      // roughly centered for a 4-wide bounding box
+    g.py = -1;     // start slightly above so spawn doesn't collide for tall pieces
+    if (collides(g, g.piece_idx, g.rot, g.px, g.py)) {
+        g.over = 1;
+    }
+}
+
+fn try_move(g, dx, dy) {
+    if (!collides(g, g.piece_idx, g.rot, g.px + dx, g.py + dy)) {
+        g.px = g.px + dx;
+        g.py = g.py + dy;
+        return 1;
+    }
+    return 0;
+}
+
+fn try_rotate(g) {
+    let new_rot = (g.rot + 1) % 4;
+    // Try the rotation in place; if it collides, fall back to a small
+    // horizontal kick. Simplest possible wall-kick.
+    let kicks = [0, -1, 1, -2, 2];
+    for k in kicks {
+        if (!collides(g, g.piece_idx, new_rot, g.px + k, g.py)) {
+            g.rot = new_rot;
+            g.px = g.px + k;
+            return;
+        }
+    }
+}
+
+fn soft_drop(g) {
+    if (try_move(g, 0, 1)) {
+        g.score = g.score + 1;
+    } else {
+        lock_piece(g);
+        clear_full_lines(g);
+        spawn_next(g);
+    }
+}
+
+fn hard_drop(g) {
+    let dist = 0;
+    while (try_move(g, 0, 1)) { dist = dist + 1; }
+    g.score = g.score + 2 * dist;
+    lock_piece(g);
+    clear_full_lines(g);
+    spawn_next(g);
+}
+
+// Ghost: where the piece would land if dropped straight down.
+fn ghost_y(g) {
+    let y = g.py;
+    while (!collides(g, g.piece_idx, g.rot, g.px, y + 1)) {
+        y = y + 1;
+    }
+    return y;
+}
+
+// =====================================================================
+// Rendering
+// =====================================================================
+
+fn cell_at(g, ghost_cells, r, c) {
+    if (g.board[r][c] != "") { return g.board[r][c] + "  "; }
+    let live = piece_cells(g, g.piece_idx, g.rot, g.px, g.py);
+    for cell in live {
+        if (cell[0] == c && cell[1] == r) {
+            return g.pieces[g.piece_idx].color + "  ";
+        }
+    }
+    for cell in ghost_cells {
+        if (cell[0] == c && cell[1] == r) {
+            return "\e[100m\e[90m::\e[0m\e[100m";
+        }
+    }
+    return "\e[100m  ";
+}
+
+fn next_piece_lines(g, idx) {
+    let cells = g.pieces[idx].rotations[0];
+    let color = g.pieces[idx].color;
+    let grid = [];
+    for r in 0..2 {
+        let row = [];
+        for c in 0..4 { push(row, 0); }
+        push(grid, row);
+    }
+    for cell in cells {
+        let x = cell[0];
+        let y = cell[1];
+        if (y >= 0 && y < 2 && x >= 0 && x < 4) {
+            grid[y][x] = 1;
+        }
+    }
+    let out = [];
+    for r in 0..2 {
+        let s = "";
+        for c in 0..4 {
+            if (grid[r][c] != 0) { s = s + color + "  \e[0m"; }
+            else                 { s = s + "  "; }
+        }
+        push(out, s);
+    }
+    return out;
+}
+
+fn render(g) {
+    let ghost_cells = piece_cells(g, g.piece_idx, g.rot, g.px, ghost_y(g));
+    let np = next_piece_lines(g, g.next_idx);
+
+    // Build the whole frame in one string, then write once — avoids
+    // visible flicker from line-by-line writes.
+    let out = "\e[H\e[2J\e[H";
+
+    let top = "+--------------------+";
+    out = out + top + "    Tetris\n";
+
+    for r in 0..20 {
+        let line = "|";
+        for c in 0..10 {
+            line = line + cell_at(g, ghost_cells, r, c);
+        }
+        line = line + "\e[0m|";
+        if (r == 1) { line = line + "  Next:"; }
+        if (r == 2) { line = line + "  " + np[0]; }
+        if (r == 3) { line = line + "  " + np[1]; }
+        if (r == 6) { line = line + "  Score: " + g.score; }
+        if (r == 7) { line = line + "  Lines: " + g.lines; }
+        if (r == 8) { line = line + "  Level: " + g.level; }
+        if (r == 11) { line = line + "  arrows: move/rotate"; }
+        if (r == 12) { line = line + "  space:  hard drop"; }
+        if (r == 13) { line = line + "  q:      quit"; }
+        out = out + line + "\n";
+    }
+    out = out + top + "\n";
+    write(out);
+}
+
+fn render_game_over(g) {
+    write("\e[H\e[2J");
+    print "";
+    print "    Game over!";
+    print "";
+    print "    Score: " + g.score;
+    print "    Lines: " + g.lines;
+    print "    Level: " + g.level;
+    print "";
+}
+
+// =====================================================================
+// Game loop
+// =====================================================================
+
+fn handle_key(g, k) {
+    if (k == 1003) { try_move(g, -1, 0); return; }   // ←
+    if (k == 1004) { try_move(g,  1, 0); return; }   // →
+    if (k == 1001) { try_rotate(g); return; }         // ↑ = rotate
+    if (k == 1002) { soft_drop(g); return; }          // ↓ = soft drop
+    if (k == 32)   { hard_drop(g); return; }          // space = hard drop
+    if (k == 113 || k == 81 || k == 27) { g.over = 1; return; }  // q, Q, Esc
+}
+
+fn play() {
+    let pieces = make_pieces();
+    let seed = floor(time_ms()) + floor(random() * 1000000);
+    let rng  = Rng(seed);
+    let board = empty_board();
+    let g = Game(board, pieces, 0, 0, 3, -1,
+                 random_piece_idx(rng), rng,
+                 0, 0, 0, 0, time_ms());
+    spawn_next(g);
+    g.last_drop = time_ms();
+
+    render(g);
+    while (!g.over) {
+        // Drain all pending keypresses since the last frame so input
+        // feels responsive even if a frame takes a while.
+        let k = read_key();
+        while (k != -1 && !g.over) {
+            handle_key(g, k);
+            k = read_key();
+        }
+        let now = time_ms();
+        if (now - g.last_drop >= drop_interval_ms(g.level)) {
+            soft_drop(g);
+            g.last_drop = now;
+        }
+        render(g);
+        sleep_ms(33);
+    }
+    render_game_over(g);
+}
+
+play();

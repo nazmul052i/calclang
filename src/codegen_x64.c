@@ -596,6 +596,12 @@ static const RtBuiltin RT_BUILTINS[] = {
     /* Shell. */
     {"system",          "cl_builtin_system",          1},
 
+    /* Terminal / interactive I/O. read_key returns -1 if no key is
+       pressed, an ASCII code, or one of 1001-1004 for arrow keys. */
+    {"sleep_ms",        "cl_builtin_sleep_ms",        1},
+    {"read_key",        "cl_builtin_read_key",        0},
+    {"time_ms",         "cl_builtin_time_ms",         0},
+
     /* Complex numbers. */
     {"complex",         "cl_builtin_complex",         2},
     {"real",            "cl_builtin_real",            1},

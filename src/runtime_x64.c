@@ -71,6 +71,21 @@
   __declspec(dllimport) void *__stdcall LoadLibraryA(const char *);
   __declspec(dllimport) void *__stdcall GetProcAddress(void *, const char *);
   __declspec(dllimport) void *__stdcall GetModuleHandleA(const char *);
+  __declspec(dllimport) void   __stdcall Sleep(unsigned long);
+  /* Console for terminal-mode (VT escapes + raw key reads). */
+  __declspec(dllimport) void *__stdcall GetStdHandle(unsigned long);
+  __declspec(dllimport) int    __stdcall GetConsoleMode(void *, unsigned long *);
+  __declspec(dllimport) int    __stdcall SetConsoleMode(void *, unsigned long);
+  #define CL_STD_OUTPUT_HANDLE         ((unsigned long)-11)
+  #define CL_ENABLE_VIRTUAL_TERMINAL   0x0004
+  /* conio.h prototypes — pulled in directly so we don't need the header. */
+  int _kbhit(void);
+  int _getch(void);
+#else
+  #include <unistd.h>     /* usleep */
+  #include <termios.h>
+  #include <sys/select.h>
+  #include <fcntl.h>
 #endif
 
 /* --- GC infrastructure ------------------------------------------- */
@@ -1596,6 +1611,141 @@ Value cl_builtin_system(Value cmdv) {
     fflush(stderr);
     int rc = system(c->data);
     return cl_from_num((double)rc);
+}
+
+/* --- Terminal-mode helpers (sleep_ms, read_key, time_ms) --------- */
+
+/* time_ms(): wall-clock milliseconds since program start. Useful for
+   game-loop pacing and benchmarks. Returns a num. The reference is
+   captured on first call so subsequent values fit comfortably in a
+   double's precision range. */
+#ifdef _WIN32
+  __declspec(dllimport) unsigned long __stdcall GetTickCount(void);
+  static unsigned long cl_t0_ms = 0;
+  static int cl_t0_init = 0;
+#else
+  #include <sys/time.h>
+  static double cl_t0_ms = 0;
+  static int    cl_t0_init = 0;
+#endif
+
+Value cl_builtin_time_ms(void) {
+#ifdef _WIN32
+    unsigned long now = GetTickCount();
+    if (!cl_t0_init) { cl_t0_ms = now; cl_t0_init = 1; }
+    return cl_from_num((double)(now - cl_t0_ms));
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double now = (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
+    if (!cl_t0_init) { cl_t0_ms = now; cl_t0_init = 1; }
+    return cl_from_num(now - cl_t0_ms);
+#endif
+}
+
+/* sleep_ms(n): pause for n milliseconds. Returns 0. */
+Value cl_builtin_sleep_ms(Value v) {
+    require_num(v, "sleep_ms");
+    double ms = cl_as_num(v);
+    if (ms < 0) ms = 0;
+    /* Flush output so the user sees the previous frame before we sleep. */
+    fflush(stdout);
+#ifdef _WIN32
+    Sleep((unsigned long)ms);
+#else
+    /* usleep takes microseconds; clamp to its range. */
+    if (ms > 1000000.0 * 60.0) ms = 1000000.0 * 60.0;
+    usleep((unsigned int)(ms * 1000));
+#endif
+    return cl_from_num(0.0);
+}
+
+#ifdef _WIN32
+/* One-time VT-mode enable so ANSI escapes ("\e[2J", "\e[H", colors)
+   actually take effect on Windows Terminal / cmd.exe. Modern Windows
+   terminals support it but it's off by default. */
+static void cl_enable_vt_mode_once(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+    void *h = GetStdHandle(CL_STD_OUTPUT_HANDLE);
+    unsigned long mode = 0;
+    if (!GetConsoleMode(h, &mode)) return;   /* not a console — leave alone */
+    SetConsoleMode(h, mode | CL_ENABLE_VIRTUAL_TERMINAL);
+}
+#else
+/* On POSIX we set the terminal to raw mode the first time read_key runs,
+   and restore it via atexit so the user's shell isn't left broken. */
+static struct termios cl_saved_termios;
+static int cl_termios_saved = 0;
+static void cl_restore_termios(void) {
+    if (cl_termios_saved) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &cl_saved_termios);
+    }
+}
+static void cl_enable_raw_once(void) {
+    if (cl_termios_saved) return;
+    if (tcgetattr(STDIN_FILENO, &cl_saved_termios) != 0) return;
+    cl_termios_saved = 1;
+    atexit(cl_restore_termios);
+    struct termios raw = cl_saved_termios;
+    raw.c_lflag &= ~(unsigned long)(ICANON | ECHO);
+    raw.c_cc[VMIN]  = 0;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+}
+#endif
+
+/* read_key(): non-blocking single-key read.
+   Returns:
+     -1   if no key is pressed
+     0-255 for normal ASCII keys ('a', ' ', '\n', etc.)
+     1001  Arrow Up
+     1002  Arrow Down
+     1003  Arrow Left
+     1004  Arrow Right
+     2000+ for other "special" Windows keys (F-keys etc.); avoid
+           relying on the exact code. */
+Value cl_builtin_read_key(void) {
+#ifdef _WIN32
+    cl_enable_vt_mode_once();
+    if (!_kbhit()) return cl_from_num(-1.0);
+    int c = _getch();
+    if (c == 0 || c == 0xE0) {
+        /* Special key: next byte is the actual scan code. */
+        int c2 = _getch();
+        switch (c2) {
+            case 72: return cl_from_num(1001.0);   /* up */
+            case 80: return cl_from_num(1002.0);   /* down */
+            case 75: return cl_from_num(1003.0);   /* left */
+            case 77: return cl_from_num(1004.0);   /* right */
+            default: return cl_from_num(2000.0 + (double)c2);
+        }
+    }
+    return cl_from_num((double)c);
+#else
+    cl_enable_raw_once();
+    unsigned char c;
+    ssize_t n = read(STDIN_FILENO, &c, 1);
+    if (n <= 0) return cl_from_num(-1.0);
+    if (c == 0x1B) {
+        /* Escape sequence: ESC [ X. Read with short timeout. */
+        unsigned char b1, b2;
+        ssize_t n1 = read(STDIN_FILENO, &b1, 1);
+        if (n1 <= 0) return cl_from_num(27.0);    /* bare ESC */
+        if (b1 != '[') return cl_from_num(27.0);
+        ssize_t n2 = read(STDIN_FILENO, &b2, 1);
+        if (n2 <= 0) return cl_from_num(27.0);
+        switch (b2) {
+            case 'A': return cl_from_num(1001.0); /* up */
+            case 'B': return cl_from_num(1002.0); /* down */
+            case 'D': return cl_from_num(1003.0); /* left */
+            case 'C': return cl_from_num(1004.0); /* right */
+            default:  return cl_from_num(2000.0 + (double)b2);
+        }
+    }
+    return cl_from_num((double)c);
+#endif
 }
 
 /* --- Complex calclib --------------------------------------------- */

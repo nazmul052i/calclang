@@ -147,6 +147,8 @@ Token lexer_next(Lexer *lx) {
                     case 'r':  ch = '\r'; break;
                     case '\\': ch = '\\'; break;
                     case '"':  ch = '"';  break;
+                    case 'e':  ch = 0x1B; break;   /* ANSI ESC, for terminal escape sequences */
+                    case '0':  ch = '\0'; break;
                     default:
                         cl_die_at(line, col, "unknown string escape '\\%c'", esc);
                 }

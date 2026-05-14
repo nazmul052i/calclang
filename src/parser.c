@@ -83,7 +83,8 @@ static AST *parse_primary(Parser *p) {
         return e;
     }
     if (t.type == TOK_LBRACKET) {
-        /* Array literal `[a, b, c]` or empty `[]`. */
+        /* Array literal `[a, b, c]` or empty `[]`. A trailing comma
+           before `]` is allowed (matches struct-field-list style). */
         next(p);
         AST *lit = ast_array_lit();
         if (p->current.type != TOK_RBRACKET) {
@@ -91,6 +92,7 @@ static AST *parse_primary(Parser *p) {
                 ast_array_lit_add(lit, parse_expr(p));
                 if (p->current.type != TOK_COMMA) break;
                 next(p);
+                if (p->current.type == TOK_RBRACKET) break;
             }
         }
         expect(p, TOK_RBRACKET);
@@ -120,6 +122,7 @@ static AST *parse_primary(Parser *p) {
                 ast_map_lit_add(m, key, val);
                 if (p->current.type != TOK_COMMA) break;
                 next(p);
+                if (p->current.type == TOK_RBRACE) break;   /* trailing comma */
             }
         }
         expect(p, TOK_RBRACE);

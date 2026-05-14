@@ -2785,6 +2785,69 @@ That's clumsy but unambiguous. For more elaborate IPC, use FFI (next section aft
 - Command syntax differs: `dir` vs `ls`, `move` vs `mv`, `type` vs `cat`. Detect at the top of your script (e.g. check for the existence of `/bin/sh`) and branch.
 - Quoting: `system` passes the string straight to the OS shell. Spaces in paths need quotes. Be cautious with user-supplied input — `system("ls " + user_path)` is a classic injection bug.
 
+### Terminal I/O — building interactive programs
+
+Three builtins plus the `\e` string escape are enough to write real-time terminal apps — games, dashboards, REPLs that don't want line buffering. All are native-only.
+
+```calc
+sleep_ms(n)       // pause for n milliseconds
+time_ms()         // wall-clock ms since program start (for game-loop pacing)
+read_key()        // non-blocking single-key read — see codes below
+```
+
+`read_key()` returns:
+
+- `-1` if no key is currently pressed (so a tight loop won't spin on stdin).
+- `0..255` for normal ASCII keys: `'a'` → 97, `' '` → 32, `'\n'` → 10, `Esc` → 27.
+- `1001` Arrow Up, `1002` Down, `1003` Left, `1004` Right.
+- `2000+` for other special keys (F-keys etc.); avoid the exact codes — they're platform-specific.
+
+The string escape `\e` produces the ANSI escape character (`0x1B`), so you can write color and cursor-control sequences inline:
+
+```calc
+print "\e[2J\e[H";                          // clear screen + cursor home
+print "\e[31mred\e[0m and \e[42mgreen-bg\e[0m";
+print "\e[10;5HHello at row 10 col 5";      // absolute cursor positioning
+```
+
+On Windows, `read_key()` automatically enables Virtual Terminal mode the first time it runs, so the same ANSI sequences work in cmd.exe and Windows Terminal. On POSIX, the terminal is put into raw, no-echo mode for the lifetime of the program (and restored at exit).
+
+#### Game-loop pattern
+
+A standard real-time loop on top of these three primitives:
+
+```calc
+fn loop() {
+    let last_tick = time_ms();
+    while (1) {
+        // Drain queued input — multiple keypresses can arrive between frames.
+        let k = read_key();
+        while (k != -1) {
+            handle_key(k);
+            k = read_key();
+        }
+        let now = time_ms();
+        if (now - last_tick >= 100) {        // physics tick every 100ms
+            advance_world();
+            last_tick = now;
+        }
+        render();                             // print frame
+        sleep_ms(16);                         // ~60 fps cap
+    }
+}
+```
+
+#### Worked example: Tetris
+
+`examples/tetris.calc` is a complete terminal Tetris built with `read_key`, `sleep_ms`, `time_ms`, and ANSI escapes. About 300 lines total: a `struct Piece` for the seven tetrominoes, a `struct Game` for board + piece state + RNG + score, collision/rotation/line-clear logic, and a render path that builds each frame as one big ANSI string before writing it (single `write` per frame avoids visible tearing).
+
+```bash
+build/calcnat examples/tetris.calc -o build/tetris.exe
+build/tetris.exe
+```
+
+Controls are arrow keys to move/rotate, space to hard-drop, `q` to quit. The "ghost" preview (where the piece would land), the next-piece panel, and the standard level-up speedup are all there.
+
 ### Complex numbers
 
 A first-class type: `complex(re, im)` builds one; arithmetic operators do the right thing.
@@ -3285,6 +3348,9 @@ show({"a": 1});           // map value
 | `file_append(path, content)`   | append content to file                              |
 | `file_exists(path)`            | 1 if openable, 0 otherwise                          |
 | `system(cmd)`                  | run shell command; return exit code                 |
+| `sleep_ms(n)`                  | pause for n milliseconds                            |
+| `time_ms()`                    | ms since program start (for game-loop pacing)       |
+| `read_key()`                   | non-blocking key read; -1 if none, 1001-1004 = arrows |
 
 **Examples:**
 
