@@ -925,46 +925,68 @@ static AST *parse_class_def(Parser *p) {
     return ctor;
 }
 
-/* Clone a fn_def's signature (name, params, types, return type) as a
-   fresh extern declaration. Body is left null; used by `import` to
-   project a library's pub fns into the current compilation unit. */
-static AST *clone_fn_as_extern(AST *fn) {
-    AST *out = ast_fn(fn->as.fn_def.name);
-    ast_fn_set_public(out, 1);
-    ast_fn_set_extern(out, 1);
-    out->as.fn_def.param_count = fn->as.fn_def.param_count;
-    out->as.fn_def.return_type = fn->as.fn_def.return_type;
-    for (int i = 0; i < fn->as.fn_def.param_count; i++) {
-        cl_strncpy_z(out->as.fn_def.params[i], fn->as.fn_def.params[i], CL_MAX_TEXT);
-        out->as.fn_def.param_types[i] = fn->as.fn_def.param_types[i];
+/* Cycle-detection set for imports. A static array is fine — the
+   compiler runs once per invocation, and CalcLang programs don't
+   import hundreds of files. Reset only at process exit. Both the
+   parser's main loop and the recursive parse_import consult it. */
+#define IMPORT_SET_MAX 256
+static char import_set[IMPORT_SET_MAX][512];
+static int  import_set_count = 0;
+
+static int import_set_has(const char *path) {
+    for (int i = 0; i < import_set_count; i++) {
+        if (strcmp(import_set[i], path) == 0) return 1;
     }
-    return out;
+    return 0;
 }
 
-/* Handle a top-level `import "path";`. Reads the file relative to the
-   current parser's source_dir, parses it, and projects every `pub fn`
-   (or `pub class` — the parser already lowered the class to a
-   NODE_FN whose params come from the class's init method) into the
-   current Program as an `extern fn` declaration. Bodies are NOT copied
-   — the library is expected to be compiled separately (e.g., via
-   `--lib` and linked with the consumer). */
+static void import_set_add(const char *path) {
+    if (import_set_count >= IMPORT_SET_MAX) return;
+    cl_strncpy_z(import_set[import_set_count++], path, 512);
+}
+
+/* Handle a top-level `import "path";`. Reads the named file, parses
+   it, and INLINES every `pub fn` (and `pub class` — the parser
+   already lowers a class to a NODE_FN whose params come from `init`)
+   into the current Program with body intact. No `--lib` build step is
+   needed: the library's bodies become part of the consumer's binary.
+
+   Cycle detection: a canonical path that has already been imported in
+   this compilation is silently skipped (transitive imports of the
+   same library all share the one inlined copy). */
 static void parse_import(Parser *p, Program *out) {
     expect(p, TOK_IMPORT);
     Token path_tok = expect(p, TOK_STRING);
     expect(p, TOK_SEMICOLON);
 
-    /* Path resolution:
-         - Absolute path:        used as-is.
-         - "./..." or "../...":  always importer-relative.
-         - Anything else:        try cwd first, then importer-relative.
-       That matches how most modern languages handle imports: cwd
-       resolution catches the "build from project root" case (`import
-       "lib/math.calc"`), explicit `./` forces locality. */
-    const char *path = path_tok.text;
-    int is_abs = path[0] == '/' || path[0] == '\\' ||
-                 (path[0] != '\0' && path[1] == ':');
-    int is_dot = path[0] == '.' && (path[1] == '/' || path[1] == '\\'
-                 || (path[1] == '.' && (path[2] == '/' || path[2] == '\\')));
+    /* Path resolution. In order:
+         - Absolute path:                used as-is.
+         - "./..." or "../...":          always importer-relative.
+         - Bare name like "math":        rewritten to "lib/<name>.calc".
+         - Anything else with a slash:   try cwd first, then importer-relative.
+
+       The bare-name form lets `import "math"` Just Work from the project
+       root: it resolves to `lib/math.calc` next to the other engineering
+       libraries. Use `./foo.calc` for a co-located helper file, or a full
+       relative path like `"lib/nr/fft.calc"` for nested libraries. */
+    const char *raw = path_tok.text;
+    int is_abs = raw[0] == '/' || raw[0] == '\\' ||
+                 (raw[0] != '\0' && raw[1] == ':');
+    int is_dot = raw[0] == '.' && (raw[1] == '/' || raw[1] == '\\'
+                 || (raw[1] == '.' && (raw[2] == '/' || raw[2] == '\\')));
+    int has_slash = 0;
+    for (const char *q = raw; *q; q++) {
+        if (*q == '/' || *q == '\\') { has_slash = 1; break; }
+    }
+
+    char rewritten[512];
+    const char *path = raw;
+    if (!is_abs && !is_dot && !has_slash) {
+        /* Bare name. Try `lib/<name>.calc`. The user can override by
+           writing the full path. */
+        snprintf(rewritten, sizeof rewritten, "lib/%s.calc", raw);
+        path = rewritten;
+    }
 
     char full_path[1024];
     if (is_abs || is_dot || p->source_dir[0] == '\0') {
@@ -982,18 +1004,30 @@ static void parse_import(Parser *p, Program *out) {
             snprintf(full_path, sizeof full_path, "%s%s", p->source_dir, path);
         }
     }
+
+    /* Cycle detection. A library that's already been imported (directly
+       or transitively) is skipped — its definitions are already in the
+       containing Program. */
+    if (import_set_has(full_path)) return;
+    import_set_add(full_path);
+
     char *src = cl_read_file(full_path);   /* exits on failure with a clear path */
     Parser sub;
     parser_init_with_path(&sub, src, full_path);
     Program sub_prog = parser_parse_program(&sub);
 
+    /* Inline the library's pub items (with body) into the current
+       Program. The codegen will compile them right alongside the
+       consumer's own code — no separate `--lib` build step needed.
+       Top-level statements in the library (anything that's not a fn
+       definition or another import-projected fn) are dropped, matching
+       the `--lib` model. */
     for (int i = 0; i < sub_prog.count; i++) {
         AST *item = sub_prog.items[i];
         if (item->kind != NODE_FN) continue;
         if (!item->as.fn_def.is_public)  continue;   /* skip priv */
-        if (item->as.fn_def.is_extern)   continue;   /* already an extern */
         if (out->count >= CL_MAX_NODES) cl_die("too many top-level items after import");
-        out->items[out->count++] = clone_fn_as_extern(item);
+        out->items[out->count++] = item;
     }
 }
 

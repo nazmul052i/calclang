@@ -1,8 +1,7 @@
-// import.calc — verify `import "path";` projects pub fn signatures
-// from a library into the current compilation unit, replacing the
-// per-function `extern fn ...` declarations.
+// import.calc — verify `import "name";` inlines a library's pub fns
+// into the current compilation unit. No --lib build step needed.
 
-import "lib/math.calc";
+import "math";
 
 print sq(7);              // 49
 print cube(4);            // 64
