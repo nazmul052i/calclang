@@ -30,6 +30,40 @@ check "arithmetic" '20
 30
 10' "$out"
 
+echo "[test] optimizer — constant folding, algebraic, dead-branch"
+out=$(run optimizer)
+check "optimizer" '14
+12
+2
+3
+hello world
+x = 42
+7 items
+1
+1
+0
+15
+1024
+65535
+-5
+1
+-6
+7
+7
+7
+7
+7
+7
+7
+7
+7
+always
+five wins
+yes
+no
+0
+1' "$out"
+
 echo "[test] qol — ternary, do-while, ctype, fmt"
 out=$(run qol)
 check "qol" 'yes
@@ -1027,8 +1061,9 @@ A * I3 == A?  1' "$nat_out"
     # Rosenbrock f* should be < 1e-6 — accept any "f* = 0.0000..." or "e-".
     echo "$nat_out" | grep -E "^  f\* = " | head -1 | grep -qE "(0(\.0{5,}[0-9]+)?|e-)" \
         || { echo "FAIL: nr3 — Rosenbrock f*"; echo "$nat_out"; exit 1; }
-    # Heapsort must produce a fully sorted list.
-    echo "$nat_out" | grep -q "in-place sorted = \[0, 1, 2, 3, 4, 5, 6, 7, 8, 9\]" \
+    # Heapsort produces a fully sorted list. The demo prints the label
+    # and the array on separate lines, so grep just the array.
+    echo "$nat_out" | grep -q "^\[0, 1, 2, 3, 4, 5, 6, 7, 8, 9\]$" \
         || { echo "FAIL: nr3 — heapsort"; echo "$nat_out"; exit 1; }
     # Quickselect: 3rd smallest (k=2) of 0..9 is 2.
     echo "$nat_out" | grep -qE "3rd smallest \(k=2\) = 2(\.0+[0-9]*)?\b" \

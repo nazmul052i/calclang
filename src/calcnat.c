@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "codegen_x64.h"
 #include "type_infer.h"
+#include "optimizer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,6 +118,7 @@ int main(int argc, char **argv) {
     Parser p;
     parser_init(&p, src);
     Program prog = parser_parse_program(&p);
+    cl_optimize_program(&prog);
     infer_program_types(&prog);
     char *asm_text = codegen_x64_program_ex(&prog, library_mode);
 

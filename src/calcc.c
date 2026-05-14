@@ -1,5 +1,6 @@
 #include "codegen.h"
 #include "type_infer.h"
+#include "optimizer.h"
 
 static void usage(void) {
     fprintf(stderr, "usage: calcc [--ast] input.calc output.casm\n");
@@ -21,6 +22,7 @@ int main(int argc, char **argv) {
     Parser p;
     parser_init(&p, src);
     Program prog = parser_parse_program(&p);
+    cl_optimize_program(&prog);
     infer_program_types(&prog);
     if (show_ast) {
         for (int i = 0; i < prog.count; i++) ast_print_debug(prog.items[i], 0);

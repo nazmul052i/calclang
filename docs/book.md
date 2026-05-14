@@ -4456,6 +4456,29 @@ The output is a `n->inferred_type` annotation on every `NODE_VAR` node — `TYPE
 
 This is the layer that was buggy until recently (Chapter 9.5's complex-arithmetic story). The fix in `infer_binop` was a six-line change: widen the result to `TS_ANY_MASK` whenever either operand isn't statically `num`, instead of always returning `TS_NUM_BIT`.
 
+### Optimizer
+
+`optimizer.c` is an AST-rewriting pass that runs between parser and type inference. It applies three categories of transformation:
+
+- **Constant folding** — evaluate compile-time-known expressions at compile time. `2 + 3 * 4` becomes `14` in the AST; `"hello" + " " + "world"` becomes `"hello world"`; bitwise, comparison, and logical ops all fold.
+- **Algebraic simplification** — apply trivial identities: `x + 0` → `x`, `x * 1` → `x`, `x | 0` → `x`, etc. Plus short-circuit constants: `0 && expr` → `0`, `1 || expr` → `1` (the RHS is never evaluated, so it doesn't have to be valid).
+- **Dead-branch elimination** — `if (0) { A } else { B }` becomes `B`; `while (0) { ... }` becomes a no-op; `do { body } while (0);` becomes just `body`; `cond ? a : b` with a constant condition picks one branch.
+
+The pass walks the AST post-order so children fold first — `if (5 > 3)` becomes `if (1)` first, then the whole conditional collapses. It's safe to call multiple times; it idempotently won't keep simplifying after a fixpoint.
+
+After the AST is lowered to x86-64 assembly, a **peephole pass** scans the emitted text for short patterns:
+
+- `mov reg, 0` → `xor reg, reg` (shorter encoding, same effect).
+- `add rsp, 16` immediately followed by `sub rsp, 16` (or vice versa) — both vanish. These appear when an intermediate stack-slot push/pop sandwich collapses.
+- `movq rdx, xmm0` immediately followed by `movq xmm0, rdx` — both vanish. Generated when a value moves through a GPR but isn't used in that form.
+- `jmp .Lx` immediately before `.Lx:` — the jmp is unnecessary, drop it.
+
+The peephole is purely textual — it splits the emitted assembly into lines, pattern-matches, and stitches back. That keeps it about 200 lines of code. Production compilers do this on an IR with type and dataflow information; we get away with text because the codegen produces highly regular output.
+
+#### What's NOT here yet
+
+A real production optimizer also does **register allocation** (currently CalcLang shuttles every value through `xmm0` via a stack slot — the biggest available speedup), **common-subexpression elimination**, **loop-invariant code motion**, and **inlining**. Each of those is its own substantial project. The current pair (constant fold + peephole) is the high-value low-complexity starting point.
+
 ### Bytecode codegen and VM
 
 `codegen.c` lowers the AST to a stack-based bytecode in a custom `.casm` text format. `calcasm.c` parses that text into binary `.co` object files. `calcld.c` resolves cross-file symbols and writes a single executable `.cexe`. `calcvm.c` is the interpreter loop:
