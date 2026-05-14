@@ -396,6 +396,45 @@ if ! echo "$err" | grep -q "takes 2 args, got 1"; then
     exit 1
 fi
 
+# Compile-time check on the native pipeline (calcnat): the same
+# literal-of-wrong-type call should fire here too. Until recently,
+# calcnat let this slip through.
+cat > build/type_bad_nat.calc <<'EOF'
+fn add(a: num, b: num): num { return a + b; }
+print add("hello", 5);
+EOF
+err=$(build/calcnat build/type_bad_nat.calc -o build/_unused.exe 2>&1 || true)
+if ! echo "$err" | grep -q "expected num, got str"; then
+    echo "FAIL: calcnat compile-time type check did not fire on literal arg"
+    echo "  got: $err"
+    exit 1
+fi
+
+# Same check at a struct constructor: type annotations on struct
+# fields are enforced on the auto-generated positional ctor.
+cat > build/type_bad_struct.calc <<'EOF'
+struct Strict { n: num }
+let s = Strict("hello");
+EOF
+err=$(build/calcnat build/type_bad_struct.calc -o build/_unused.exe 2>&1 || true)
+if ! echo "$err" | grep -q "expected num, got str"; then
+    echo "FAIL: calcnat struct ctor type check did not fire"
+    echo "  got: $err"
+    exit 1
+fi
+
+# Same check at a class constructor (via init's param annotations).
+cat > build/type_bad_class.calc <<'EOF'
+class StrictC { fn init(n: num) { this.n = n; } }
+let s = StrictC("hello");
+EOF
+err=$(build/calcnat build/type_bad_class.calc -o build/_unused.exe 2>&1 || true)
+if ! echo "$err" | grep -q "expected num, got str"; then
+    echo "FAIL: calcnat class ctor type check did not fire"
+    echo "  got: $err"
+    exit 1
+fi
+
 # `any` parameter should accept anything (no compile-time error,
 # no TYPECHECK at runtime).
 cat > build/type_any_ok.calc <<'EOF'
