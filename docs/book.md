@@ -2855,13 +2855,18 @@ For an actual *windowed* program — pixels, mouse, keyboard, smooth animation �
 #### One-time setup
 
 ```bash
-tools/setup_sdl2.sh        # downloads + unpacks SDL2 into third_party/
+tools/setup_sdl2.sh        # downloads SDL2 + stb_truetype into third_party/
 make                        # rebuild calcnat to pick up the GUI runtime path
 ```
 
-The setup script fetches the official SDL2 mingw dev tarball (~13 MB) from `github.com/libsdl-org/SDL`, extracts to `third_party/SDL2-X.X.X/`, and that's it. The vendored tree is gitignored. After this, calcnat auto-detects SDL2 and links every GUI program against it (non-GUI programs aren't affected — the dead-code stripper drops the unused builtins).
+The setup script fetches two things into `third_party/`:
 
-When you build a GUI program, calcnat copies `SDL2.dll` next to the output `.exe`, so the resulting executable runs anywhere — no PATH setup needed.
+- **SDL2** (the official mingw devel tarball, ~13 MB): window/renderer/event/audio.
+- **`stb_truetype.h`** (a single-header TTF rasterizer by Sean Barrett, ~195 KB, public domain): drives `gui_text`'s anti-aliased text rendering.
+
+No font is bundled — `gui_text` uses the host's system font (`Segoe UI` on Windows, `Helvetica.ttc` on macOS, `DejaVu Sans` on most Linux distros). If none of those are present at startup the runtime falls back to the embedded 8×8 bitmap font so programs still render readable text.
+
+The vendored tree is gitignored. After setup, calcnat auto-detects SDL2 and links every GUI program against it (non-GUI programs aren't affected — the dead-code stripper drops the unused builtins). When you build a GUI program, calcnat copies `SDL2.dll` next to the output `.exe`, so the resulting executable runs anywhere — no PATH setup needed.
 
 #### Builtins
 
@@ -2881,8 +2886,8 @@ The whole API is ~17 functions, all named `gui_*`:
 | `gui_pixel(x, y)`                     | single pixel, current color                   |
 | `gui_circle(x, y, r)`                 | filled circle (Bresenham)                     |
 | `gui_circle_outline(x, y, r)`         | outline circle                                |
-| `gui_text(x, y, str)`                 | bitmap text — embedded 8×8 font, multi-line `\n` |
-| `gui_set_text_scale(n)`               | character scale (n×8 px); default 1           |
+| `gui_text(x, y, str)`                 | anti-aliased text using the system TTF font, multi-line `\n` |
+| `gui_set_text_scale(n)`               | text size class: 1=body(14px), 2=sub(22px), 3=heading(32px) |
 | `gui_present()`                       | swap buffers (display what you drew)          |
 | `gui_set_title(s)`                    | change window title (e.g. for status display) |
 | `gui_key_down(name)`                  | 1 if key currently held                       |

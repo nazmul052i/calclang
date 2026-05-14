@@ -31,6 +31,14 @@
   /* GetActiveWindow is normally in user32; pull it via windows.h too. */
 #endif
 
+/* stb_truetype — single-header TTF rasterizer (Sean Barrett, public
+   domain). Used for crisp scalable text in gui_text. We disable the
+   built-in stbtt_assert dependency and let it use the C library's
+   assert. */
+#define STB_TRUETYPE_IMPLEMENTATION
+#define STBTT_STATIC
+#include "../third_party/stb/stb_truetype.h"
+
 /* All GUI state lives in a single static struct. There's only one
    window per program — opening a second one isn't supported. That's
    fine for the educational use cases and saves an awful lot of
@@ -63,9 +71,38 @@ typedef struct {
        cursor and which dropdown panel is open. */
     char          focus_buf[128];
     int           focus_len;
+    /* TTF font state. font_loaded is 1 iff we successfully read a
+       font file at init time. When 0, gui_text falls back to the
+       embedded 8x8 bitmap font. */
+    int           font_loaded;
+    stbtt_fontinfo font_info;
+    unsigned char *font_buf;
+    /* Current font pixel size — set by gui_set_text_scale, used by
+       gui_text. Scale 1 → 14px (body), 2 → 22px (sub-headings),
+       3 → 32px (large numbers). Maps cleanly to the existing
+       widget code that calls gui_set_text_scale(1..3). */
+    int           font_size;
 } GuiState;
 
 static GuiState G;
+
+/* TTF glyph cache (one entry per rasterized (codepoint, size) pair).
+   Declared up front so cleanup helpers can reference them; the
+   build/lookup functions live further down with the text-render code. */
+typedef struct {
+    int          codepoint;
+    int          size;
+    SDL_Texture *tex;
+    int          w;
+    int          h;
+    int          xoff;
+    int          yoff;
+    int          advance;
+} GlyphEntry;
+
+#define GLYPH_CACHE_MAX 1024
+static GlyphEntry  GL_CACHE[GLYPH_CACHE_MAX];
+static int         GL_CACHE_N = 0;
 
 /* Forward — exported by runtime_x64.c. */
 extern void cl_die_rt(const char *msg);
@@ -145,6 +182,7 @@ Value cl_builtin_gui_init(Value w_v, Value h_v, Value title_v) {
     G.width = w;
     G.height = h;
     G.r = 255; G.g = 255; G.b = 255; G.a = 255;
+    G.font_size = 14;
     G.inited = 1;
     /* Enable SDL's text-input mode so SDL_TEXTINPUT events fire for
        typed characters. Without this, all we'd get is raw SDL_KEYDOWN
@@ -152,11 +190,58 @@ Value cl_builtin_gui_init(Value w_v, Value h_v, Value title_v) {
        keys — fine for game-key polling, useless for typing into a
        text field. */
     SDL_StartTextInput();
+
+    /* Try to load a system TTF font for crisp text rendering. We
+       walk a small fallback chain — Segoe UI is the default Windows
+       UI font (present on Win7+); macOS / Linux paths added when
+       those backends land. If everything fails we silently fall
+       back to the embedded 8x8 bitmap font in gui_text. */
+    const char *font_candidates[] = {
+        /* Windows */
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/consola.ttf",
+        /* macOS — system fonts. */
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/SFNS.ttf",
+        /* Linux — DejaVu is on most distros. */
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        NULL,
+    };
+    for (int i = 0; font_candidates[i]; i++) {
+        FILE *ff = fopen(font_candidates[i], "rb");
+        if (!ff) continue;
+        fseek(ff, 0, SEEK_END);
+        long sz = ftell(ff);
+        fseek(ff, 0, SEEK_SET);
+        if (sz <= 0 || sz > 16 * 1024 * 1024) { fclose(ff); continue; }
+        G.font_buf = (unsigned char *)malloc((size_t)sz);
+        if (!G.font_buf) { fclose(ff); continue; }
+        if (fread(G.font_buf, 1, (size_t)sz, ff) != (size_t)sz) {
+            free(G.font_buf); G.font_buf = NULL; fclose(ff); continue;
+        }
+        fclose(ff);
+        if (stbtt_InitFont(&G.font_info, G.font_buf,
+                stbtt_GetFontOffsetForIndex(G.font_buf, 0)) == 0) {
+            free(G.font_buf); G.font_buf = NULL; continue;
+        }
+        G.font_loaded = 1;
+        break;
+    }
     return cl_from_num(1.0);
 }
 
 Value cl_builtin_gui_close(void) {
     if (!G.inited) return cl_from_num(0.0);
+    /* Free cached glyph textures first — they're tied to the
+       renderer, so they must die before SDL_DestroyRenderer. */
+    for (int i = 0; i < GL_CACHE_N; i++) {
+        if (GL_CACHE[i].tex) SDL_DestroyTexture(GL_CACHE[i].tex);
+    }
+    GL_CACHE_N = 0;
+    if (G.font_buf) { free(G.font_buf); G.font_buf = NULL; }
+    G.font_loaded = 0;
     if (G.ren) SDL_DestroyRenderer(G.ren);
     if (G.win) SDL_DestroyWindow(G.win);
     SDL_Quit();
@@ -445,23 +530,117 @@ static const unsigned char GUI_FONT8x8[128][8] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},  /* DEL (unused) */
 };
 
-/* Text-render state. Scale defaults to 1 (a glyph is 8×8 px). At
-   scale 2, each glyph is 16×16 etc. Changing the scale doesn't
-   reflow anything — gui_text just multiplies its step size. */
-static int gui_text_scale = 1;
+/* Map the legacy gui_set_text_scale(1..n) integer scale onto a TTF
+   pixel size. Scale 1 (the widget default) gets a comfortable body
+   size; larger scales jump to sub-heading and heading sizes. This
+   keeps existing widget code calling `gui_set_text_scale(1)` /
+   `(2)` / `(3)` working untouched, but the visual result is crisp
+   anti-aliased text instead of a pixelated 8x8 bitmap. */
+static int gui_font_size_for_scale(int s) {
+    if (s <= 1) return 14;
+    if (s == 2) return 22;
+    if (s == 3) return 32;
+    /* Past scale 3, linear-extrapolate. */
+    return 32 + (s - 3) * 10;
+}
 
 Value cl_builtin_gui_set_text_scale(Value sv) {
     int s = as_int(sv, "gui_set_text_scale");
     if (s < 1) s = 1;
     if (s > 32) s = 32;
-    gui_text_scale = s;
+    G.font_size = gui_font_size_for_scale(s);
     return cl_from_num(0.0);
 }
 
-/* Draw one character at (x, y) using the current draw color. Returns
-   the glyph width in pixels (always 8 * scale) so callers can advance. */
-static int draw_char(int x, int y, char ch) {
-    int s = gui_text_scale;
+/* --- TTF rendering ---------------------------------------------- */
+/* Each glyph-cache entry is one (codepoint, size) → rasterized
+   SDL_Texture. We pre-multiply with white-with-alpha so
+   SDL_SetTextureColorMod can recolor each glyph at draw time. */
+
+static GlyphEntry *find_or_build_glyph(int codepoint, int size) {
+    for (int i = 0; i < GL_CACHE_N; i++) {
+        if (GL_CACHE[i].codepoint == codepoint && GL_CACHE[i].size == size) {
+            return &GL_CACHE[i];
+        }
+    }
+    if (GL_CACHE_N >= GLYPH_CACHE_MAX) {
+        /* Cache full — drop the first half (oldest by insertion). */
+        for (int i = 0; i < GL_CACHE_N / 2; i++) {
+            if (GL_CACHE[i].tex) SDL_DestroyTexture(GL_CACHE[i].tex);
+        }
+        memmove(&GL_CACHE[0], &GL_CACHE[GL_CACHE_N / 2],
+                sizeof(GlyphEntry) * (size_t)(GL_CACHE_N - GL_CACHE_N / 2));
+        GL_CACHE_N = GL_CACHE_N - GL_CACHE_N / 2;
+    }
+    float scale = stbtt_ScaleForPixelHeight(&G.font_info, (float)size);
+    int gw, gh, xoff, yoff;
+    unsigned char *bm = stbtt_GetCodepointBitmap(&G.font_info, 0, scale,
+        codepoint, &gw, &gh, &xoff, &yoff);
+    int adv, lsb;
+    stbtt_GetCodepointHMetrics(&G.font_info, codepoint, &adv, &lsb);
+    int advance_px = (int)((float)adv * scale + 0.5f);
+
+    SDL_Texture *tex = NULL;
+    if (bm && gw > 0 && gh > 0) {
+        /* Expand the 8-bit alpha bitmap into an RGBA8888 buffer where
+           every pixel is white-with-alpha. SDL_SetTextureColorMod
+           will recolor it at draw time. */
+        Uint32 *rgba = (Uint32 *)malloc((size_t)(gw * gh) * sizeof(Uint32));
+        if (rgba) {
+            for (int i = 0; i < gw * gh; i++) {
+                Uint8 a = bm[i];
+                rgba[i] = ((Uint32)a << 24) | 0x00FFFFFF;
+            }
+            SDL_Surface *surf = SDL_CreateRGBSurfaceWithFormatFrom(
+                rgba, gw, gh, 32, gw * 4, SDL_PIXELFORMAT_ABGR8888);
+            if (surf) {
+                tex = SDL_CreateTextureFromSurface(G.ren, surf);
+                SDL_FreeSurface(surf);
+            }
+            free(rgba);
+        }
+    }
+    if (bm) stbtt_FreeBitmap(bm, NULL);
+
+    GlyphEntry *e = &GL_CACHE[GL_CACHE_N++];
+    e->codepoint = codepoint;
+    e->size      = size;
+    e->tex       = tex;
+    e->w         = gw;
+    e->h         = gh;
+    e->xoff      = xoff;
+    e->yoff      = yoff;
+    e->advance   = advance_px;
+    return e;
+}
+
+/* Draw one character via the TTF cache. Returns the horizontal advance
+   in pixels. (x, y) is the top-left of the line box; glyph offsets
+   are added internally so descenders/etc. land in the right place. */
+static int draw_char_ttf(int x, int y, int size, int codepoint) {
+    GlyphEntry *e = find_or_build_glyph(codepoint, size);
+    /* Empty advance — nothing visible, just space. */
+    if (!e || !e->tex) {
+        return e ? e->advance : (size * 5 / 8);
+    }
+    /* The baseline is `ascent * scale` below the top of the line box.
+       Use ascent from font metrics. */
+    int asc, desc, line_gap;
+    stbtt_GetFontVMetrics(&G.font_info, &asc, &desc, &line_gap);
+    float fscale = stbtt_ScaleForPixelHeight(&G.font_info, (float)size);
+    int baseline = (int)((float)asc * fscale);
+    SDL_SetTextureColorMod(e->tex, G.r, G.g, G.b);
+    SDL_SetTextureAlphaMod(e->tex, G.a);
+    SDL_Rect dst = { x + e->xoff, y + baseline + e->yoff, e->w, e->h };
+    SDL_RenderCopy(G.ren, e->tex, NULL, &dst);
+    return e->advance;
+}
+
+/* Fallback bitmap-font drawer for when no TTF was loaded. Keeps
+   programs running on systems that have no system font. */
+static int draw_char_bitmap(int x, int y, int size, char ch) {
+    int s = size < 8 ? 1 : size / 8;
+    if (s < 1) s = 1;
     if ((unsigned char)ch >= 128) ch = '?';
     const unsigned char *g = GUI_FONT8x8[(unsigned char)ch];
     for (int row = 0; row < 8; row++) {
@@ -469,12 +648,8 @@ static int draw_char(int x, int y, char ch) {
         if (!bits) continue;
         for (int col = 0; col < 8; col++) {
             if (bits & (1u << col)) {
-                if (s == 1) {
-                    SDL_RenderDrawPoint(G.ren, x + col, y + row);
-                } else {
-                    SDL_Rect r = { x + col * s, y + row * s, s, s };
-                    SDL_RenderFillRect(G.ren, &r);
-                }
+                SDL_Rect r = { x + col * s, y + row * s, s, s };
+                SDL_RenderFillRect(G.ren, &r);
             }
         }
     }
@@ -482,23 +657,28 @@ static int draw_char(int x, int y, char ch) {
 }
 
 /* gui_text(x, y, str) — draw str starting at (x, y) using the
-   current draw color and current text scale. Each character is
-   8 px wide at scale 1; newlines advance one row down. */
+   current draw color and current text scale. With a TTF loaded,
+   each glyph is anti-aliased and properly proportional; without
+   one, we fall back to the embedded 8×8 bitmap font. Newlines
+   advance one line height. */
 Value cl_builtin_gui_text(Value xv, Value yv, Value sv) {
     if (!G.inited) return cl_from_num(0.0);
     require_str(sv, "gui_text");
     int x0 = as_int(xv, "gui_text");
     int y0 = as_int(yv, "gui_text");
     CalcStr *cs = cl_as_str(sv);
+    int size = G.font_size;
+    int line_h = size + (size / 4);
     int x = x0, y = y0;
-    int step_x = 8 * gui_text_scale;
-    int step_y = 8 * gui_text_scale;
     for (uint64_t i = 0; i < cs->len; i++) {
-        char ch = cs->data[i];
-        if (ch == '\n') { x = x0; y += step_y; continue; }
+        unsigned char ch = (unsigned char)cs->data[i];
+        if (ch == '\n') { x = x0; y += line_h; continue; }
         if (ch == '\r') continue;
-        draw_char(x, y, ch);
-        x += step_x;
+        if (G.font_loaded) {
+            x += draw_char_ttf(x, y, size, (int)ch);
+        } else {
+            x += draw_char_bitmap(x, y, size, (char)ch);
+        }
     }
     return cl_from_num(0.0);
 }
