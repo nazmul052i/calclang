@@ -629,6 +629,14 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"gui_text_typed",  "cl_builtin_gui_text_typed",  0},
     {"gui_get_focus",   "cl_builtin_gui_get_focus",   0},
     {"gui_set_focus",   "cl_builtin_gui_set_focus",   1},
+    /* Clipping for scrollable regions / windowed plots. */
+    {"gui_set_clip",    "cl_builtin_gui_set_clip",    4},
+    {"gui_clear_clip",  "cl_builtin_gui_clear_clip",  0},
+    /* Modal dialogs + native file pickers. */
+    {"gui_message_box", "cl_builtin_gui_message_box", 2},
+    {"gui_confirm",     "cl_builtin_gui_confirm",     2},
+    {"gui_open_file",   "cl_builtin_gui_open_file",   1},
+    {"gui_save_file",   "cl_builtin_gui_save_file",   1},
 
     /* Complex numbers. */
     {"complex",         "cl_builtin_complex",         2},

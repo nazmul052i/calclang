@@ -1,0 +1,201 @@
+// engineering_dashboard.calc — a small "engineering tool" UI that
+// exercises the full widget kit: menu bar, table, plot, scrollable
+// regions, modal dialogs, native file dialogs.
+//
+//   build/calcnat examples/engineering_dashboard.calc -o build/eng_dash.exe
+//   build/eng_dash.exe
+//
+// The dashboard shows a synthetic sensor-readings dataset and lets
+// you scroll through it, plot it, and confirm-or-cancel actions.
+
+import "gui";
+import "random";
+
+// =====================================================================
+// Synthesize a dataset (sensor over time). About 200 rows.
+// =====================================================================
+
+fn synth_dataset(n, seed) {
+    let rng = Rng(seed);
+    let rows = [];
+    let xs = [];
+    let ys = [];
+    let t = 0;
+    let value = 50;
+    for i in 0..n {
+        t = t + 1;
+        // Mean-reverting random walk with a slow sinusoidal drift.
+        let drift = 10 * sin(i / 30.0);
+        value = value + drift / 10 + (rng.uniform01() - 0.5) * 3;
+        let label = "OK";
+        if (value > 65) { label = "HIGH"; }
+        if (value < 40) { label = "LOW";  }
+        let row = [i, floor(value * 100) / 100, label];
+        push(rows, row);
+        push(xs, i);
+        push(ys, value);
+    }
+    return {"rows": rows, "xs": xs, "ys": ys};
+}
+
+let data = synth_dataset(200, 42);
+
+// =====================================================================
+// UI state
+// =====================================================================
+
+let win_w = 900;
+let win_h = 640;
+gui_init(win_w, win_h, "CalcLang engineering dashboard");
+
+let menu_active   = -1;     // which menubar item is open
+let table_scroll  = 0;      // scroll-y of the data table
+let view_mode     = 0;      // 0 = table, 1 = plot, 2 = both
+let view_options  = ["Table", "Plot", "Both"];
+let filter_text   = "";
+
+// Statistics on the dataset for the side panel.
+fn min_of_arr(a) { let m = a[0]; for v in a { if (v < m) { m = v; } } return m; }
+fn max_of_arr(a) { let m = a[0]; for v in a { if (v > m) { m = v; } } return m; }
+fn mean_of_arr(a) { let s = 0; for v in a { s = s + v; } return s / len(a); }
+let ymin  = min_of_arr(data["ys"]);
+let ymax  = max_of_arr(data["ys"]);
+let ymean = mean_of_arr(data["ys"]);
+
+// Filter rows by a substring against the third column.
+fn filter_rows(all, q) {
+    if (len(q) == 0) { return all; }
+    let out = [];
+    for row in all {
+        if (str_find("" + row[2], q) >= 0) {
+            push(out, row);
+        }
+    }
+    return out;
+}
+
+// =====================================================================
+// Main loop
+// =====================================================================
+
+while (!gui_should_close()) {
+    gui_poll_events();
+    gui_clear_c(col_dark());
+
+    // ---- Menu bar ----
+    menu_active = menubar(0, 0, win_w, ["File", "View", "Help"], menu_active);
+
+    // ---- Side panel (left) ----
+    let panel_x = 12;
+    let panel_y = 36;
+    let panel_w = 220;
+    let panel_h = win_h - panel_y - 12;
+    gui_card(panel_x, panel_y, panel_w, panel_h, col_panel(), Color(60, 65, 85));
+
+    gui_set(col_text());
+    gui_set_text_scale(2);
+    gui_text(panel_x + 12, panel_y + 12, "Stats");
+
+    gui_set_text_scale(1);
+    gui_text(panel_x + 12, panel_y + 50, "rows:  " + len(data["rows"]));
+    gui_text(panel_x + 12, panel_y + 65, "min:   " + (floor(ymin * 100) / 100));
+    gui_text(panel_x + 12, panel_y + 80, "max:   " + (floor(ymax * 100) / 100));
+    gui_text(panel_x + 12, panel_y + 95, "mean:  " + (floor(ymean * 100) / 100));
+
+    label(panel_x + 12, panel_y + 130, "Filter:");
+    filter_text = text_input(panel_x + 12, panel_y + 144, panel_w - 24, 28, "filter", filter_text);
+
+    label(panel_x + 12, panel_y + 190, "View:");
+    // (dropdown drawn last so it overlays cleanly)
+
+    // Buttons.
+    if (button(panel_x + 12, panel_y + 280, panel_w - 24, 32, "Reload sample")) {
+        let new_seed = floor(time_ms()) % 1000000;
+        data = synth_dataset(200, new_seed);
+        ymin  = min_of_arr(data["ys"]);
+        ymax  = max_of_arr(data["ys"]);
+        ymean = mean_of_arr(data["ys"]);
+        table_scroll = 0;
+    }
+    if (button(panel_x + 12, panel_y + 320, panel_w - 24, 32, "About")) {
+        gui_message_box("About", "CalcLang engineering dashboard\nDemo of every widget.");
+    }
+    if (button(panel_x + 12, panel_y + 360, panel_w - 24, 32, "Reset stats")) {
+        let ok = gui_confirm("Reset?", "This resets all derived state. Continue?");
+        if (ok) {
+            data = synth_dataset(200, 999);
+            ymin  = min_of_arr(data["ys"]);
+            ymax  = max_of_arr(data["ys"]);
+            ymean = mean_of_arr(data["ys"]);
+            table_scroll = 0;
+        }
+    }
+
+    // ---- Main view ----
+    let view_x = panel_x + panel_w + 12;
+    let view_y = panel_y;
+    let view_w = win_w - view_x - 12;
+    let view_h = panel_h;
+
+    let shown = filter_rows(data["rows"], filter_text);
+
+    if (view_mode == 0) {
+        // Table only.
+        let h = ["t", "value", "status"];
+        table_scroll = table(view_x, view_y, view_w, view_h, h, shown, table_scroll);
+    } else if (view_mode == 1) {
+        // Plot only.
+        plot_xy(view_x, view_y, view_w, view_h,
+                data["xs"], data["ys"], "Sensor value over time");
+    } else {
+        // Table on top, plot on bottom.
+        let split_h = floor(view_h / 2) - 6;
+        let h = ["t", "value", "status"];
+        table_scroll = table(view_x, view_y, view_w, split_h, h, shown, table_scroll);
+        plot_xy(view_x, view_y + split_h + 12, view_w, view_h - split_h - 12,
+                data["xs"], data["ys"], "Sensor value over time");
+    }
+
+    // ---- View dropdown (drawn last so it overlays) ----
+    view_mode = dropdown(panel_x + 12, panel_y + 204, panel_w - 24, 28,
+                        "view", view_mode, view_options);
+
+    // ---- Active menu dropdown ----
+    if (menu_active == 0) {
+        let picked = menu_dropdown(0, 0, 0, ["Open...", "Save...", "Quit"]);
+        if (picked == 0) {
+            let p = gui_open_file("CSV files|*.csv|Text files|*.txt|All files|*.*");
+            if (len(p) > 0) { gui_message_box("Open", "would load:\n" + p); }
+            menu_active = -1;
+        }
+        if (picked == 1) {
+            let p = gui_save_file("CSV files|*.csv|All files|*.*");
+            if (len(p) > 0) { gui_message_box("Save", "would save to:\n" + p); }
+            menu_active = -1;
+        }
+        if (picked == 2) {
+            menu_active = -1;
+            gui_close();
+            print "done";
+            return;
+        }
+    } else if (menu_active == 1) {
+        let picked = menu_dropdown(0, 0, 1, ["Table", "Plot", "Both"]);
+        if (picked >= 0) {
+            view_mode = picked;
+            menu_active = -1;
+        }
+    } else if (menu_active == 2) {
+        let picked = menu_dropdown(0, 0, 2, ["About"]);
+        if (picked == 0) {
+            gui_message_box("About", "CalcLang engineering dashboard\nElements 3-6 demo.");
+            menu_active = -1;
+        }
+    }
+
+    gui_present();
+    sleep_ms(16);
+}
+gui_close();
+
+print "done";

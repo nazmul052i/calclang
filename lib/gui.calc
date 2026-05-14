@@ -347,3 +347,299 @@ pub fn slider(x, y, w, h, lo, hi, value) {
 
     return v;
 }
+
+// =====================================================================
+// Scrollable region — clip + offset
+// =====================================================================
+//
+// Used to display content larger than its visible box. The caller draws
+// the content with y values offset by scroll_y, framed between calls to
+// scroll_begin and scroll_end. The shared focus registry holds the
+// scroll position keyed by id so multiple regions on screen don't fight.
+//
+//   scroll_begin(x, y, w, h);
+//   // draw content at (y - scroll_y) etc.
+//   scroll_end();
+
+pub fn scroll_begin(x, y, w, h) {
+    gui_set_clip(x, y, w, h);
+}
+
+pub fn scroll_end() {
+    gui_clear_clip();
+}
+
+// Draw a vertical scrollbar on the right edge of (x, y, w, h) showing
+// current scroll position. Returns the (possibly mutated) scroll_y
+// (clamped to [0, content_h - h]).
+//
+// Drag the thumb with the left mouse button to scroll. Click on the
+// track jumps to that position.
+pub fn scrollbar(x, y, w, h, content_h, scroll_y) {
+    let max_y = content_h - h;
+    if (max_y < 0) { max_y = 0; }
+    let new_y = scroll_y;
+    if (new_y < 0)     { new_y = 0; }
+    if (new_y > max_y) { new_y = max_y; }
+    if (max_y == 0) {
+        // Nothing to scroll — draw nothing.
+        return new_y;
+    }
+
+    let bar_w = 10;
+    let bx = x + w - bar_w;
+    gui_box(bx, y, bar_w, h, Color(35, 38, 52));
+    let thumb_h = floor(h * h / content_h);
+    if (thumb_h < 24) { thumb_h = 24; }
+    if (thumb_h > h)  { thumb_h = h; }
+    let thumb_y = y + floor((h - thumb_h) * new_y / max_y);
+
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let held = gui_mouse_down(0);
+    if (held && _in_rect(mx, my, bx, y, bar_w, h)) {
+        // Jump to wherever the mouse is along the bar.
+        let frac = (my - y - thumb_h / 2) / (h - thumb_h);
+        if (frac < 0) { frac = 0; }
+        if (frac > 1) { frac = 1; }
+        new_y = floor(max_y * frac);
+        thumb_y = y + floor((h - thumb_h) * new_y / max_y);
+    }
+    gui_box(bx + 1, thumb_y, bar_w - 2, thumb_h, col_accent());
+    return new_y;
+}
+
+// =====================================================================
+// Table / data grid
+// =====================================================================
+//
+//   let headers = ["Name", "Age", "City"];
+//   let rows = [["Alice", 30, "NYC"], ["Bob", 24, "SF"], ...];
+//   let scroll_y = table(x, y, w, h, headers, rows, scroll_y);
+//
+// Returns the new scroll position. Column widths are equal-split
+// across w; pass an explicit col_widths array via table_ex for
+// uneven layouts.
+
+priv fn _table_cell_to_str(cell) {
+    return "" + cell;
+}
+
+pub fn table(x, y, w, h, headers, rows, scroll_y) {
+    let n_cols = len(headers);
+    if (n_cols == 0) { return scroll_y; }
+    let cw = floor((w - 12) / n_cols);   // leave space for scrollbar
+    let header_h = 24;
+    let row_h = 22;
+
+    // Header row.
+    gui_box(x, y, w, header_h, Color(45, 50, 70));
+    gui_set(col_text());
+    gui_set_text_scale(1);
+    for c in 0..n_cols {
+        gui_text(x + c * cw + 6, y + 8, headers[c]);
+    }
+
+    // Vertical column separators (over the header).
+    for c in 1..n_cols {
+        gui_set(Color(60, 65, 85));
+        gui_line(x + c * cw, y, x + c * cw, y + header_h);
+    }
+
+    // Body — scrollable.
+    let body_y = y + header_h;
+    let body_h = h - header_h;
+    let n_rows = len(rows);
+    let content_h = n_rows * row_h;
+
+    scroll_begin(x, body_y, w - 12, body_h);
+    for r in 0..n_rows {
+        let ry = body_y + r * row_h - scroll_y;
+        if (ry + row_h < body_y) { continue; }
+        if (ry > body_y + body_h) { break; }
+        let bg = Color(30, 33, 45);
+        if (r % 2 == 1) { bg = Color(35, 38, 52); }
+        gui_box(x, ry, w - 12, row_h, bg);
+        gui_set(col_text());
+        gui_set_text_scale(1);
+        let row = rows[r];
+        for c in 0..n_cols {
+            let s = _table_cell_to_str(row[c]);
+            gui_text(x + c * cw + 6, ry + 7, s);
+        }
+    }
+    scroll_end();
+
+    gui_border(x, y, w - 1, h - 1, Color(60, 65, 85));
+
+    // Right-hand scrollbar.
+    let new_scroll_y = scrollbar(x, body_y, w, body_h, content_h, scroll_y);
+    return new_scroll_y;
+}
+
+// =====================================================================
+// XY plot — line chart with axes + labels
+// =====================================================================
+//
+//   plot_xy(x, y, w, h, xs, ys, title);
+//
+// `xs` and `ys` are parallel arrays. Auto-scales axes to the data
+// range; draws a 1px line through the points. Title (string) is
+// rendered at the top-left of the plot box.
+
+pub fn plot_xy(x, y, w, h, xs, ys, title) {
+    let n = len(xs);
+    if (n == 0 || len(ys) != n) {
+        gui_box(x, y, w, h, Color(28, 30, 42));
+        gui_border(x, y, w - 1, h - 1, Color(60, 65, 85));
+        return;
+    }
+
+    // Data range.
+    let xmin = xs[0]; let xmax = xs[0];
+    let ymin = ys[0]; let ymax = ys[0];
+    for i in 1..n {
+        if (xs[i] < xmin) { xmin = xs[i]; }
+        if (xs[i] > xmax) { xmax = xs[i]; }
+        if (ys[i] < ymin) { ymin = ys[i]; }
+        if (ys[i] > ymax) { ymax = ys[i]; }
+    }
+    if (xmax == xmin) { xmax = xmin + 1; }
+    if (ymax == ymin) { ymax = ymin + 1; }
+
+    // Outer frame.
+    gui_box(x, y, w, h, Color(28, 30, 42));
+    gui_border(x, y, w - 1, h - 1, Color(60, 65, 85));
+
+    // Title.
+    if (len(title) > 0) {
+        gui_set(col_text());
+        gui_set_text_scale(1);
+        gui_text(x + 8, y + 6, title);
+    }
+
+    // Plot area (inset for axes + labels).
+    let pad_l = 56;
+    let pad_r = 12;
+    let pad_t = 24;
+    let pad_b = 24;
+    let px = x + pad_l;
+    let py = y + pad_t;
+    let pw = w - pad_l - pad_r;
+    let ph = h - pad_t - pad_b;
+    gui_box(px, py, pw, ph, Color(20, 22, 30));
+    gui_border(px, py, pw - 1, ph - 1, Color(70, 80, 105));
+
+    // Light grid: 4 horizontal + 4 vertical lines.
+    gui_set(Color(34, 36, 50));
+    for i in 1..4 {
+        let gy = py + floor(ph * i / 4);
+        gui_line(px, gy, px + pw, gy);
+        let gx = px + floor(pw * i / 4);
+        gui_line(gx, py, gx, py + ph);
+    }
+
+    // Axis labels (extents — keep it simple).
+    gui_set(col_text());
+    gui_set_text_scale(1);
+    gui_text(x + 4, y + pad_t,                "" + ymax);
+    gui_text(x + 4, y + h - pad_b - 8,        "" + ymin);
+    gui_text(x + pad_l,            y + h - 12, "" + xmin);
+    gui_text(x + w - pad_r - 56,   y + h - 12, "" + xmax);
+
+    // The line itself.
+    gui_set(col_accent());
+    gui_set_clip(px, py, pw, ph);
+    let prev_sx = 0; let prev_sy = 0;
+    for i in 0..n {
+        let sx = px + floor((xs[i] - xmin) / (xmax - xmin) * pw);
+        let sy = py + ph - floor((ys[i] - ymin) / (ymax - ymin) * ph);
+        if (i > 0) {
+            gui_line(prev_sx, prev_sy, sx, sy);
+        }
+        prev_sx = sx;
+        prev_sy = sy;
+    }
+    gui_clear_clip();
+}
+
+// =====================================================================
+// Menu bar
+// =====================================================================
+//
+//   let mb_state = menubar(0, 0, win_w, ["File", "Edit", "Help"], mb_state);
+//
+// Renders a row of clickable menu items along the top of the window.
+// Returns the index of the currently-active menu, or -1 if none.
+// Pass the previous return value back in to track open/closed state.
+//
+// The menu dropdowns themselves are NOT drawn by this function — the
+// caller looks at the returned index and draws whatever menu they
+// want. The menubar widget just owns the top strip.
+
+pub fn menubar(x, y, w, items, active) {
+    let n = len(items);
+    let h = 24;
+    let item_w = 88;
+
+    gui_box(x, y, w, h, Color(30, 33, 45));
+    gui_set(Color(50, 55, 70));
+    gui_line(x, y + h, x + w, y + h);
+
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let clicked = gui_mouse_clicked(0);
+    let new_active = active;
+
+    for i in 0..n {
+        let ix = x + i * item_w;
+        let hov = _in_rect(mx, my, ix, y, item_w, h);
+        if (hov || i == active) {
+            gui_box(ix, y, item_w, h, Color(60, 70, 95));
+        }
+        if (clicked && hov) {
+            if (i == active) { new_active = -1; } else { new_active = i; }
+        }
+        gui_set(col_text());
+        gui_set_text_scale(1);
+        gui_text(ix + 10, y + 8, items[i]);
+    }
+    // Click outside the bar AND we're open? close.
+    if (clicked && !_in_rect(mx, my, x, y, w, h) && active >= 0) {
+        new_active = -1;
+    }
+    return new_active;
+}
+
+// Render a menu's dropdown list under the menu-bar item at index `idx`.
+// Returns the index of the chosen item (0-based in `items`), or -1 if
+// nothing was picked this frame. Caller should reset the menubar
+// active state to -1 after a pick.
+pub fn menu_dropdown(x, y, idx, items) {
+    let n = len(items);
+    let item_w = 160;
+    let item_h = 22;
+    let menu_x = x + idx * 88;
+    let menu_y = y + 24;
+    gui_box(menu_x, menu_y, item_w, n * item_h + 4, Color(40, 44, 58));
+    gui_border(menu_x, menu_y, item_w - 1, n * item_h + 3, col_accent());
+
+    let mx = gui_mouse_x();
+    let my = gui_mouse_y();
+    let clicked = gui_mouse_clicked(0);
+    let picked = -1;
+    for i in 0..n {
+        let iy = menu_y + 2 + i * item_h;
+        let hov = _in_rect(mx, my, menu_x, iy, item_w, item_h);
+        if (hov) {
+            gui_box(menu_x + 1, iy, item_w - 2, item_h, Color(60, 70, 95));
+        }
+        gui_set(col_text());
+        gui_set_text_scale(1);
+        gui_text(menu_x + 10, iy + 7, items[i]);
+        if (clicked && hov) {
+            picked = i;
+        }
+    }
+    return picked;
+}

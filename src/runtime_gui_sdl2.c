@@ -22,6 +22,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+  /* Pull in commdlg.h for GetOpenFileNameA / GetSaveFileNameA. We
+     don't pull all of windows.h to keep the namespace clean — just
+     the bare-minimum OPENFILENAMEA + entry points. */
+  #include <windows.h>
+  #include <commdlg.h>
+  /* GetActiveWindow is normally in user32; pull it via windows.h too. */
+#endif
+
 /* All GUI state lives in a single static struct. There's only one
    window per program — opening a second one isn't supported. That's
    fine for the educational use cases and saves an awful lot of
@@ -590,4 +599,147 @@ Value cl_builtin_gui_mouse_clicked(Value idx_v) {
     int idx = as_int(idx_v, "gui_mouse_clicked");
     if (idx < 0 || idx >= 5) return cl_from_num(0.0);
     return cl_from_num(G.mouse_button_clicked[idx] ? 1.0 : 0.0);
+}
+
+/* --- Clipping / scrollable regions ------------------------------- */
+
+/* gui_set_clip(x, y, w, h) — restrict subsequent draws to this rect.
+   Anything outside is discarded. Used by scrollable containers to
+   hide content that's scrolled out of view. */
+Value cl_builtin_gui_set_clip(Value xv, Value yv, Value wv, Value hv) {
+    if (!G.inited) return cl_from_num(0.0);
+    SDL_Rect r = {
+        as_int(xv, "gui_set_clip"), as_int(yv, "gui_set_clip"),
+        as_int(wv, "gui_set_clip"), as_int(hv, "gui_set_clip")
+    };
+    SDL_RenderSetClipRect(G.ren, &r);
+    return cl_from_num(0.0);
+}
+
+Value cl_builtin_gui_clear_clip(void) {
+    if (!G.inited) return cl_from_num(0.0);
+    SDL_RenderSetClipRect(G.ren, NULL);
+    return cl_from_num(0.0);
+}
+
+/* --- Modal dialogs (OS-native) ----------------------------------- */
+
+/* gui_message_box(title, msg) — show an OS-native modal alert. Blocks
+   until the user dismisses. Returns 0. */
+Value cl_builtin_gui_message_box(Value title_v, Value msg_v) {
+    require_str(title_v, "gui_message_box");
+    require_str(msg_v,   "gui_message_box");
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+        cl_as_str(title_v)->data,
+        cl_as_str(msg_v)->data,
+        G.inited ? G.win : NULL);
+    return cl_from_num(0.0);
+}
+
+/* gui_confirm(title, msg) — OK / Cancel dialog. Returns 1 for OK,
+   0 for Cancel (or for any failure to show). */
+Value cl_builtin_gui_confirm(Value title_v, Value msg_v) {
+    require_str(title_v, "gui_confirm");
+    require_str(msg_v,   "gui_confirm");
+    const SDL_MessageBoxButtonData buttons[2] = {
+        { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel" },
+        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "OK"     },
+    };
+    SDL_MessageBoxData mb = {0};
+    mb.flags       = SDL_MESSAGEBOX_INFORMATION;
+    mb.window      = G.inited ? G.win : NULL;
+    mb.title       = cl_as_str(title_v)->data;
+    mb.message     = cl_as_str(msg_v)->data;
+    mb.numbuttons  = 2;
+    mb.buttons     = buttons;
+    mb.colorScheme = NULL;
+    int btn = 0;
+    if (SDL_ShowMessageBox(&mb, &btn) != 0) return cl_from_num(0.0);
+    return cl_from_num((double)btn);
+}
+
+/* --- Native file open / save dialogs ----------------------------- */
+
+#ifdef _WIN32
+/* Convert "Text files|*.txt|All files|*.*" (the cross-platform form
+   the CalcLang side expects) into the Win32 \0-separated form
+   "Text files\0*.txt\0All files\0*.*\0\0" in place. Returns the
+   total length including all NULs. */
+static int build_win_filter(const char *src, char *dst, int dst_max) {
+    int i = 0;
+    while (src[i] && i < dst_max - 2) {
+        dst[i] = src[i] == '|' ? '\0' : src[i];
+        i++;
+    }
+    dst[i++] = '\0';
+    dst[i] = '\0';
+    return i + 1;
+}
+#endif
+
+/* gui_open_file(filter) — show OS-native Open dialog. Filter is
+   "Description|pattern|Description|pattern|..." (pipe-separated).
+   Returns the chosen path as a string, or "" if cancelled. */
+Value cl_builtin_gui_open_file(Value filter_v) {
+    require_str(filter_v, "gui_open_file");
+#ifdef _WIN32
+    CalcStr *f = cl_as_str(filter_v);
+    char filter[512];
+    int  flen = (int)f->len;
+    if (flen >= (int)sizeof filter - 2) flen = (int)sizeof filter - 3;
+    memcpy(filter, f->data, (size_t)flen);
+    filter[flen] = '\0';
+    build_win_filter(filter, filter, (int)sizeof filter);
+
+    OPENFILENAMEA ofn;
+    char path[1024];
+    memset(&ofn, 0, sizeof ofn);
+    memset(path, 0, sizeof path);
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner   = NULL;            /* keeping things simple */
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile   = path;
+    ofn.nMaxFile    = sizeof path;
+    ofn.Flags       = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    if (GetOpenFileNameA(&ofn)) {
+        return cl_new_str(path, strlen(path));
+    }
+    return cl_new_str("", 0);
+#else
+    /* TODO: macOS NSOpenPanel via Cocoa, Linux GTK or zenity fallback.
+       For now we just return "" so portable code paths still work. */
+    return cl_new_str("", 0);
+#endif
+}
+
+/* gui_save_file(filter) — Save dialog. Same filter format as
+   gui_open_file. Returns chosen path or "". */
+Value cl_builtin_gui_save_file(Value filter_v) {
+    require_str(filter_v, "gui_save_file");
+#ifdef _WIN32
+    CalcStr *f = cl_as_str(filter_v);
+    char filter[512];
+    int  flen = (int)f->len;
+    if (flen >= (int)sizeof filter - 2) flen = (int)sizeof filter - 3;
+    memcpy(filter, f->data, (size_t)flen);
+    filter[flen] = '\0';
+    build_win_filter(filter, filter, (int)sizeof filter);
+
+    OPENFILENAMEA ofn;
+    char path[1024];
+    memset(&ofn, 0, sizeof ofn);
+    memset(path, 0, sizeof path);
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner   = NULL;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile   = path;
+    ofn.nMaxFile    = sizeof path;
+    ofn.Flags       = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+    if (GetSaveFileNameA(&ofn)) {
+        return cl_new_str(path, strlen(path));
+    }
+    return cl_new_str("", 0);
+#else
+    return cl_new_str("", 0);
+#endif
 }
