@@ -2944,6 +2944,90 @@ The library adds:
 - **Validators**: `is_integer`, `is_number`, `is_email`, `is_ipv4`, `is_hex`, `is_iso_date` — each returns 1 or 0.
 - **Whitespace utilities**: `collapse_whitespace`, `trim_around`.
 
+### Vectorized math, scientific constants, and IEEE-754 predicates
+
+CalcLang already had `lib/linalg`, `lib/stats`, `lib/nr/`, etc. for numerical work, but every element-wise operation forced you to write a loop. The scientific bundle adds NumPy/Fortran-style ergonomics on top.
+
+#### `lib/vec.calc` — element-wise array ops, broadcasting, BLAS-1
+
+```calc
+import "vec";
+
+let theta = linspace(0, TAU(), 100);          // 100 points 0..2π
+let y     = vec_add(vec_mul(2, theta),
+                    vec_sin(theta));           // y = 2θ + sin(θ)
+print vec_dot(y, y);                           // ||y||²
+print vec_norm(vec_sub(y, mean_curve));        // L2 error
+```
+
+| Op                            | What it does                                     |
+|-------------------------------|--------------------------------------------------|
+| `vec_add` / `_sub` / `_mul` / `_div` | Element-wise; either operand may be scalar (broadcast) |
+| `vec_neg`, `_abs`, `_sqrt`, `_pow(a, p)` | Unary maps                                 |
+| `vec_sin`, `_cos`, `_tan`, `_exp`, `_log`, `_log10` | Pointwise math                |
+| `vec_floor`, `_ceil`          | Pointwise rounding                               |
+| `vec_apply(a, fn)`            | Generic map: apply any unary fn to every element |
+| `vec_dot(a, b)`               | Dot product `∑ a[i]·b[i]`                        |
+| `vec_norm(a)`, `_norm1`, `_norm_inf` | L2, L1, L∞ norms                          |
+| `vec_axpy(α, x, y)`           | `α·x + y` returned fresh                         |
+| `vec_scale(α, x)`             | `α·x`                                            |
+| `linspace(start, stop, n)`    | n equally-spaced points                          |
+| `arange(start, stop, step)`   | Half-open numeric range                          |
+| `vec_zeros(n)` / `_ones(n)` / `_full(n, v)` | Construction helpers              |
+
+#### `lib/stats.calc` — extended reductions
+
+The original `mean / variance / stddev / min_of / max_of / linreg / histogram` set is now joined by Fortran-intrinsic-style helpers:
+
+| Function                        | What it does                                |
+|---------------------------------|---------------------------------------------|
+| `argmin(xs)` / `argmax(xs)`     | Index of the min / max element              |
+| `cumsum(xs)` / `cumprod(xs)`    | Cumulative running sum / product            |
+| `diff(xs)`                      | First-differences (output is len-1 shorter) |
+| `percentile(xs, p)`             | Linear-interp percentile, p in 0..100       |
+| `quartiles(xs)`                 | `{q1, q2, q3}` map (q2 = median)            |
+| `covariance(xs, ys)`            | Unbiased covariance                         |
+| `coeff_variation(xs)`           | `stddev/mean`                               |
+| `sem(xs)`                       | Standard error of the mean                  |
+| `zscore(xs)`                    | `(x − mean) / stddev` for every element     |
+| `normalize(xs)`                 | Min-max normalize to `[0, 1]`               |
+
+#### `lib/constants.calc` — math, physics, conversions
+
+Everything in SI units. Defined-exactly constants from the 2019 SI revision get their exact CODATA values; the rest match CODATA 2018.
+
+```calc
+import "constants";
+
+let ke = 0.5 * MASS_ELECTRON() * v * v;       // kinetic energy
+let f  = SPEED_OF_LIGHT() / wavelength;        // frequency from λ
+let pv = n * R_GAS() * celsius_to_kelvin(t);   // PV = nRT
+```
+
+Available constants (all as `pub fn` calls so they can be used inside user functions):
+- **Math**: `TAU()`, `GOLDEN()`, `EULER_GAMMA()`, `SQRT_2/3()`, `LN_2/10()`, `LOG2_E()`, `LOG10_E()`.
+- **Physics** (defined exact): `SPEED_OF_LIGHT()`, `PLANCK()`, `BOLTZMANN()`, `AVOGADRO()`, `ELEM_CHARGE()`.
+- **Physics** (measured): `HBAR()`, `GRAVITATIONAL()`, `EPSILON_0()`, `MU_0()`, `STEFAN_BOLTZMANN()`, `R_GAS()`, `FARADAY()`, `ATOMIC_MASS_UNIT()`, `STD_GRAVITY()`, `STD_ATMOSPHERE()`, `ZERO_CELSIUS_K()`.
+- **Particle masses**: `MASS_ELECTRON()`, `MASS_PROTON()`, `MASS_NEUTRON()`, `MASS_MUON()`.
+- **Conversions**: `EV_TO_J()`, `CAL_TO_J()`, `KCAL_TO_J()`, `BTU_TO_J()`, `DEG_TO_RAD()`, `RAD_TO_DEG()`, `ATM_TO_PA()`, `BAR_TO_PA()`, `TORR_TO_PA()`, `PSI_TO_PA()`, `FT_TO_M()`, `IN_TO_M()`, `MILE_TO_M()`.
+- **Converters as functions**: `celsius_to_kelvin(c)`, `kelvin_to_celsius(k)`, `fahrenheit_to_celsius(f)`, `celsius_to_fahrenheit(c)`, `fahrenheit_to_kelvin(f)`, `kelvin_to_fahrenheit(k)`, `deg_to_rad(d)`, `rad_to_deg(r)`, `ev_to_joule(e)`, `joule_to_ev(j)`, `atm_to_pa(a)`, `pa_to_atm(p)`.
+
+#### IEEE-754 predicates
+
+Numerical code needs to distinguish "this came back NaN because we divided by zero" from "this is a perfectly fine number." Four builtins:
+
+| Function          | Returns 1 if...                                     |
+|-------------------|-----------------------------------------------------|
+| `is_nan(x)`       | x is NaN                                            |
+| `is_inf(x)`       | x is +Inf or -Inf                                   |
+| `is_finite(x)`    | x is neither NaN nor Inf                            |
+| `is_normal(x)`    | x is finite, non-zero, and ≥ 2.2e-308 in magnitude  |
+
+```calc
+let r = something_numerical(x);
+if (!is_finite(r)) { throw "blew up at x = " + x; }
+```
+
 ### HTTP client
 
 `lib/http.calc` plus four runtime builtins give you a basic HTTP client backed by WinHTTP on Windows. Enough for "fetch this JSON" and "POST this form" patterns — most engineering scripts that talk to a REST API.

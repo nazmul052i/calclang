@@ -118,6 +118,68 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] vec / extended stats / constants / NaN-Inf predicates"
+build/calcnat tests/vec_stats_constants.calc -o build/d_vsc.exe
+out=$(build/d_vsc.exe | strip_cr)
+check "vec_stats_constants" '1
+1
+0
+1
+1
+0
+1
+0
+[11, 22, 33, 44]
+[9, 18, 27, 36]
+[10, 40, 90, 160]
+[10, 10, 10, 10]
+[101, 102, 103, 104]
+[101, 102, 103, 104]
+[2, 4, 6, 8]
+[-1, 2, -3]
+[1, 2, 3]
+[0, 1, 2, 3]
+0
+1
+1
+[8, 27, 64]
+[2, 4, 6]
+32
+5
+6
+5
+[12, 24, 36]
+[1, 2, 3, 4]
+[0, 0.25, 0.5, 0.75, 1]
+[0, 2, 4, 6, 8]
+[10, 8, 6, 4, 2]
+[0, 0, 0]
+[1, 1, 1]
+[7, 7, 7]
+1
+5
+[1, 3, 6, 10]
+[1, 2, 6, 24]
+[2, 3, 4]
+1
+3
+5
+4.5
+-1.27
+1.26
+0
+0.5
+1
+299792458
+6.62607015e-34
+6.02214076e+23
+273.15
+26.85
+212
+0
+3.141592
+180' "$out"
+
 echo "[test] integer helpers + debugger-lite (parse_hex, hash_u32, assert, trace)"
 build/calcnat tests/intlike_and_debug.calc -o build/d_intlike.exe
 # Trace output goes to stderr — drop it so the assertion-printout

@@ -1,0 +1,122 @@
+// Tests for the scientific bundle: vec ops, extended stats,
+// constants, and NaN/Inf predicates.
+
+import "vec";
+import "stats";
+import "constants";
+
+// =====================================================================
+// IEEE-754 predicates
+// =====================================================================
+
+print is_finite(3.14);                  // 1
+print is_finite(0);                     // 1
+print is_finite(1.0 / 0.0);             // 0  (Inf)
+print is_inf(1.0 / 0.0);                // 1
+print is_nan(0.0 / 0.0);                // 1
+print is_nan(3.14);                     // 0
+print is_normal(1e-300);                // 1  (still normal)
+print is_normal(0);                     // 0  (zero isn't normal)
+
+// =====================================================================
+// vec — binary ops with broadcasting
+// =====================================================================
+
+let a = [1, 2, 3, 4];
+let b = [10, 20, 30, 40];
+
+print vec_add(a, b);                    // [11, 22, 33, 44]
+print vec_sub(b, a);                    // [9, 18, 27, 36]
+print vec_mul(a, b);                    // [10, 40, 90, 160]
+print vec_div(b, a);                    // [10, 10, 10, 10]
+
+// Scalar broadcasting (scalar + array, array + scalar).
+print vec_add(a, 100);                  // [101, 102, 103, 104]
+print vec_add(100, a);                  // same
+print vec_mul(2, a);                    // [2, 4, 6, 8]
+
+// =====================================================================
+// vec — unary maps
+// =====================================================================
+
+print vec_neg([1, -2, 3]);              // [-1, 2, -3]
+print vec_abs([-1, 2, -3]);             // [1, 2, 3]
+print vec_sqrt([0, 1, 4, 9]);           // [0, 1, 2, 3]
+
+// sin(0) = 0, sin(pi/2) = 1, sin(pi) ≈ 0
+let theta = [0, pi() / 2, pi()];
+let s = vec_sin(theta);
+print floor(s[0] * 1000) / 1000;       // 0
+print floor(s[1] * 1000) / 1000;       // 1
+print abs(s[2]) < 1e-10;                // 1
+
+print vec_pow([2, 3, 4], 3);            // [8, 27, 64]
+print vec_apply([1, 4, 9], fn(x) { return sqrt(x) * 2; });  // [2, 4, 6]
+
+// =====================================================================
+// vec — BLAS-1
+// =====================================================================
+
+print vec_dot([1, 2, 3], [4, 5, 6]);    // 32
+print vec_norm([3, 4]);                  // 5
+print vec_norm1([-1, 2, -3]);            // 6
+print vec_norm_inf([-1, 5, -3]);         // 5
+print vec_axpy(2, [1, 2, 3], [10, 20, 30]); // [12, 24, 36]
+print vec_scale(0.5, [2, 4, 6, 8]);     // [1, 2, 3, 4]
+
+// =====================================================================
+// vec — construction helpers
+// =====================================================================
+
+print linspace(0, 1, 5);                // [0, 0.25, 0.5, 0.75, 1]
+print arange(0, 10, 2);                  // [0, 2, 4, 6, 8]
+print arange(10, 0, -2);                 // [10, 8, 6, 4, 2]
+print vec_zeros(3);                      // [0, 0, 0]
+print vec_ones(3);                       // [1, 1, 1]
+print vec_full(3, 7);                    // [7, 7, 7]
+
+// =====================================================================
+// stats — extended reductions
+// =====================================================================
+
+let xs = [3, 1, 4, 1, 5, 9, 2, 6];
+
+print argmin(xs);                        // 1   (first '1' is at index 1)
+print argmax(xs);                        // 5   ('9')
+print cumsum([1, 2, 3, 4]);              // [1, 3, 6, 10]
+print cumprod([1, 2, 3, 4]);             // [1, 2, 6, 24]
+print diff([1, 3, 6, 10]);               // [2, 3, 4]
+
+// Percentile on a small set.
+print percentile([1, 2, 3, 4, 5], 0);    // 1
+print percentile([1, 2, 3, 4, 5], 50);   // 3
+print percentile([1, 2, 3, 4, 5], 100);  // 5
+
+let q = quartiles([1, 2, 3, 4, 5, 6, 7, 8]);
+print q["q2"];                           // 4.5  (median)
+
+// Z-score / normalize.
+let zs = zscore([1, 2, 3, 4, 5]);
+print floor(zs[0] * 100) / 100;          // -1.26
+print floor(zs[4] * 100) / 100;          // 1.26  (symmetric)
+
+let norm = normalize([10, 20, 30, 40, 50]);
+print norm[0];                           // 0
+print norm[2];                           // 0.5
+print norm[4];                           // 1
+
+// =====================================================================
+// constants — values + conversions
+// =====================================================================
+
+print SPEED_OF_LIGHT();                  // 299792458
+print PLANCK();                          // 6.62607015e-34
+print AVOGADRO();                        // 6.02214076e+23
+
+print celsius_to_kelvin(0);              // 273.15
+print kelvin_to_celsius(300);            // 26.85
+print celsius_to_fahrenheit(100);        // 212
+print fahrenheit_to_celsius(32);         // 0
+
+print floor(deg_to_rad(180) * 1000000) / 1000000;   // 3.141592
+print floor(rad_to_deg(pi()) * 1000) / 1000;        // 180

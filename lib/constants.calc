@@ -1,0 +1,99 @@
+// constants.calc — mathematical, physical, and conversion constants
+// for scientific code. Values use the 2019 SI revision (exact base
+// units) where the definition is exact; CODATA-recommended values
+// otherwise. All values are in SI units unless the name says
+// otherwise.
+//
+// Top-level functions are used (not `let`s) so they're visible from
+// inside other top-level functions — CalcLang's import inlines pub
+// fns but top-level `let` bindings can't be read by top-level fns.
+
+// =====================================================================
+// Mathematical constants
+// =====================================================================
+
+pub fn TAU()         { return 6.28318530717958647693; }   // 2π
+pub fn GOLDEN()      { return 1.61803398874989484820; }   // φ
+pub fn EULER_GAMMA() { return 0.57721566490153286061; }   // γ
+pub fn SQRT_2()      { return 1.41421356237309504880; }
+pub fn SQRT_3()      { return 1.73205080756887729353; }
+pub fn LN_2()        { return 0.69314718055994530942; }
+pub fn LN_10()       { return 2.30258509299404568402; }
+pub fn LOG2_E()      { return 1.44269504088896340736; }
+pub fn LOG10_E()     { return 0.43429448190325182765; }
+
+// =====================================================================
+// Physical constants — 2019 SI / CODATA
+// =====================================================================
+
+// Defined exactly by 2019 SI revision:
+pub fn SPEED_OF_LIGHT()  { return 299792458; }                   // m/s     (exact)
+pub fn PLANCK()          { return 6.62607015e-34; }              // J·s     (exact)
+pub fn BOLTZMANN()       { return 1.380649e-23; }                // J/K     (exact)
+pub fn AVOGADRO()        { return 6.02214076e23; }                // 1/mol   (exact)
+pub fn ELEM_CHARGE()     { return 1.602176634e-19; }              // C       (exact)
+
+// Derived / measured constants:
+pub fn HBAR()            { return 1.054571817e-34; }              // J·s
+pub fn GRAVITATIONAL()   { return 6.67430e-11; }                  // m³/(kg·s²)
+pub fn EPSILON_0()       { return 8.8541878128e-12; }             // F/m
+pub fn MU_0()            { return 1.25663706212e-6; }             // N/A²
+pub fn STEFAN_BOLTZMANN(){ return 5.670374419e-8; }               // W/(m²·K⁴)
+pub fn R_GAS()           { return 8.314462618; }                  // J/(mol·K)
+pub fn FARADAY()         { return 96485.33212; }                  // C/mol
+pub fn ATOMIC_MASS_UNIT(){ return 1.66053906660e-27; }            // kg
+pub fn STD_GRAVITY()     { return 9.80665; }                       // m/s² (Earth)
+pub fn STD_ATMOSPHERE()  { return 101325; }                        // Pa
+pub fn ZERO_CELSIUS_K()  { return 273.15; }                        // K
+pub fn ABSOLUTE_ZERO_C() { return -273.15; }                       // °C
+
+// =====================================================================
+// Particle masses (kg)
+// =====================================================================
+
+pub fn MASS_ELECTRON()   { return 9.1093837015e-31; }
+pub fn MASS_PROTON()     { return 1.67262192369e-27; }
+pub fn MASS_NEUTRON()    { return 1.67492749804e-27; }
+pub fn MASS_MUON()       { return 1.883531627e-28; }
+
+// =====================================================================
+// Energy / unit conversions
+// =====================================================================
+
+pub fn EV_TO_J()         { return 1.602176634e-19; }
+pub fn J_TO_EV()         { return 6.241509074e18; }
+pub fn CAL_TO_J()        { return 4.184; }                         // thermochem cal
+pub fn KCAL_TO_J()       { return 4184; }
+pub fn BTU_TO_J()        { return 1055.05585262; }                 // IT BTU
+
+pub fn DEG_TO_RAD()      { return 0.01745329251994329577; }        // π/180
+pub fn RAD_TO_DEG()      { return 57.29577951308232087680; }       // 180/π
+
+pub fn ATM_TO_PA()       { return 101325; }
+pub fn BAR_TO_PA()       { return 100000; }
+pub fn TORR_TO_PA()      { return 133.322387415; }
+pub fn PSI_TO_PA()       { return 6894.7572931683; }
+
+pub fn FT_TO_M()         { return 0.3048; }
+pub fn IN_TO_M()         { return 0.0254; }
+pub fn MILE_TO_M()       { return 1609.344; }
+
+// =====================================================================
+// Convenience converters — pass values, get values back
+// =====================================================================
+
+pub fn celsius_to_kelvin(c)   { return c + ZERO_CELSIUS_K(); }
+pub fn kelvin_to_celsius(k)   { return k - ZERO_CELSIUS_K(); }
+pub fn fahrenheit_to_kelvin(f){ return (f - 32) * 5 / 9 + ZERO_CELSIUS_K(); }
+pub fn kelvin_to_fahrenheit(k){ return (k - ZERO_CELSIUS_K()) * 9 / 5 + 32; }
+pub fn fahrenheit_to_celsius(f){ return (f - 32) * 5 / 9; }
+pub fn celsius_to_fahrenheit(c){ return c * 9 / 5 + 32; }
+
+pub fn deg_to_rad(d)          { return d * DEG_TO_RAD(); }
+pub fn rad_to_deg(r)          { return r * RAD_TO_DEG(); }
+
+pub fn ev_to_joule(e)         { return e * EV_TO_J(); }
+pub fn joule_to_ev(j)         { return j * J_TO_EV(); }
+
+pub fn atm_to_pa(a)           { return a * ATM_TO_PA(); }
+pub fn pa_to_atm(p)           { return p / ATM_TO_PA(); }

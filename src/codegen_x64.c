@@ -640,6 +640,12 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"assert",          "cl_builtin_assert",          2},
     {"trace",           "cl_builtin_trace",           1},
 
+    /* IEEE-754 predicates — needed for robust numerical code. */
+    {"is_nan",          "cl_builtin_is_nan",          1},
+    {"is_inf",          "cl_builtin_is_inf",          1},
+    {"is_finite",       "cl_builtin_is_finite",       1},
+    {"is_normal",       "cl_builtin_is_normal",       1},
+
     /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
        helpers built on top. */
     {"gui_init",        "cl_builtin_gui_init",        3},

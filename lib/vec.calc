@@ -1,0 +1,234 @@
+// vec.calc — NumPy/Fortran-style element-wise array operations,
+// broadcasting, and BLAS-1 staples.
+//
+// Every binary op accepts either (array, array) of equal length or
+// (array, scalar) / (scalar, array) — the scalar is broadcast across
+// the array. The result is a fresh array; inputs are untouched.
+//
+//   let y = vec_add(vec_mul(2, x), vec_sin(theta));   // y = 2x + sin(θ)
+//
+// These are pure CalcLang fns over our regular boxed arrays — easy
+// to read and ergonomic enough for most science scripts, though not
+// as fast as the unboxed-array path that's still on the roadmap.
+
+// =====================================================================
+// Internal helpers
+// =====================================================================
+
+priv fn _is_arr(x) { return type_of(x) == "arr"; }
+
+priv fn _len_match(a, b, where) {
+    if (len(a) != len(b)) {
+        throw where + ": length mismatch (" + len(a) + " vs " + len(b) + ")";
+    }
+}
+
+priv fn _zeros_like(a) {
+    let out = [];
+    for i in 0..len(a) { push(out, 0); }
+    return out;
+}
+
+// =====================================================================
+// Element-wise binary ops, with scalar broadcasting
+// =====================================================================
+
+pub fn vec_add(a, b) {
+    if (_is_arr(a) && _is_arr(b)) {
+        _len_match(a, b, "vec_add");
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] + b[i]; }
+        return out;
+    }
+    if (_is_arr(a)) {
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] + b; }
+        return out;
+    }
+    if (_is_arr(b)) {
+        let out = _zeros_like(b);
+        for i in 0..len(b) { out[i] = a + b[i]; }
+        return out;
+    }
+    return a + b;
+}
+
+pub fn vec_sub(a, b) {
+    if (_is_arr(a) && _is_arr(b)) {
+        _len_match(a, b, "vec_sub");
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] - b[i]; }
+        return out;
+    }
+    if (_is_arr(a)) {
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] - b; }
+        return out;
+    }
+    if (_is_arr(b)) {
+        let out = _zeros_like(b);
+        for i in 0..len(b) { out[i] = a - b[i]; }
+        return out;
+    }
+    return a - b;
+}
+
+pub fn vec_mul(a, b) {
+    if (_is_arr(a) && _is_arr(b)) {
+        _len_match(a, b, "vec_mul");
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] * b[i]; }
+        return out;
+    }
+    if (_is_arr(a)) {
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] * b; }
+        return out;
+    }
+    if (_is_arr(b)) {
+        let out = _zeros_like(b);
+        for i in 0..len(b) { out[i] = a * b[i]; }
+        return out;
+    }
+    return a * b;
+}
+
+pub fn vec_div(a, b) {
+    if (_is_arr(a) && _is_arr(b)) {
+        _len_match(a, b, "vec_div");
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] / b[i]; }
+        return out;
+    }
+    if (_is_arr(a)) {
+        let out = _zeros_like(a);
+        for i in 0..len(a) { out[i] = a[i] / b; }
+        return out;
+    }
+    if (_is_arr(b)) {
+        let out = _zeros_like(b);
+        for i in 0..len(b) { out[i] = a / b[i]; }
+        return out;
+    }
+    return a / b;
+}
+
+// =====================================================================
+// Unary mapping
+// =====================================================================
+
+pub fn vec_apply(a, fn_) {
+    let out = _zeros_like(a);
+    for i in 0..len(a) { out[i] = fn_(a[i]); }
+    return out;
+}
+
+pub fn vec_neg(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = -a[i];   } return o; }
+pub fn vec_abs(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = abs(a[i]);  } return o; }
+pub fn vec_sqrt(a)  { let o = _zeros_like(a); for i in 0..len(a) { o[i] = sqrt(a[i]); } return o; }
+pub fn vec_sin(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = sin(a[i]);  } return o; }
+pub fn vec_cos(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = cos(a[i]);  } return o; }
+pub fn vec_tan(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = tan(a[i]);  } return o; }
+pub fn vec_exp(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = exp(a[i]);  } return o; }
+pub fn vec_log(a)   { let o = _zeros_like(a); for i in 0..len(a) { o[i] = log(a[i]);  } return o; }
+pub fn vec_log10(a) { let o = _zeros_like(a); for i in 0..len(a) { o[i] = log10(a[i]); } return o; }
+pub fn vec_floor(a) { let o = _zeros_like(a); for i in 0..len(a) { o[i] = floor(a[i]); } return o; }
+pub fn vec_ceil(a)  { let o = _zeros_like(a); for i in 0..len(a) { o[i] = ceil(a[i]);  } return o; }
+pub fn vec_pow(a, p){ let o = _zeros_like(a); for i in 0..len(a) { o[i] = pow(a[i], p); } return o; }
+
+// =====================================================================
+// BLAS-1 essentials
+// =====================================================================
+
+// Dot product: ∑ a[i] * b[i].
+pub fn vec_dot(a, b) {
+    _len_match(a, b, "vec_dot");
+    let s = 0;
+    for i in 0..len(a) { s = s + a[i] * b[i]; }
+    return s;
+}
+
+// L2 (Euclidean) norm: sqrt(∑ a[i]²).
+pub fn vec_norm(a) {
+    let s = 0;
+    for i in 0..len(a) { s = s + a[i] * a[i]; }
+    return sqrt(s);
+}
+
+// L1 norm: ∑ |a[i]|.
+pub fn vec_norm1(a) {
+    let s = 0;
+    for i in 0..len(a) { s = s + abs(a[i]); }
+    return s;
+}
+
+// L-infinity (max-abs) norm.
+pub fn vec_norm_inf(a) {
+    let m = 0;
+    for i in 0..len(a) {
+        let v = abs(a[i]);
+        if (v > m) { m = v; }
+    }
+    return m;
+}
+
+// AXPY: y := a * x + y (returns a fresh array; inputs untouched).
+pub fn vec_axpy(a, x, y) {
+    _len_match(x, y, "vec_axpy");
+    let out = _zeros_like(x);
+    for i in 0..len(x) { out[i] = a * x[i] + y[i]; }
+    return out;
+}
+
+// Scale: a * x.
+pub fn vec_scale(a, x) {
+    let out = _zeros_like(x);
+    for i in 0..len(x) { out[i] = a * x[i]; }
+    return out;
+}
+
+// =====================================================================
+// Construction helpers
+// =====================================================================
+
+// Linearly spaced points: linspace(0, 1, 5) = [0, 0.25, 0.5, 0.75, 1].
+pub fn linspace(start, stop, n) {
+    if (n <= 0) { return []; }
+    if (n == 1) { return [start]; }
+    let out = [];
+    let step = (stop - start) / (n - 1);
+    for i in 0..n { push(out, start + step * i); }
+    return out;
+}
+
+// Arithmetic range with optional step. arange(0, 10, 2) = [0, 2, 4, 6, 8].
+pub fn arange(start, stop, step) {
+    let out = [];
+    if (step == 0) { throw "arange: step must be non-zero"; }
+    if (step > 0) {
+        let v = start;
+        while (v < stop) { push(out, v); v = v + step; }
+    } else {
+        let v = start;
+        while (v > stop) { push(out, v); v = v + step; }
+    }
+    return out;
+}
+
+pub fn vec_zeros(n) {
+    let out = [];
+    for i in 0..n { push(out, 0); }
+    return out;
+}
+
+pub fn vec_ones(n) {
+    let out = [];
+    for i in 0..n { push(out, 1); }
+    return out;
+}
+
+pub fn vec_full(n, value) {
+    let out = [];
+    for i in 0..n { push(out, value); }
+    return out;
+}

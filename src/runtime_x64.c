@@ -2521,6 +2521,35 @@ Value cl_builtin_http_post_json(Value url_v, Value body_v) {
 #endif
 }
 
+/* --- IEEE-754 predicates ----------------------------------------- */
+/* CalcLang values are NaN-boxed doubles, so a "real" math NaN
+   (0/0, sqrt(-1), etc.) bits as a regular num (tag bits 0x7FF8 /
+   0xFFF8 don't overlap the 0xFFF9..0xFFFE tag range). require_num
+   rejects tagged non-num values, so by the time we call isnan etc.
+   the value is genuinely a double. */
+#include <math.h>
+
+Value cl_builtin_is_nan(Value v) {
+    require_num(v, "is_nan");
+    return cl_from_num(isnan(cl_as_num(v)) ? 1.0 : 0.0);
+}
+Value cl_builtin_is_inf(Value v) {
+    require_num(v, "is_inf");
+    return cl_from_num(isinf(cl_as_num(v)) ? 1.0 : 0.0);
+}
+Value cl_builtin_is_finite(Value v) {
+    require_num(v, "is_finite");
+    return cl_from_num(isfinite(cl_as_num(v)) ? 1.0 : 0.0);
+}
+/* Normal: finite, non-zero, not subnormal. Useful for guarding
+   division-by-tiny in numerical code. */
+Value cl_builtin_is_normal(Value v) {
+    require_num(v, "is_normal");
+    double d = cl_as_num(v);
+    /* isnormal is a C99 macro; in mingw it pulls from <math.h>. */
+    return cl_from_num((isfinite(d) && d != 0.0 && fabs(d) >= 2.2250738585072014e-308) ? 1.0 : 0.0);
+}
+
 /* --- Typed-integer helpers (lite) -------------------------------- */
 /* CalcLang's value model is still f64 throughout. These helpers let
    you do binary-format / hashing / bit-twiddling work with explicit
