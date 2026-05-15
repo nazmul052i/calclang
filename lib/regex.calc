@@ -1,0 +1,113 @@
+// regex.calc — thin CalcLang shim over the regex_* runtime builtins.
+//
+// The runtime gives us five primitives: regex_match, regex_find,
+// regex_find_all, regex_replace, regex_split. This file adds a few
+// ergonomic helpers around them — convenience matchers, capture-group
+// extraction, simple validators.
+//
+// Patterns are written like every other C-derived language: a literal
+// backslash in the pattern is a "\\" in the CalcLang string. So
+// matching a digit is regex_test("\\d+", "...").
+//
+// Supported regex syntax (full list in src/regex.c):
+//   .              any char (not newline)
+//   ^ $            start / end of string
+//   \b \B          word boundary
+//   \d \D \w \W \s \S
+//   [abc] [a-z] [^a-z]
+//   *  +  ?  {n}  {n,}  {n,m}        (greedy)
+//   *? +? ??  {n,m}?                  (lazy)
+//   (group)  (?:non-capturing)
+//   a|b|c       alternation
+//   \. \\ \n etc. literal escapes
+
+pub fn regex_test(pattern, text) {
+    // Just a friendlier name for the boolean variant.
+    return regex_match(pattern, text);
+}
+
+// Return just the matched substring of the first match, or "" if none.
+pub fn regex_first(pattern, text) {
+    let m = regex_find(pattern, text);
+    if (type_of(m) == "str") { return ""; }
+    return m["match"];
+}
+
+// Return the array of captured groups for the first match. Whole-match
+// at index 0, then groups in order. Returns [] if no match.
+pub fn regex_groups(pattern, text) {
+    let m = regex_find(pattern, text);
+    if (type_of(m) == "str") { return []; }
+    let out = [m["match"]];
+    for g in m["groups"] { push(out, g); }
+    return out;
+}
+
+// Number of non-overlapping matches in text.
+pub fn regex_count(pattern, text) {
+    return len(regex_find_all(pattern, text));
+}
+
+// Just the matched substrings (one entry per match), no positions.
+pub fn regex_matches(pattern, text) {
+    let out = [];
+    for m in regex_find_all(pattern, text) {
+        push(out, m["match"]);
+    }
+    return out;
+}
+
+// For each match, extract one specific capture group (1-indexed).
+// Returns array of strings.
+pub fn regex_extract_group(pattern, text, group_idx) {
+    let out = [];
+    for m in regex_find_all(pattern, text) {
+        let gs = m["groups"];
+        let i = group_idx - 1;
+        if (i >= 0 && i < len(gs)) {
+            push(out, gs[i]);
+        }
+    }
+    return out;
+}
+
+// ---- A few common validators built on the engine. ----------------
+
+pub fn is_integer(s) {
+    return regex_test("^-?\\d+$", s) == 1;
+}
+
+pub fn is_number(s) {
+    return regex_test("^-?\\d+(\\.\\d+)?([eE][-+]?\\d+)?$", s) == 1;
+}
+
+pub fn is_email(s) {
+    // A reasonable but not RFC-perfect email check.
+    return regex_test("^[\\w.+-]+@[\\w-]+\\.[\\w.-]+$", s) == 1;
+}
+
+pub fn is_ipv4(s) {
+    return regex_test("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$", s) == 1;
+}
+
+pub fn is_hex(s) {
+    return regex_test("^[0-9a-fA-F]+$", s) == 1;
+}
+
+pub fn is_iso_date(s) {
+    return regex_test("^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z?)?$", s) == 1;
+}
+
+// Strip all matches of `pattern` from `text`.
+pub fn regex_strip(pattern, text) {
+    return regex_replace(pattern, text, "");
+}
+
+// Whitespace utilities — common enough to bake in.
+pub fn collapse_whitespace(s) {
+    return regex_replace("\\s+", s, " ");
+}
+
+pub fn trim_around(s) {
+    return regex_replace("^\\s+|\\s+$", s, "");
+}

@@ -160,7 +160,8 @@ int main(int argc, char **argv) {
     char cmd[8192];
     int  off = 0;
     off += snprintf(cmd + off, sizeof(cmd) - off,
-        "gcc -O0 -I%s \"%s\" \"%s\"", include_dir, asm_path, rt_dir);
+        "gcc -O0 -I%s \"%s\" \"%s\" src/regex.c",
+        include_dir, asm_path, rt_dir);
     if (gui_enabled) {
         off += snprintf(cmd + off, sizeof(cmd) - off,
             " src/runtime_gui_sdl2.c -I%s/include -L%s/lib -lmingw32 -lSDL2main -lSDL2 -lcomdlg32",

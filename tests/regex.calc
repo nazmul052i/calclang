@@ -1,0 +1,84 @@
+// Regex test — exercise every feature in src/regex.c via the
+// regex_* builtins and lib/regex.calc helpers.
+
+import "regex";
+
+// ---- Plain matches ---------------------------------------------
+print regex_match("hello", "say hello world");             // 1
+print regex_match("HELLO", "say hello world");             // 0
+print regex_match("^say", "say hello world");              // 1
+print regex_match("world$", "say hello world");            // 1
+print regex_match("^say.*world$", "say hello world");      // 1
+
+// ---- Character classes -----------------------------------------
+print regex_first("[aeiou]+", "hello world");              // e
+print regex_first("[^aeiou]+", "hello world");             // h
+print regex_first("[a-z]+", "ABC def GHI");                // def
+print regex_first("[A-Za-z]+", "  Hello  ");               // Hello
+
+// ---- Class shortcuts -------------------------------------------
+print regex_first("\\d+", "12 + 34 = 46");                  // 12
+print regex_first("\\w+", "  ___abc 123");                  // ___abc
+print len(regex_first("\\s+", "abc   def"));                // 3
+
+// ---- Quantifiers -----------------------------------------------
+print regex_first("a*", "aaab");                            // aaa
+print regex_first("a+", "aaab");                            // aaa
+print regex_first("a?", "aaab");                            // a
+print regex_first("a{3}", "aaaa");                          // aaa
+print regex_first("a{2,4}", "aaaaab");                      // aaaa
+
+// ---- Lazy vs greedy --------------------------------------------
+print regex_first("<.*>",  "<one><two>");                  // <one><two>
+print regex_first("<.*?>", "<one><two>");                  // <one>
+
+// ---- Alternation -----------------------------------------------
+print regex_first("cat|dog|bird", "I love dogs");          // dog
+print regex_first("a(b|c)d", "axyd abd acd");              // abd
+
+// ---- Captures --------------------------------------------------
+let m = regex_find("(\\w+)@(\\w+)\\.(\\w+)", "ping bob@example.com please");
+print m["match"];      // bob@example.com
+print m["groups"][0];  // bob
+print m["groups"][1];  // example
+print m["groups"][2];  // com
+
+// ---- Anchors ---------------------------------------------------
+print regex_match("^hello$", "hello");                      // 1
+print regex_match("^hello$", "hello!");                     // 0
+print regex_match("\\bword\\b", "swordfish word!");         // 1
+print regex_match("\\bword\\b", "swordfish");               // 0
+
+// ---- find_all + matches ---------------------------------------
+let nums = regex_matches("\\d+", "ages 30, 24, and 42");
+for n in nums { print n; }                                  // 30, 24, 42
+
+// ---- replace with $N -------------------------------------------
+print regex_replace("(\\w+)@(\\w+)", "ping bob@example", "$2 owes $1");
+                                                            // ping example owes bob
+
+// ---- split -----------------------------------------------------
+let parts = regex_split("\\s*,\\s*", "alpha, beta , gamma,delta");
+print len(parts);                                            // 4
+for p in parts { print p; }                                  // alpha beta gamma delta
+
+// ---- Validators (lib/regex.calc) -------------------------------
+print is_integer("42");          // 1
+print is_integer("-7");          // 1
+print is_integer("3.14");        // 0
+print is_number("3.14");         // 1
+print is_number("-2.5e10");      // 1
+print is_email("bob@example.com");   // 1
+print is_email("not-an-email");      // 0
+print is_ipv4("192.168.1.1");        // 1
+print is_ipv4("not.an.ip");          // 0
+print is_hex("DEADbeef");            // 1
+print is_iso_date("2026-05-14");                    // 1
+print is_iso_date("2026-05-14T18:32:01Z");          // 1
+print is_iso_date("yesterday");                     // 0
+
+// ---- Misc helpers — bracket the strings so trailing whitespace
+//      doesn't leak into test fixtures.
+print "[" + collapse_whitespace("  hello   world  foo ") + "]";
+print "[" + trim_around("   hello   ") + "]";
+print "[" + regex_strip("\\d+", "year 2026 quarter 2") + "]";

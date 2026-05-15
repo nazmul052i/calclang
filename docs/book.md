@@ -2894,6 +2894,56 @@ Available helpers:
 
 Every helper accepts either a `DateTime` record or a bare epoch-ms number — `dt_plus_days(now, 1)` and `dt_plus_days(now.ms, 1)` both work. Use the record form when you want type-checked code and the bare form when you're passing through an existing numeric pipeline.
 
+### Regular expressions
+
+A small but featureful regex engine ships in `src/regex.c` and is exposed through five builtins. Pattern syntax follows the usual C-derived conventions — a literal backslash in the pattern is `"\\"` in a CalcLang string (so a digit class is `regex_test("\\d+", "...")`).
+
+#### What the engine supports
+
+| Construct                       | Notes                                                |
+|---------------------------------|------------------------------------------------------|
+| `.`                             | Any char except newline                              |
+| `^` `$`                         | Start / end of string                                |
+| `\b` `\B`                       | Word boundary / non-word-boundary                    |
+| `\d \D \w \W \s \S`             | Digit, word-char, whitespace, and negations          |
+| `[abc]` `[a-z]` `[^a-z]`        | Character classes (with shortcuts inside)            |
+| `*` `+` `?` `{n}` `{n,}` `{n,m}` | Greedy quantifiers                                  |
+| `*?` `+?` `??` `{n,m}?`         | Lazy variants                                        |
+| `(group)` `(?:non-capturing)`   | Capturing + non-capturing groups (up to 16)          |
+| `a|b|c`                         | Alternation                                          |
+| `\n \t \r \\ \. \(` ...         | Escapes                                              |
+
+Engine internals: regex source → AST → recursive backtracking matcher with captures. Patterns are cached internally by `(pattern, flags)` so repeated use in a loop doesn't recompile every call.
+
+#### Builtins
+
+| Function                                     | What it does                                                          |
+|----------------------------------------------|-----------------------------------------------------------------------|
+| `regex_match(pattern, text)`                 | Returns 1 if any match (Python-style search), 0 otherwise             |
+| `regex_find(pattern, text)`                  | First match → `{start, end, match, groups}` map, or `""` if no match  |
+| `regex_find_all(pattern, text)`              | Array of all non-overlapping match maps                               |
+| `regex_replace(pattern, text, replacement)`  | Replace all matches; `$0`-`$9` in `replacement` substitute groups     |
+| `regex_split(pattern, text)`                 | Split text on every match → array of segments                         |
+
+#### `lib/regex.calc` — ergonomic helpers + validators
+
+```calc
+import "regex";
+
+if (is_email(user_input)) { ... }
+if (is_iso_date("2026-05-14")) { ... }
+
+let years = regex_extract_group("(\\d{4})-\\d{2}-\\d{2}", text, 1);
+let words = regex_matches("\\w+", text);
+let stripped = regex_strip("\\d+", "year 2026 quarter 2");   // "year  quarter "
+```
+
+The library adds:
+
+- **Friendlier names**: `regex_test`, `regex_first`, `regex_groups`, `regex_count`, `regex_matches`, `regex_extract_group`, `regex_strip`.
+- **Validators**: `is_integer`, `is_number`, `is_email`, `is_ipv4`, `is_hex`, `is_iso_date` — each returns 1 or 0.
+- **Whitespace utilities**: `collapse_whitespace`, `trim_around`.
+
 ### Windowed GUI via SDL2
 
 For an actual *windowed* program — pixels, mouse, keyboard, smooth animation — CalcLang ships an SDL2-backed set of builtins. Same pattern as the terminal builtins: pure CalcLang code on top, a small C runtime module (`src/runtime_gui_sdl2.c`) that wraps SDL2's window/renderer/event API.

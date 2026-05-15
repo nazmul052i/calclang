@@ -608,6 +608,15 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"time_make",       "cl_builtin_time_make",       3},
     {"time_format",     "cl_builtin_time_format",     2},
 
+    /* Regex — bundled engine in src/regex.c. Patterns accept escape
+       sequences, character classes, quantifiers, anchors, alternation,
+       and capture groups. */
+    {"regex_match",     "cl_builtin_regex_match",     2},
+    {"regex_find",      "cl_builtin_regex_find",      2},
+    {"regex_find_all",  "cl_builtin_regex_find_all",  2},
+    {"regex_replace",   "cl_builtin_regex_replace",   3},
+    {"regex_split",     "cl_builtin_regex_split",     2},
+
     /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
        helpers built on top. */
     {"gui_init",        "cl_builtin_gui_init",        3},

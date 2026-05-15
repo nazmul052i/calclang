@@ -2106,3 +2106,220 @@ Value cl_builtin_ffi_call(Value libv, Value namev, Value sigv, Value argsv) {
     exit(1);
     #undef SIG_IS
 }
+
+/* --- Regex builtins --------------------------------------------- */
+
+#include "regex.h"
+
+/* For each pattern we compile we cache it keyed on (pattern, flags)
+   so the same pattern used repeatedly (find_all-in-a-loop) doesn't
+   recompile every call. Cache evicts oldest when full. */
+typedef struct {
+    char       *pat;        /* heap copy of the source pattern */
+    int         flags;
+    CalcRegex  *re;
+} RegexCacheEntry;
+
+#define RE_CACHE_MAX 32
+static RegexCacheEntry re_cache[RE_CACHE_MAX];
+static int             re_cache_n = 0;
+static int             re_cache_next_evict = 0;
+
+static CalcRegex *re_get_or_compile(const char *pat, int flags) {
+    for (int i = 0; i < re_cache_n; i++) {
+        if (re_cache[i].flags == flags && strcmp(re_cache[i].pat, pat) == 0) {
+            return re_cache[i].re;
+        }
+    }
+    CalcRegex *r = cl_regex_compile(pat, flags);
+    if (!r) {
+        cl_die_rt(cl_regex_error());
+    }
+    if (re_cache_n < RE_CACHE_MAX) {
+        re_cache[re_cache_n].pat   = strdup(pat);
+        re_cache[re_cache_n].flags = flags;
+        re_cache[re_cache_n].re    = r;
+        re_cache_n++;
+    } else {
+        /* Evict oldest. */
+        int i = re_cache_next_evict;
+        re_cache_next_evict = (re_cache_next_evict + 1) % RE_CACHE_MAX;
+        free(re_cache[i].pat);
+        cl_regex_free(re_cache[i].re);
+        re_cache[i].pat   = strdup(pat);
+        re_cache[i].flags = flags;
+        re_cache[i].re    = r;
+    }
+    return r;
+}
+
+/* regex_match(pattern, text) — returns 1 if any match exists in text,
+   0 otherwise. Equivalent to `re.search` in Python (NOT anchored to
+   the start; use ^ if you want that). */
+Value cl_builtin_regex_match(Value pat_v, Value text_v) {
+    require_str(pat_v,  "regex_match");
+    require_str(text_v, "regex_match");
+    CalcStr *p = cl_as_str(pat_v);
+    CalcStr *t = cl_as_str(text_v);
+    CalcRegex *r = re_get_or_compile(p->data, 0);
+    int ms, me;
+    int matched = cl_regex_match(r, t->data, (int)t->len, 0, &ms, &me,
+                                  NULL, NULL, 0, NULL);
+    return cl_from_num(matched ? 1.0 : 0.0);
+}
+
+/* regex_find(pattern, text) — returns a map describing the first match:
+     {"start": int, "end": int, "match": str, "groups": [str, str, ...]}
+   Or returns the empty string "" if no match. (Returning a Value-less
+   "null" is awkward without a tag; using "" is a common idiom in
+   CalcLang scripts.) */
+Value cl_builtin_regex_find(Value pat_v, Value text_v) {
+    require_str(pat_v,  "regex_find");
+    require_str(text_v, "regex_find");
+    CalcStr *p = cl_as_str(pat_v);
+    CalcStr *t = cl_as_str(text_v);
+    CalcRegex *r = re_get_or_compile(p->data, 0);
+    int ms, me;
+    int cs[RE_CACHE_MAX], ce[RE_CACHE_MAX], nc = 0;
+    /* (RE_CACHE_MAX is unrelated — just reusing a large enough constant.) */
+    if (!cl_regex_match(r, t->data, (int)t->len, 0, &ms, &me, cs, ce, RE_CACHE_MAX, &nc)) {
+        return cl_new_str("", 0);
+    }
+    Value m = cl_new_map();
+    cl_index_set(m, cl_new_str("start", 5), cl_from_num((double)ms));
+    cl_index_set(m, cl_new_str("end",   3), cl_from_num((double)me));
+    cl_index_set(m, cl_new_str("match", 5), cl_new_str(t->data + ms, (uint64_t)(me - ms)));
+    Value groups = cl_new_arr();
+    for (int i = 1; i < nc; i++) {
+        if (cs[i] >= 0) {
+            cl_arr_push(groups, cl_new_str(t->data + cs[i], (uint64_t)(ce[i] - cs[i])));
+        } else {
+            cl_arr_push(groups, cl_new_str("", 0));
+        }
+    }
+    cl_index_set(m, cl_new_str("groups", 6), groups);
+    return m;
+}
+
+/* regex_find_all(pattern, text) — returns an array of all
+   non-overlapping matches. Each entry is the same map shape as
+   regex_find. Empty array on no matches. */
+Value cl_builtin_regex_find_all(Value pat_v, Value text_v) {
+    require_str(pat_v,  "regex_find_all");
+    require_str(text_v, "regex_find_all");
+    CalcStr *p = cl_as_str(pat_v);
+    CalcStr *t = cl_as_str(text_v);
+    CalcRegex *r = re_get_or_compile(p->data, 0);
+    Value out = cl_new_arr();
+    int pos = 0;
+    while (pos <= (int)t->len) {
+        int ms, me;
+        int cs[32], ce[32], nc = 0;
+        if (!cl_regex_match(r, t->data, (int)t->len, pos, &ms, &me, cs, ce, 32, &nc)) break;
+        Value m = cl_new_map();
+        cl_index_set(m, cl_new_str("start", 5), cl_from_num((double)ms));
+        cl_index_set(m, cl_new_str("end",   3), cl_from_num((double)me));
+        cl_index_set(m, cl_new_str("match", 5), cl_new_str(t->data + ms, (uint64_t)(me - ms)));
+        Value groups = cl_new_arr();
+        for (int i = 1; i < nc; i++) {
+            if (cs[i] >= 0) {
+                cl_arr_push(groups, cl_new_str(t->data + cs[i], (uint64_t)(ce[i] - cs[i])));
+            } else {
+                cl_arr_push(groups, cl_new_str("", 0));
+            }
+        }
+        cl_index_set(m, cl_new_str("groups", 6), groups);
+        cl_arr_push(out, m);
+        /* Advance past the match; if match was zero-width, step by 1
+           to avoid an infinite loop. */
+        pos = (me > ms) ? me : ms + 1;
+    }
+    return out;
+}
+
+/* regex_replace(pattern, text, replacement) — replace every match
+   with `replacement`. The replacement string may contain $0 (whole
+   match) and $1..$N (captured groups) as substitution references.
+   $$ produces a literal $. */
+Value cl_builtin_regex_replace(Value pat_v, Value text_v, Value rep_v) {
+    require_str(pat_v,  "regex_replace");
+    require_str(text_v, "regex_replace");
+    require_str(rep_v,  "regex_replace");
+    CalcStr *p = cl_as_str(pat_v);
+    CalcStr *t = cl_as_str(text_v);
+    CalcStr *rep = cl_as_str(rep_v);
+    CalcRegex *r = re_get_or_compile(p->data, 0);
+
+    /* Build into a growable buffer. */
+    size_t cap = t->len + 64;
+    char  *buf = (char *)malloc(cap);
+    size_t blen = 0;
+    if (!buf) cl_die_rt("regex_replace: oom");
+
+    int pos = 0;
+    int cs[32], ce[32], nc = 0;
+    while (pos <= (int)t->len) {
+        int ms, me;
+        if (!cl_regex_match(r, t->data, (int)t->len, pos, &ms, &me, cs, ce, 32, &nc)) break;
+        /* Append everything before the match. */
+        size_t pre = (size_t)(ms - pos);
+        if (blen + pre + 1 > cap) { cap = (blen + pre) * 2 + 64; buf = realloc(buf, cap); }
+        memcpy(buf + blen, t->data + pos, pre); blen += pre;
+        /* Expand replacement with $N substitutions. */
+        for (uint64_t i = 0; i < rep->len; i++) {
+            char rc = rep->data[i];
+            if (rc == '$' && i + 1 < rep->len) {
+                char nc1 = rep->data[i + 1];
+                if (nc1 == '$') {
+                    if (blen + 1 + 1 > cap) { cap = blen * 2 + 64; buf = realloc(buf, cap); }
+                    buf[blen++] = '$';
+                    i++;
+                    continue;
+                }
+                if (nc1 >= '0' && nc1 <= '9') {
+                    int idx = nc1 - '0';
+                    if (idx < nc && cs[idx] >= 0) {
+                        int n = ce[idx] - cs[idx];
+                        if (blen + (size_t)n + 1 > cap) { cap = (blen + (size_t)n) * 2 + 64; buf = realloc(buf, cap); }
+                        memcpy(buf + blen, t->data + cs[idx], (size_t)n);
+                        blen += (size_t)n;
+                    }
+                    i++;
+                    continue;
+                }
+            }
+            if (blen + 1 + 1 > cap) { cap = blen * 2 + 64; buf = realloc(buf, cap); }
+            buf[blen++] = rc;
+        }
+        pos = (me > ms) ? me : ms + 1;
+    }
+    /* Append the rest. */
+    size_t tail = (size_t)((int)t->len - pos);
+    if (blen + tail + 1 > cap) { cap = (blen + tail) * 2 + 64; buf = realloc(buf, cap); }
+    memcpy(buf + blen, t->data + pos, tail); blen += tail;
+    buf[blen] = '\0';
+
+    Value v = cl_new_str(buf, (uint64_t)blen);
+    free(buf);
+    return v;
+}
+
+/* regex_split(pattern, text) — split text on every match of pattern.
+   Returns array of strings (the segments BETWEEN matches). */
+Value cl_builtin_regex_split(Value pat_v, Value text_v) {
+    require_str(pat_v,  "regex_split");
+    require_str(text_v, "regex_split");
+    CalcStr *p = cl_as_str(pat_v);
+    CalcStr *t = cl_as_str(text_v);
+    CalcRegex *r = re_get_or_compile(p->data, 0);
+    Value out = cl_new_arr();
+    int pos = 0;
+    int ms, me;
+    while (pos <= (int)t->len
+        && cl_regex_match(r, t->data, (int)t->len, pos, &ms, &me, NULL, NULL, 0, NULL)) {
+        cl_arr_push(out, cl_new_str(t->data + pos, (uint64_t)(ms - pos)));
+        pos = (me > ms) ? me : ms + 1;
+    }
+    cl_arr_push(out, cl_new_str(t->data + pos, (uint64_t)((int)t->len - pos)));
+    return out;
+}
