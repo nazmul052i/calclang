@@ -160,7 +160,7 @@ int main(int argc, char **argv) {
     char cmd[8192];
     int  off = 0;
     off += snprintf(cmd + off, sizeof(cmd) - off,
-        "gcc -O0 -I%s \"%s\" \"%s\" src/regex.c",
+        "gcc -O0 -I%s \"%s\" \"%s\" src/regex.c -lwinhttp",
         include_dir, asm_path, rt_dir);
     if (gui_enabled) {
         off += snprintf(cmd + off, sizeof(cmd) - off,

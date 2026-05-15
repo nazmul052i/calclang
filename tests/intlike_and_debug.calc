@@ -1,0 +1,44 @@
+// Tests for the typed-integer helpers + debugger-lite builtins.
+
+// ---- Integer helpers --------------------------------------------
+print parse_hex("DEADBEEF");           // 3735928559
+print parse_hex("0xff");                // 255
+print parse_hex("ABC_DEF");             // 11259375  (underscores allowed)
+print to_hex(255);                      // ff
+print to_hex(3735928559);               // deadbeef
+print to_hex(0);                        // 0
+print to_bin(170);                      // 10101010
+print to_bin(0);                        // 0
+print bit_count(0xff);                  // 8
+print bit_count(0xCAFE);                // 11
+print bit_count(0);                     // 0
+print wrap_u32(-1);                     // 4294967295
+print wrap_i32(0xFFFFFFFF);             // -1
+print wrap_u32(0x100000000);            // 0
+
+// Hashing is deterministic; round-trip a known set.
+let a = hash_u32("hello");
+let b = hash_u32("hello");
+print a == b;                           // 1
+print hash_u32("") == 2166136261;       // 1  (FNV-1a offset basis)
+print hash_u32("a") == 3826002220;      // 1  (FNV-1a("a"))
+print hash_u32("ab") != hash_u32("ba"); // 1  (order matters)
+
+// ---- Debugger lite ---------------------------------------------
+// assert(true) is a no-op.
+assert(1, "true is true");
+assert(2 + 2 == 4, "arithmetic");
+print "assertions passed";
+
+// assert(false) throws.
+try {
+    assert(0, "this should fail");
+    print "unreachable";
+} catch (e) {
+    print e;                            // assertion failed: this should fail
+}
+
+// trace writes to stderr — exercised via the smoke test.
+// We just call it to make sure it doesn't blow up.
+trace("test trace line");
+print "trace ok";

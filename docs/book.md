@@ -2944,6 +2944,99 @@ The library adds:
 - **Validators**: `is_integer`, `is_number`, `is_email`, `is_ipv4`, `is_hex`, `is_iso_date` — each returns 1 or 0.
 - **Whitespace utilities**: `collapse_whitespace`, `trim_around`.
 
+### HTTP client
+
+`lib/http.calc` plus four runtime builtins give you a basic HTTP client backed by WinHTTP on Windows. Enough for "fetch this JSON" and "POST this form" patterns — most engineering scripts that talk to a REST API.
+
+#### Builtins
+
+| Function                       | What it does                                                        |
+|--------------------------------|---------------------------------------------------------------------|
+| `http_get(url)`                | GET; returns response body string, `""` on failure                  |
+| `http_post(url, body)`         | POST with `application/x-www-form-urlencoded`                       |
+| `http_post_json(url, body)`    | POST with `application/json` (you encode the body yourself)         |
+| `http_status()`                | Status code of the last request (200, 404, 500, ...)                |
+
+```calc
+let body = http_get("https://httpbin.org/get?hello=calclang");
+print http_status();                  // 200
+print body;                            // {"args": {"hello": "calclang"}, ...}
+```
+
+#### `lib/http.calc` — typed responses + JSON helpers
+
+```calc
+import "http";
+
+let r = http_fetch("https://api.example.com/users/42");
+if (r.ok) { print r.body; }
+
+let user = http_get_json("https://api.example.com/users/42");
+print user.name;
+
+http_post_value("https://api.example.com/users",
+    {"name": "Alice", "age": 30});
+```
+
+- **`HttpResp`** struct: `status`, `body`, `ok` (1 iff 2xx).
+- **`http_fetch(url)`**, **`http_send(url, body)`**, **`http_send_json(url, body)`** — return `HttpResp`.
+- **`http_get_json(url)`** — fetch + parse JSON in one call; throws on non-2xx.
+- **`http_post_value(url, value)`** — encode CalcLang value as JSON, POST, parse response.
+
+POSIX HTTP path will use libcurl in a future iteration; today the builtins return `""` on non-Windows.
+
+### Typed-integer helpers
+
+CalcLang's value model is still f64 throughout — there's no real `i32` or `u64` type yet. But for the practical use cases that need integer semantics (hashing, binary formats, bit-twiddling beyond 2^53), a handful of explicit-wrap helpers are enough.
+
+| Function              | What it does                                       |
+|-----------------------|----------------------------------------------------|
+| `wrap_i32(n)`         | Reinterpret n as a signed 32-bit (wrap to -2^31..2^31-1) |
+| `wrap_u32(n)`         | Wrap to 0..2^32-1                                  |
+| `wrap_u64(n)`         | Wrap to uint64 range (best-effort beyond 2^53)     |
+| `parse_hex(s)`        | Parse hex string ("DEADBEEF", "0xFF") → num. `_` allowed as separator |
+| `to_hex(n)`           | Format num as lowercase hex (no `0x` prefix)       |
+| `to_bin(n)`           | Format num as binary string                        |
+| `bit_count(n)`        | Popcount of the low 64 bits                        |
+| `hash_u32(s)`         | FNV-1a 32-bit hash of a string                     |
+| `hash_u64(s)`         | FNV-1a 64-bit hash                                 |
+
+```calc
+let raw = parse_hex("DEADBEEF");                  // 3735928559
+let hi  = wrap_u32(raw >> 16);                     // 57005 (0xDEAD)
+let lo  = wrap_u32(raw & 0xFFFF);                  // 48879 (0xBEEF)
+print to_hex(hi);                                  // dead
+print to_hex(lo);                                  // beef
+print bit_count(0xCAFEBABE);                       // 20
+
+let h = hash_u32("hello");
+print h;                                            // deterministic FNV-1a
+```
+
+A proper typed-integer type system (real `i32 / i64 / u32 / u64` in the language, with per-op dispatch on tag) is on the roadmap as its own session.
+
+### Debugger helpers
+
+Full source-level debugging is its own multi-session project (needs debug-info tables in the assembly + a breakpoint protocol). In the meantime, two small builtins make `print`-debugging less awful:
+
+| Function                  | What it does                                                          |
+|---------------------------|-----------------------------------------------------------------------|
+| `assert(cond, msg)`       | If `cond` is falsy, throws `"assertion failed: <msg>"` (catchable)    |
+| `trace(label)`            | Writes a timestamped trace line to stderr — doesn't disturb stdout    |
+
+```calc
+fn divide(a, b) {
+    assert(b != 0, "divide by zero");
+    return a / b;
+}
+
+trace("about to crunch numbers");
+let r = solve(big_matrix);
+trace("solver done");
+```
+
+Trace output looks like `[TRACE 18:32:01.482] solver done` and goes to stderr, so it doesn't interleave with `print` output. Useful for long-running programs where you want to know where you are without polluting stdout.
+
 ### Windowed GUI via SDL2
 
 For an actual *windowed* program — pixels, mouse, keyboard, smooth animation — CalcLang ships an SDL2-backed set of builtins. Same pattern as the terminal builtins: pure CalcLang code on top, a small C runtime module (`src/runtime_gui_sdl2.c`) that wraps SDL2's window/renderer/event API.

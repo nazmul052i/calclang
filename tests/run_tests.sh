@@ -118,6 +118,33 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] integer helpers + debugger-lite (parse_hex, hash_u32, assert, trace)"
+build/calcnat tests/intlike_and_debug.calc -o build/d_intlike.exe
+# Trace output goes to stderr — drop it so the assertion-printout
+# comparison stays clean.
+out=$(build/d_intlike.exe 2>/dev/null | strip_cr)
+check "intlike_and_debug" '3735928559
+255
+11259375
+ff
+deadbeef
+0
+10101010
+0
+8
+11
+0
+4294967295
+-1
+0
+1
+1
+1
+1
+assertions passed
+assertion failed: this should fail
+trace ok' "$out"
+
 echo "[test] regex (engine + builtins + lib/regex.calc helpers)"
 build/calcnat tests/regex.calc -o build/d_regex.exe
 out=$(build/d_regex.exe | strip_cr)
@@ -894,7 +921,7 @@ if command -v gcc >/dev/null 2>&1; then
     vm_out=$(build/calcvm build/native_basic.vm.cexe | strip_cr)
 
     build/calcnat tests/native_basic.calc build/native_basic.s
-    gcc build/native_basic.s src/runtime_x64.c src/regex.c -Iinclude -o build/native_basic.exe
+    gcc build/native_basic.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_basic.exe
     nat_out=$(build/native_basic.exe | strip_cr)
 
     check "native_basic" "$vm_out" "$nat_out"
@@ -906,7 +933,7 @@ if command -v gcc >/dev/null 2>&1; then
     vm_out=$(build/calcvm build/native_strings.vm.cexe | strip_cr)
 
     build/calcnat tests/native_strings.calc build/native_strings.s
-    gcc build/native_strings.s src/runtime_x64.c src/regex.c -Iinclude -o build/native_strings.exe
+    gcc build/native_strings.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_strings.exe
     nat_out=$(build/native_strings.exe | strip_cr)
 
     check "native_strings" "$vm_out" "$nat_out"
@@ -920,7 +947,7 @@ if command -v gcc >/dev/null 2>&1; then
     vm_out=$(build/calcvm build/native_arrays.vm.cexe | strip_cr)
 
     build/calcnat tests/arrays.calc build/native_arrays.s
-    gcc build/native_arrays.s src/runtime_x64.c src/regex.c -Iinclude -o build/native_arrays.exe
+    gcc build/native_arrays.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_arrays.exe
     nat_out=$(build/native_arrays.exe | strip_cr)
 
     check "native_arrays" "$vm_out" "$nat_out"
@@ -932,7 +959,7 @@ if command -v gcc >/dev/null 2>&1; then
     vm_out=$(build/calcvm build/native_maps.vm.cexe | strip_cr)
 
     build/calcnat tests/maps.calc build/native_maps.s
-    gcc build/native_maps.s src/runtime_x64.c src/regex.c -Iinclude -o build/native_maps.exe
+    gcc build/native_maps.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_maps.exe
     nat_out=$(build/native_maps.exe | strip_cr)
 
     check "native_maps" "$vm_out" "$nat_out"
@@ -954,7 +981,7 @@ if command -v gcc >/dev/null 2>&1; then
         vm_out=$(build/calcvm build/n_$tcase.vm.cexe | strip_cr)
 
         build/calcnat tests/$tcase.calc build/n_$tcase.s
-        gcc build/n_$tcase.s src/runtime_x64.c src/regex.c -Iinclude -o build/n_$tcase.exe
+        gcc build/n_$tcase.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/n_$tcase.exe
         nat_out=$(build/n_$tcase.exe | strip_cr)
 
         check "native_$tcase" "$vm_out" "$nat_out"

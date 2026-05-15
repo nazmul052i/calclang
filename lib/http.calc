@@ -1,0 +1,55 @@
+// http.calc — small HTTP convenience layer on the http_* builtins.
+// Most engineering scripts that fetch data want one of three things:
+// a JSON response parsed into a CalcLang value, a download-to-string
+// for further processing, or a one-shot POST with a JSON body and
+// status check.
+
+import "json";
+
+pub struct HttpResp {
+    status: num,
+    body: str,
+    ok: num,           // 1 iff 2xx
+}
+
+priv fn _wrap(body) {
+    let s = http_status();
+    let ok = (s >= 200 && s < 300) ? 1 : 0;
+    return HttpResp(s, body, ok);
+}
+
+pub fn http_fetch(url) {
+    let body = http_get(url);
+    return _wrap(body);
+}
+
+pub fn http_send(url, body) {
+    let resp_body = http_post(url, body);
+    return _wrap(resp_body);
+}
+
+pub fn http_send_json(url, body) {
+    let resp_body = http_post_json(url, body);
+    return _wrap(resp_body);
+}
+
+// Fetch a URL and parse the response body as JSON. Throws on parse
+// failure; check status() before calling if you want a soft mode.
+pub fn http_get_json(url) {
+    let body = http_get(url);
+    if (http_status() < 200 || http_status() >= 300) {
+        throw "http_get_json: status " + http_status() + " for " + url;
+    }
+    return json_parse(body);
+}
+
+// POST a CalcLang value (will be encoded as JSON) and parse the
+// JSON response back. Convenient for REST-style APIs.
+pub fn http_post_value(url, value) {
+    let body = json_encode(value);
+    let resp = http_post_json(url, body);
+    if (http_status() < 200 || http_status() >= 300) {
+        throw "http_post_value: status " + http_status() + " for " + url;
+    }
+    return json_parse(resp);
+}

@@ -2304,6 +2304,396 @@ Value cl_builtin_regex_replace(Value pat_v, Value text_v, Value rep_v) {
     return v;
 }
 
+/* --- HTTP client (WinHTTP) -------------------------------------- */
+
+#ifdef _WIN32
+/* WinHTTP entrypoints — declared by hand so we don't include the
+   ~500-line winhttp.h just to use four functions. */
+typedef void *HINTERNET;
+typedef wchar_t WCHAR;
+typedef unsigned int   DWORDX;
+__declspec(dllimport) void *__stdcall WinHttpOpen(const WCHAR *user_agent,
+    DWORDX access_type, const WCHAR *proxy, const WCHAR *proxy_bypass,
+    DWORDX flags);
+__declspec(dllimport) void *__stdcall WinHttpConnect(void *session,
+    const WCHAR *host, unsigned short port, DWORDX reserved);
+__declspec(dllimport) void *__stdcall WinHttpOpenRequest(void *connect,
+    const WCHAR *verb, const WCHAR *path, const WCHAR *version,
+    const WCHAR *referrer, const WCHAR **accept_types, DWORDX flags);
+__declspec(dllimport) int __stdcall WinHttpSendRequest(void *req,
+    const WCHAR *headers, DWORDX headers_length,
+    void *data, DWORDX data_length, DWORDX total_length, void *context);
+__declspec(dllimport) int __stdcall WinHttpReceiveResponse(void *req,
+    void *reserved);
+__declspec(dllimport) int __stdcall WinHttpQueryDataAvailable(void *req,
+    DWORDX *available);
+__declspec(dllimport) int __stdcall WinHttpReadData(void *req,
+    void *buf, DWORDX to_read, DWORDX *read);
+__declspec(dllimport) int __stdcall WinHttpQueryHeaders(void *req,
+    DWORDX info_level, const WCHAR *name, void *buf, DWORDX *buf_len,
+    DWORDX *index);
+__declspec(dllimport) int __stdcall WinHttpCloseHandle(void *handle);
+__declspec(dllimport) int __stdcall WinHttpCrackUrl(const WCHAR *url,
+    DWORDX url_length, DWORDX flags, void *components);
+#define WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY 4
+#define WINHTTP_FLAG_SECURE                 0x00800000
+#define WINHTTP_QUERY_STATUS_CODE           19
+#define WINHTTP_QUERY_FLAG_NUMBER           0x20000000
+
+/* URL_COMPONENTS struct (Windows). Pad fields manually to avoid a
+   header dependency. */
+typedef struct {
+    DWORDX dwStructSize;
+    const WCHAR *lpszScheme;
+    DWORDX dwSchemeLength;
+    DWORDX nScheme;
+    const WCHAR *lpszHostName;
+    DWORDX dwHostNameLength;
+    unsigned short nPort;
+    const WCHAR *lpszUserName;
+    DWORDX dwUserNameLength;
+    const WCHAR *lpszPassword;
+    DWORDX dwPasswordLength;
+    const WCHAR *lpszUrlPath;
+    DWORDX dwUrlPathLength;
+    const WCHAR *lpszExtraInfo;
+    DWORDX dwExtraInfoLength;
+} URL_COMPS;
+
+/* Last HTTP status code — read by http_status(). */
+static int g_last_http_status = 0;
+
+/* Convert UTF-8 to wide string (heap-allocated, caller frees). */
+__declspec(dllimport) int __stdcall MultiByteToWideChar(unsigned int cp,
+    unsigned long flags, const char *in, int in_len, WCHAR *out, int out_len);
+static WCHAR *utf8_to_wide(const char *s, int len) {
+    int wlen = MultiByteToWideChar(65001 /* UTF-8 */, 0, s, len, NULL, 0);
+    if (wlen <= 0) return NULL;
+    WCHAR *w = (WCHAR *)malloc(sizeof(WCHAR) * (size_t)(wlen + 1));
+    if (!w) return NULL;
+    MultiByteToWideChar(65001, 0, s, len, w, wlen);
+    w[wlen] = 0;
+    return w;
+}
+
+/* Perform an HTTP request. Returns response body as a CalcLang
+   string (empty on failure). Updates g_last_http_status. */
+static Value http_request(const char *method, const char *url,
+                          const char *body, int body_len,
+                          const char *content_type) {
+    g_last_http_status = 0;
+    WCHAR *url_w = utf8_to_wide(url, -1);
+    if (!url_w) return cl_new_str("", 0);
+
+    /* Crack the URL into pieces. */
+    URL_COMPS uc;
+    memset(&uc, 0, sizeof uc);
+    uc.dwStructSize = sizeof uc;
+    /* We need pointers into the URL string — set the length-fields
+       to non-zero so WinHttpCrackUrl returns pointers. */
+    WCHAR scheme[16], host[256], path[2048];
+    uc.lpszScheme       = scheme; uc.dwSchemeLength       = 16;
+    uc.lpszHostName     = host;   uc.dwHostNameLength     = 256;
+    uc.lpszUrlPath      = path;   uc.dwUrlPathLength      = 2048;
+    if (!WinHttpCrackUrl(url_w, 0, 0, &uc)) {
+        free(url_w);
+        return cl_new_str("", 0);
+    }
+
+    void *session = WinHttpOpen(L"CalcLang/1.0",
+        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, NULL, NULL, 0);
+    if (!session) { free(url_w); return cl_new_str("", 0); }
+    void *conn = WinHttpConnect(session, uc.lpszHostName, uc.nPort, 0);
+    if (!conn) { WinHttpCloseHandle(session); free(url_w); return cl_new_str("", 0); }
+
+    WCHAR *method_w = utf8_to_wide(method, -1);
+    int secure = (uc.nScheme == 2);  /* INTERNET_SCHEME_HTTPS = 2 */
+    DWORDX req_flags = secure ? WINHTTP_FLAG_SECURE : 0;
+    void *req = WinHttpOpenRequest(conn, method_w,
+        uc.lpszUrlPath, NULL, NULL, NULL, req_flags);
+    free(method_w);
+    if (!req) { WinHttpCloseHandle(conn); WinHttpCloseHandle(session); free(url_w); return cl_new_str("", 0); }
+
+    /* Optional Content-Type header. */
+    WCHAR *ct_header = NULL;
+    int ct_header_len = 0;
+    if (content_type && *content_type) {
+        char hbuf[256];
+        snprintf(hbuf, sizeof hbuf, "Content-Type: %s\r\n", content_type);
+        ct_header = utf8_to_wide(hbuf, -1);
+        ct_header_len = ct_header ? (int)wcslen(ct_header) : 0;
+    }
+    int ok = WinHttpSendRequest(req,
+        ct_header, (DWORDX)ct_header_len,
+        (void *)body, (DWORDX)body_len,
+        (DWORDX)body_len, NULL);
+    if (ct_header) free(ct_header);
+    if (!ok || !WinHttpReceiveResponse(req, NULL)) {
+        WinHttpCloseHandle(req); WinHttpCloseHandle(conn);
+        WinHttpCloseHandle(session); free(url_w);
+        return cl_new_str("", 0);
+    }
+
+    /* Status code. */
+    DWORDX status = 0, status_size = sizeof status;
+    WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+        NULL, &status, &status_size, NULL);
+    g_last_http_status = (int)status;
+
+    /* Read body in chunks into a growing buffer. */
+    size_t cap = 4096, len_out = 0;
+    char *buf = (char *)malloc(cap);
+    if (!buf) {
+        WinHttpCloseHandle(req); WinHttpCloseHandle(conn);
+        WinHttpCloseHandle(session); free(url_w);
+        return cl_new_str("", 0);
+    }
+    for (;;) {
+        DWORDX avail = 0;
+        if (!WinHttpQueryDataAvailable(req, &avail) || avail == 0) break;
+        if (len_out + avail + 1 > cap) {
+            while (len_out + avail + 1 > cap) cap *= 2;
+            char *nb = (char *)realloc(buf, cap);
+            if (!nb) break;
+            buf = nb;
+        }
+        DWORDX read = 0;
+        if (!WinHttpReadData(req, buf + len_out, avail, &read) || read == 0) break;
+        len_out += read;
+    }
+
+    WinHttpCloseHandle(req);
+    WinHttpCloseHandle(conn);
+    WinHttpCloseHandle(session);
+    free(url_w);
+
+    Value v = cl_new_str(buf, (uint64_t)len_out);
+    free(buf);
+    return v;
+}
+#endif  /* _WIN32 */
+
+/* http_get(url) — fetch a URL via HTTP/HTTPS. Returns the response
+   body as a string. Empty string on failure. Status code is
+   available via http_status(). */
+Value cl_builtin_http_get(Value url_v) {
+    require_str(url_v, "http_get");
+    CalcStr *url = cl_as_str(url_v);
+#ifdef _WIN32
+    return http_request("GET", url->data, NULL, 0, NULL);
+#else
+    (void)url;
+    return cl_new_str("", 0);
+#endif
+}
+
+/* http_post(url, body) — POST `body` as application/x-www-form-urlencoded
+   (or set the content type via headers if you need something else;
+   for now the body is sent with that default Content-Type). Returns
+   the response body; empty on failure. */
+Value cl_builtin_http_post(Value url_v, Value body_v) {
+    require_str(url_v,  "http_post");
+    require_str(body_v, "http_post");
+    CalcStr *url  = cl_as_str(url_v);
+    CalcStr *body = cl_as_str(body_v);
+#ifdef _WIN32
+    return http_request("POST", url->data, body->data, (int)body->len,
+        "application/x-www-form-urlencoded");
+#else
+    (void)url; (void)body;
+    return cl_new_str("", 0);
+#endif
+}
+
+/* http_post_json(url, json_body) — same as http_post but sends with
+   Content-Type: application/json. */
+Value cl_builtin_http_post_json(Value url_v, Value body_v) {
+    require_str(url_v,  "http_post_json");
+    require_str(body_v, "http_post_json");
+    CalcStr *url  = cl_as_str(url_v);
+    CalcStr *body = cl_as_str(body_v);
+#ifdef _WIN32
+    return http_request("POST", url->data, body->data, (int)body->len,
+        "application/json");
+#else
+    (void)url; (void)body;
+    return cl_new_str("", 0);
+#endif
+}
+
+/* --- Typed-integer helpers (lite) -------------------------------- */
+/* CalcLang's value model is still f64 throughout. These helpers let
+   you do binary-format / hashing / bit-twiddling work with explicit
+   wrap-around semantics — which f64 arithmetic can't express on its
+   own once you cross 2^53. A real typed-integer type system is on
+   the roadmap; these are the stopgap. */
+
+#include <stdint.h>
+
+Value cl_builtin_wrap_u32(Value v) {
+    require_num(v, "wrap_u32");
+    double d = cl_as_num(v);
+    uint32_t u = (uint32_t)(int64_t)d;
+    return cl_from_num((double)u);
+}
+Value cl_builtin_wrap_i32(Value v) {
+    require_num(v, "wrap_i32");
+    double d = cl_as_num(v);
+    int32_t i = (int32_t)(int64_t)d;
+    return cl_from_num((double)i);
+}
+Value cl_builtin_wrap_u64(Value v) {
+    require_num(v, "wrap_u64");
+    double d = cl_as_num(v);
+    /* As a double we can only represent uint64 exactly up to 2^53.
+       Beyond that, this is best-effort. */
+    uint64_t u = (uint64_t)(int64_t)d;
+    return cl_from_num((double)u);
+}
+
+/* parse_hex(s) — parse a hex string ("DEADBEEF", "0xff", "0XCAFE")
+   and return as a num. */
+Value cl_builtin_parse_hex(Value sv) {
+    require_str(sv, "parse_hex");
+    CalcStr *s = cl_as_str(sv);
+    const char *p = s->data;
+    int        n  = (int)s->len;
+    int        i  = 0;
+    if (n >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) i = 2;
+    uint64_t   v  = 0;
+    for (; i < n; i++) {
+        char c = p[i];
+        int  d = -1;
+        if (c >= '0' && c <= '9') d = c - '0';
+        else if (c >= 'a' && c <= 'f') d = 10 + (c - 'a');
+        else if (c >= 'A' && c <= 'F') d = 10 + (c - 'A');
+        else if (c == '_') continue;
+        else { cl_die_rt("parse_hex: invalid hex digit"); }
+        v = (v << 4) | (uint64_t)d;
+    }
+    return cl_from_num((double)v);
+}
+
+/* to_hex(n) — format a number as a lowercase hex string (no 0x). */
+Value cl_builtin_to_hex(Value v) {
+    require_num(v, "to_hex");
+    uint64_t u = (uint64_t)(int64_t)cl_as_num(v);
+    char buf[32];
+    int  i = 0;
+    if (u == 0) { buf[i++] = '0'; }
+    while (u > 0) {
+        int d = (int)(u & 0xF);
+        buf[i++] = (char)(d < 10 ? '0' + d : 'a' + d - 10);
+        u >>= 4;
+    }
+    /* Reverse in place. */
+    char rev[32];
+    for (int j = 0; j < i; j++) rev[j] = buf[i - 1 - j];
+    return cl_new_str(rev, (uint64_t)i);
+}
+
+/* to_bin(n) — format a number as a binary string (no 0b prefix). */
+Value cl_builtin_to_bin(Value v) {
+    require_num(v, "to_bin");
+    uint64_t u = (uint64_t)(int64_t)cl_as_num(v);
+    char buf[80];
+    int  i = 0;
+    if (u == 0) { buf[i++] = '0'; }
+    while (u > 0) {
+        buf[i++] = (char)('0' + (u & 1));
+        u >>= 1;
+    }
+    char rev[80];
+    for (int j = 0; j < i; j++) rev[j] = buf[i - 1 - j];
+    return cl_new_str(rev, (uint64_t)i);
+}
+
+/* bit_count(n) — popcount of the low 64 bits. */
+Value cl_builtin_bit_count(Value v) {
+    require_num(v, "bit_count");
+    uint64_t u = (uint64_t)(int64_t)cl_as_num(v);
+    int      n = 0;
+    while (u) { n += (int)(u & 1); u >>= 1; }
+    return cl_from_num((double)n);
+}
+
+/* hash_u32(s) — FNV-1a 32-bit hash. */
+Value cl_builtin_hash_u32(Value sv) {
+    require_str(sv, "hash_u32");
+    CalcStr *s = cl_as_str(sv);
+    uint32_t h = 0x811c9dc5u;
+    for (uint64_t i = 0; i < s->len; i++) {
+        h ^= (uint8_t)s->data[i];
+        h *= 0x01000193u;
+    }
+    return cl_from_num((double)h);
+}
+
+/* hash_u64(s) — FNV-1a 64-bit hash. */
+Value cl_builtin_hash_u64(Value sv) {
+    require_str(sv, "hash_u64");
+    CalcStr *s = cl_as_str(sv);
+    uint64_t h = 0xcbf29ce484222325ULL;
+    for (uint64_t i = 0; i < s->len; i++) {
+        h ^= (uint8_t)s->data[i];
+        h *= 0x100000001b3ULL;
+    }
+    return cl_from_num((double)h);
+}
+
+/* --- Debugger lite ----------------------------------------------- */
+/* assert(cond, msg) — if cond is falsy, throws an exception with msg
+   prefixed by "assertion failed:". For tests and pre-conditions. */
+Value cl_builtin_assert(Value cond_v, Value msg_v) {
+    require_num(cond_v, "assert");
+    double c = cl_as_num(cond_v);
+    if (c != 0.0) return cl_from_num(1.0);
+    /* Failed — build "assertion failed: <msg>" and throw. */
+    require_str(msg_v, "assert");
+    CalcStr *m = cl_as_str(msg_v);
+    char buf[512];
+    int n = snprintf(buf, sizeof buf, "assertion failed: %.*s",
+        (int)m->len, m->data);
+    if (n < 0) n = 0;
+    if (n >= (int)sizeof buf) n = (int)sizeof buf - 1;
+    cl_throw(cl_new_str(buf, (uint64_t)n));
+    return cl_from_num(0.0);  /* unreachable */
+}
+
+/* trace(label) — write a timestamped trace line to stderr. Does NOT
+   affect program state — useful for debugging long-running programs
+   where adding `print` would interleave with output. */
+Value cl_builtin_trace(Value label_v) {
+    require_str(label_v, "trace");
+    CalcStr *s = cl_as_str(label_v);
+    /* Pull wall-clock time for a useful timestamp. */
+    Value tv = cl_builtin_epoch_ms();
+    double ms = cl_as_num(tv);
+    time_t sec = (time_t)(ms / 1000);
+    struct tm t;
+#ifdef _WIN32
+    gmtime_s(&t, &sec);
+#else
+    gmtime_r(&sec, &t);
+#endif
+    fprintf(stderr, "[TRACE %02d:%02d:%02d.%03d] %.*s\n",
+        t.tm_hour, t.tm_min, t.tm_sec, (int)(((long long)ms) % 1000),
+        (int)s->len, s->data);
+    fflush(stderr);
+    return cl_from_num(0.0);
+}
+
+/* http_status() — last HTTP status code (200 / 404 / 500 / etc.).
+   Zero if no HTTP request has been made yet, or the last request
+   failed before reading a status. */
+Value cl_builtin_http_status(void) {
+#ifdef _WIN32
+    return cl_from_num((double)g_last_http_status);
+#else
+    return cl_from_num(0.0);
+#endif
+}
+
 /* regex_split(pattern, text) — split text on every match of pattern.
    Returns array of strings (the segments BETWEEN matches). */
 Value cl_builtin_regex_split(Value pat_v, Value text_v) {

@@ -617,6 +617,29 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"regex_replace",   "cl_builtin_regex_replace",   3},
     {"regex_split",     "cl_builtin_regex_split",     2},
 
+    /* HTTP client (WinHTTP on Windows). */
+    {"http_get",        "cl_builtin_http_get",        1},
+    {"http_post",       "cl_builtin_http_post",       2},
+    {"http_post_json",  "cl_builtin_http_post_json",  2},
+    {"http_status",     "cl_builtin_http_status",     0},
+
+    /* Typed-integer helpers — explicit wrap-around for hashing /
+       binary-format work. f64 doesn't preserve integer semantics
+       beyond 2^53; these do. */
+    {"wrap_u32",        "cl_builtin_wrap_u32",        1},
+    {"wrap_i32",        "cl_builtin_wrap_i32",        1},
+    {"wrap_u64",        "cl_builtin_wrap_u64",        1},
+    {"parse_hex",       "cl_builtin_parse_hex",       1},
+    {"to_hex",          "cl_builtin_to_hex",          1},
+    {"to_bin",          "cl_builtin_to_bin",          1},
+    {"bit_count",       "cl_builtin_bit_count",       1},
+    {"hash_u32",        "cl_builtin_hash_u32",        1},
+    {"hash_u64",        "cl_builtin_hash_u64",        1},
+
+    /* Debugger-lite — assertions + trace. */
+    {"assert",          "cl_builtin_assert",          2},
+    {"trace",           "cl_builtin_trace",           1},
+
     /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
        helpers built on top. */
     {"gui_init",        "cl_builtin_gui_init",        3},
