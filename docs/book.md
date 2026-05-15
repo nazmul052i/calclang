@@ -2944,6 +2944,40 @@ The library adds:
 - **Validators**: `is_integer`, `is_number`, `is_email`, `is_ipv4`, `is_hex`, `is_iso_date` — each returns 1 or 0.
 - **Whitespace utilities**: `collapse_whitespace`, `trim_around`.
 
+### Indexing sugar: `m[i, j]` and 1-D slicing
+
+CalcLang now accepts two NumPy-style shorthands inside `[ ... ]`:
+
+#### Chained multi-index — `m[i, j, k, ...]`
+
+`m[i, j]` desugars to `m[i][j]`, `m[i, j, k]` to `m[i][j][k]`, and so on. Just a parser-level rewrite, no runtime changes. Saves the visual noise of stacked brackets when walking matrices, cubes, etc.
+
+```calc
+let m = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+print m[1, 2];                  // 6
+let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+print cube[1, 0, 1];            // 6
+```
+
+#### 1-D slicing — `m[lo:hi]`, `m[:hi]`, `m[lo:]`, `m[:]`
+
+`m[lo:hi]` desugars to a call to `array_slice(m, lo, hi)`. Omit either bound to default to 0 / `len(m)`; the bare `[:]` returns a copy.
+
+```calc
+let a = [10, 20, 30, 40, 50];
+print a[1:4];                   // [20, 30, 40]
+print a[:3];                    // [10, 20, 30]
+print a[2:];                    // [30, 40, 50]
+print a[:];                     // [10, 20, 30, 40, 50]
+print make_arr()[1:3];          // works on any expression
+```
+
+**Current limits:**
+
+- 2-D slicing (`m[1:5, :]` to select rows-and-all-columns) isn't supported yet — that would require a matrix-slice primitive in the runtime. For now, use `array_slice(m, 1, 5)` for row slicing and a loop for column-wise extraction.
+- Mixing slice with comma inside one bracket (`m[1, 0:2]`) is rejected; use the chained form (`m[1][0:2]`) instead.
+- Slicing of an expression like `make_arr()[5:]` evaluates the expression twice when the upper bound is omitted (to compute `len(...)`). For variable reads this is free; for side-effecting calls, bind to a `let` first.
+
 ### Vectorized math, scientific constants, and IEEE-754 predicates
 
 CalcLang already had `lib/linalg`, `lib/stats`, `lib/nr/`, etc. for numerical work, but every element-wise operation forced you to write a loop. The scientific bundle adds NumPy/Fortran-style ergonomics on top.

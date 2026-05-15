@@ -133,9 +133,11 @@ static AST *parse_primary(Parser *p) {
     exit(1);
 }
 
-/* Postfix chain. Accepts `[expr]`, `.identifier`, and `(args)`. The
-   dot form is sugar for `["identifier"]` (struct-like field access on
-   maps). The parenthesised form is an indirect call — `obj.method(a)`
+/* Postfix chain. Accepts `[expr]`, `.identifier`, `(args)`, and
+   the NumPy-style extensions `[i, j]` (chained indexing) and
+   `[lo:hi]` / `[:hi]` / `[lo:]` / `[:]` (1-D slicing). The dot form
+   is sugar for `["identifier"]` (struct-like field access on maps).
+   The parenthesised form is an indirect call — `obj.method(a)`
    parses as `(obj["method"])(a)`. */
 static AST *parse_postfix(Parser *p) {
     AST *n = parse_primary(p);
@@ -144,9 +146,56 @@ static AST *parse_postfix(Parser *p) {
         || p->current.type == TOK_LPAREN) {
         if (p->current.type == TOK_LBRACKET) {
             next(p);
-            AST *idx = parse_expr(p);
-            expect(p, TOK_RBRACKET);
-            n = ast_index(n, idx);
+            /* Two opening cases: `[expr ...` or `[: ...`. The latter
+               means slice-from-start. */
+            AST *first = NULL;
+            if (p->current.type != TOK_COLON) {
+                first = parse_expr(p);
+            }
+            if (p->current.type == TOK_COLON) {
+                /* Slice: `[lo:hi]`, `[:hi]`, `[lo:]`, or `[:]`. Desugar
+                   to a call to array_slice(target, lo, hi). When lo is
+                   omitted it defaults to 0; when hi is omitted, len(target).
+                   Note: target is evaluated twice when hi is omitted —
+                   acceptable for the common variable-read case. */
+                next(p);
+                AST *hi = NULL;
+                if (p->current.type != TOK_RBRACKET && p->current.type != TOK_COMMA) {
+                    hi = parse_expr(p);
+                }
+                /* 2-D slice forms like `m[1:5, :]` aren't supported yet;
+                   if a comma follows, drop everything through to the `]`. */
+                if (p->current.type == TOK_COMMA) {
+                    while (p->current.type != TOK_RBRACKET && p->current.type != TOK_EOF) {
+                        next(p);
+                    }
+                }
+                expect(p, TOK_RBRACKET);
+                AST *lo_v = first ? first : ast_number(0);
+                AST *hi_v = hi;
+                if (!hi_v) {
+                    hi_v = ast_call("len");
+                    ast_call_add_arg(hi_v, n);
+                }
+                AST *call = ast_call("array_slice");
+                ast_call_add_arg(call, n);
+                ast_call_add_arg(call, lo_v);
+                ast_call_add_arg(call, hi_v);
+                n = call;
+            } else if (p->current.type == TOK_COMMA) {
+                /* Multi-dim indexing: m[i, j, k] -> ((m[i])[j])[k]. */
+                n = ast_index(n, first);
+                while (p->current.type == TOK_COMMA) {
+                    next(p);
+                    AST *more = parse_expr(p);
+                    n = ast_index(n, more);
+                }
+                expect(p, TOK_RBRACKET);
+            } else {
+                /* Plain single-index m[i] — what we've always done. */
+                expect(p, TOK_RBRACKET);
+                n = ast_index(n, first);
+            }
         } else if (p->current.type == TOK_DOT) {
             next(p);
             Token field = expect(p, TOK_IDENTIFIER);

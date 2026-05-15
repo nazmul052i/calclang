@@ -1,0 +1,48 @@
+// Indexing sugar tests — m[i, j] chained indexing + 1D slicing.
+
+// 1D slicing.
+let a = [10, 20, 30, 40, 50];
+print a[1:4];                      // [20, 30, 40]
+print a[:3];                       // [10, 20, 30]
+print a[2:];                       // [30, 40, 50]
+print a[:];                        // [10, 20, 30, 40, 50]
+print a[0:0];                      // []  empty
+print a[5:5];                      // []  empty at end
+print len(a[:]);                   // 5  copy preserves length
+
+// Slice from a function call (target evaluated twice when hi omitted —
+// document this is OK for variable reads).
+fn make_arr() { return [1, 2, 3, 4]; }
+print make_arr()[1:3];             // [2, 3]
+
+// Matrix-style indexing: m[i, j] desugars to m[i][j].
+let m = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+print m[0, 0];                      // 1
+print m[1, 1];                      // 5
+print m[2, 2];                      // 9
+print m[0, 2] + m[2, 0];            // 3 + 7 = 10
+
+// 3D chained.
+let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+print cube[0, 0, 0];                // 1
+print cube[0, 1, 1];                // 4
+print cube[1, 0, 1];                // 6
+print cube[1, 1, 0];                // 7
+
+// Mix indexing and slicing (use the chained form for slice-within-multi-index).
+print m[0];                          // [1, 2, 3]
+print m[0][1:];                      // [2, 3]
+print m[1][0:2];                     // [4, 5]
+
+// Iterate using comma indexing.
+let total = 0;
+for r in 0..3 {
+    for c in 0..3 {
+        total = total + m[r, c];
+    }
+}
+print total;                        // 45
+
+// Single-index still works.
+print a[0];                          // 10
+print a[len(a) - 1];                 // 50

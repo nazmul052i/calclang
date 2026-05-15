@@ -118,6 +118,32 @@ pi = 3.1416
 1010
 one + two = 3' "$out"
 
+echo "[test] indexing sugar (m[i,j] chained + 1D slicing m[lo:hi])"
+build/calcnat tests/index_slice.calc -o build/d_idx.exe
+out=$(build/d_idx.exe | strip_cr)
+check "index_slice" '[20, 30, 40]
+[10, 20, 30]
+[30, 40, 50]
+[10, 20, 30, 40, 50]
+[]
+[]
+5
+[2, 3]
+1
+5
+9
+10
+1
+4
+6
+7
+[1, 2, 3]
+[2, 3]
+[4, 5]
+45
+10
+50' "$out"
+
 echo "[test] vec / extended stats / constants / NaN-Inf predicates"
 build/calcnat tests/vec_stats_constants.calc -o build/d_vsc.exe
 out=$(build/d_vsc.exe | strip_cr)
