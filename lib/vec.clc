@@ -1,4 +1,4 @@
-// vec.calc — NumPy/Fortran-style element-wise array operations,
+// vec.clc — NumPy/Fortran-style element-wise array operations,
 // broadcasting, and BLAS-1 staples.
 //
 // Every binary op accepts either (array, array) of equal length or

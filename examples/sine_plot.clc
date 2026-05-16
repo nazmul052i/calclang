@@ -1,7 +1,7 @@
 // Generate a sine wave and plot it to SVG.
 //
 // Build:
-//   build/calcnat examples/sine_plot.calc -o build/sine_plot.exe
+//   bin/clc examples/sine_plot.clc -o build/sine_plot.exe
 //   build/sine_plot.exe
 //
 // Output: build/sine.svg — open in any browser.

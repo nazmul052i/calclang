@@ -1,9 +1,9 @@
 // Monte Carlo estimate of π by counting points inside a quarter-
 // circle, plus a normal-distribution sample summary. Demonstrates
-// random.calc and stats.calc working together.
+// random.clc and stats.clc working together.
 //
 // Build:
-//   build/calcnat examples/monte_carlo.calc -o build/monte_carlo.exe
+//   bin/clc examples/monte_carlo.clc -o build/monte_carlo.exe
 
 import "random";
 import "stats";

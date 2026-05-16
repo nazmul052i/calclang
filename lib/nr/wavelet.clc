@@ -1,4 +1,4 @@
-// wavelet.calc — discrete wavelet transforms (Haar and Daubechies-4).
+// wavelet.clc — discrete wavelet transforms (Haar and Daubechies-4).
 //
 // Each level of the transform applies the wavelet's lowpass and
 // highpass quadrature-mirror filter pair, downsamples by 2, and then

@@ -1,7 +1,7 @@
 // Solve a small linear system with the matrix library.
 //
 // Build:
-//   build/calcnat examples/linsys.calc -o build/linsys.exe
+//   bin/clc examples/linsys.clc -o build/linsys.exe
 //   build/linsys.exe
 
 import "linalg";

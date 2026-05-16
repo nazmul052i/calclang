@@ -1,7 +1,7 @@
-// stats.calc — a tiny statistics library.
+// stats.clc — a tiny statistics library.
 // Build with:
-//   build/calcc   examples/multi/stats.calc build/stats.casm
-//   build/calcasm build/stats.casm           build/stats.co
+//   bin/calcc   examples/multi/stats.clc build/stats.casm
+//   bin/calcasm build/stats.casm           build/stats.co
 // Then link with the caller via `calcld <main>.co stats.co out.cexe`.
 
 pub fn sum(arr: arr): num {

@@ -1,4 +1,4 @@
-// Library file: defines functions used from main.calc.
+// Library file: defines functions used from main.clc.
 // `pub fn` is exported as a global symbol; bare `fn` stays file-local.
 
 pub fn add(a: num, b: num): num {

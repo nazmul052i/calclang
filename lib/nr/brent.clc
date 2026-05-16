@@ -1,4 +1,4 @@
-// brent.calc — Brent's method root finder.
+// brent.clc — Brent's method root finder.
 //
 // A bracketed root finder that combines bisection's reliability with
 // secant / inverse-quadratic interpolation's speed. Always converges

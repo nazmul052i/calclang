@@ -1,4 +1,4 @@
-// switch_stmt.calc — switch on num and str, with break, default, nested.
+// switch_stmt.clc — switch on num and str, with break, default, nested.
 
 fn day_name(d) {
     switch (d) {

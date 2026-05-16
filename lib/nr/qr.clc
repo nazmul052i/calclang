@@ -1,4 +1,4 @@
-// qr.calc — QR decomposition by Householder reflections.
+// qr.clc — QR decomposition by Householder reflections.
 //
 // For an m x n matrix A with m >= n, computes A = Q R where Q is m x m
 // orthogonal and R is m x n upper triangular. Then any linear system or

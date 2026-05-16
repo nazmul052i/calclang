@@ -1,7 +1,7 @@
 // Tier-5 NR demo: QR + SVD + Laguerre poly roots + convolution.
 //
 // Build:
-//   build/calcnat examples/nr_demo5.calc -o build/nr_demo5.exe
+//   bin/clc examples/nr_demo5.clc -o build/nr_demo5.exe
 
 import "nr.qr";
 import "nr.svd";

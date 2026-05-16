@@ -1,4 +1,4 @@
-// kalman.calc — discrete-time Kalman filter.
+// kalman.clc — discrete-time Kalman filter.
 //
 // State-space model:
 //   x_k   = F x_{k-1} + B u_{k-1} + w,   w ~ N(0, Q)   (process noise)

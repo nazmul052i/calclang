@@ -1,4 +1,4 @@
-// bitwise.calc — bitwise operators + hex/binary literals.
+// bitwise.clc — bitwise operators + hex/binary literals.
 
 // ===== Basic operators =====
 print 5 & 3;            // 1

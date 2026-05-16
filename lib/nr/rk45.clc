@@ -1,4 +1,4 @@
-// rk45.calc — adaptive Runge-Kutta-Cash-Karp for scalar ODEs.
+// rk45.clc — adaptive Runge-Kutta-Cash-Karp for scalar ODEs.
 //
 // One Cash-Karp step computes both a 5th-order estimate and a 4th-
 // order estimate from the same six function evaluations. Their

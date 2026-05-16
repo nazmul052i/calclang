@@ -8,10 +8,10 @@ strip_cr() { tr -d '\r'; }
 
 run() {
     name="$1"
-    build/calcc   "tests/$name.calc" "build/$name.casm"
-    build/calcasm "build/$name.casm" "build/$name.co"
-    build/calcld  "build/$name.co"   "build/$name.cexe"
-    build/calcvm  "build/$name.cexe" | strip_cr
+    bin/calcc   "tests/$name.clc" "build/$name.casm"
+    bin/calcasm "build/$name.casm" "build/$name.co"
+    bin/calcld  "build/$name.co"   "build/$name.cexe"
+    bin/calcvm  "build/$name.cexe" | strip_cr
 }
 
 check() {
@@ -31,8 +31,8 @@ check "arithmetic" '20
 10' "$out"
 
 echo "[test] import — self-contained, no --lib step"
-# import "math" should resolve to lib/math.calc and inline bodies.
-build/calcnat tests/import.calc -o build/d_import.exe
+# import "math" should resolve to lib/math.clc and inline bodies.
+bin/calcnat tests/import.clc -o build/d_import.exe
 nat_out=$(build/d_import.exe | strip_cr)
 check "import" '49
 64
@@ -119,7 +119,7 @@ pi = 3.1416
 one + two = 3' "$out"
 
 echo "[test] indexing sugar (m[i,j] chained + 1D slicing m[lo:hi])"
-build/calcnat tests/index_slice.calc -o build/d_idx.exe
+bin/calcnat tests/index_slice.clc -o build/d_idx.exe
 out=$(build/d_idx.exe | strip_cr)
 check "index_slice" '[20, 30, 40]
 [10, 20, 30]
@@ -145,7 +145,7 @@ check "index_slice" '[20, 30, 40]
 50' "$out"
 
 echo "[test] vec / extended stats / constants / NaN-Inf predicates"
-build/calcnat tests/vec_stats_constants.calc -o build/d_vsc.exe
+bin/calcnat tests/vec_stats_constants.clc -o build/d_vsc.exe
 out=$(build/d_vsc.exe | strip_cr)
 check "vec_stats_constants" '1
 1
@@ -207,7 +207,7 @@ check "vec_stats_constants" '1
 180' "$out"
 
 echo "[test] integer helpers + debugger-lite (parse_hex, hash_u32, assert, trace)"
-build/calcnat tests/intlike_and_debug.calc -o build/d_intlike.exe
+bin/calcnat tests/intlike_and_debug.clc -o build/d_intlike.exe
 # Trace output goes to stderr — drop it so the assertion-printout
 # comparison stays clean.
 out=$(build/d_intlike.exe 2>/dev/null | strip_cr)
@@ -233,8 +233,8 @@ assertions passed
 assertion failed: this should fail
 trace ok' "$out"
 
-echo "[test] regex (engine + builtins + lib/regex.calc helpers)"
-build/calcnat tests/regex.calc -o build/d_regex.exe
+echo "[test] regex (engine + builtins + lib/regex.clc helpers)"
+bin/calcnat tests/regex.clc -o build/d_regex.exe
 out=$(build/d_regex.exe | strip_cr)
 check "regex" '1
 0
@@ -292,7 +292,7 @@ delta
 [year  quarter ]' "$out"
 
 echo "[test] datetime (epoch_ms, time_make, time_components, time_format, lib/datetime)"
-build/calcnat tests/datetime.calc -o build/d_dt.exe
+bin/calcnat tests/datetime.clc -o build/d_dt.exe
 out=$(build/d_dt.exe | strip_cr)
 check "datetime" '1990
 1
@@ -322,7 +322,7 @@ Monday, January 15, 1990
 1' "$out"
 
 echo "[test] struct (typed records — fields, positional ctor, mutation, nesting)"
-build/calcnat tests/struct_record.calc -o build/d_struct.exe
+bin/calcnat tests/struct_record.clc -o build/d_struct.exe
 out=$(build/d_struct.exe | strip_cr)
 check "struct_record" '3
 4
@@ -343,7 +343,7 @@ echo "[test] for-in / range (arr, str, range exclusive/inclusive, parens, classi
 # This one runs through the native pipeline too, since most for-in
 # iteration uses calls like len() / index that already get exercised
 # by the larger native sweep below — keeping it on the VM side here.
-build/calcnat tests/for_in.calc -o build/d_forin.exe
+bin/calcnat tests/for_in.clc -o build/d_forin.exe
 out=$(build/d_forin.exe | strip_cr)
 check "for_in" '10
 20
@@ -535,7 +535,7 @@ check "visibility" '7
 # Visibility also affects the assembler labels and the linker section
 # split. Spot-check that pub becomes a global SYMS entry and bare fn
 # becomes a LOCALSYMS entry.
-build/calcasm build/visibility.casm build/visibility.co
+bin/calcasm build/visibility.casm build/visibility.co
 syms_pub=$(grep -c "^S fn_add"      build/visibility.co || true)
 syms_priv=$(grep -c "^S fn_helper"  build/visibility.co || true)
 locals_pub=$(grep -c "^L fn_add"    build/visibility.co || true)
@@ -560,11 +560,11 @@ anything works
 42' "$out"
 
 # Compile-time check: literal of the wrong type should be rejected.
-cat > build/type_bad_compile.calc <<'EOF'
+cat > build/type_bad_compile.clc <<'EOF'
 fn add(a: num, b: num): num { return a + b; }
 print add("hello", 5);
 EOF
-err=$(build/calcc build/type_bad_compile.calc /dev/null 2>&1 || true)
+err=$(bin/calcc build/type_bad_compile.clc /dev/null 2>&1 || true)
 if ! echo "$err" | grep -q "expected num, got str"; then
     echo "FAIL: compile-time type check did not fire on literal arg"
     echo "  got: $err"
@@ -572,15 +572,15 @@ if ! echo "$err" | grep -q "expected num, got str"; then
 fi
 
 # Runtime check: argument type unknowable at compile time.
-cat > build/type_bad_runtime.calc <<'EOF'
+cat > build/type_bad_runtime.clc <<'EOF'
 fn need_num(x: num): num { return x + 1; }
 fn make_str() { return "oops"; }
 print need_num(make_str());
 EOF
-build/calcc   build/type_bad_runtime.calc build/type_bad_runtime.casm
-build/calcasm build/type_bad_runtime.casm build/type_bad_runtime.co
-build/calcld  build/type_bad_runtime.co   build/type_bad_runtime.cexe
-err=$(build/calcvm build/type_bad_runtime.cexe 2>&1 || true)
+bin/calcc   build/type_bad_runtime.clc build/type_bad_runtime.casm
+bin/calcasm build/type_bad_runtime.casm build/type_bad_runtime.co
+bin/calcld  build/type_bad_runtime.co   build/type_bad_runtime.cexe
+err=$(bin/calcvm build/type_bad_runtime.cexe 2>&1 || true)
 if ! echo "$err" | grep -q "runtime type error"; then
     echo "FAIL: runtime type check did not fire"
     echo "  got: $err"
@@ -588,11 +588,11 @@ if ! echo "$err" | grep -q "runtime type error"; then
 fi
 
 # Arg-count check: wrong number of arguments should be rejected.
-cat > build/type_bad_arity.calc <<'EOF'
+cat > build/type_bad_arity.clc <<'EOF'
 fn add(a: num, b: num): num { return a + b; }
 print add(3);
 EOF
-err=$(build/calcc build/type_bad_arity.calc /dev/null 2>&1 || true)
+err=$(bin/calcc build/type_bad_arity.clc /dev/null 2>&1 || true)
 if ! echo "$err" | grep -q "takes 2 args, got 1"; then
     echo "FAIL: arg-count check did not fire"
     echo "  got: $err"
@@ -602,11 +602,11 @@ fi
 # Compile-time check on the native pipeline (calcnat): the same
 # literal-of-wrong-type call should fire here too. Until recently,
 # calcnat let this slip through.
-cat > build/type_bad_nat.calc <<'EOF'
+cat > build/type_bad_nat.clc <<'EOF'
 fn add(a: num, b: num): num { return a + b; }
 print add("hello", 5);
 EOF
-err=$(build/calcnat build/type_bad_nat.calc -o build/_unused.exe 2>&1 || true)
+err=$(bin/calcnat build/type_bad_nat.clc -o build/_unused.exe 2>&1 || true)
 if ! echo "$err" | grep -q "expected num, got str"; then
     echo "FAIL: calcnat compile-time type check did not fire on literal arg"
     echo "  got: $err"
@@ -615,11 +615,11 @@ fi
 
 # Same check at a struct constructor: type annotations on struct
 # fields are enforced on the auto-generated positional ctor.
-cat > build/type_bad_struct.calc <<'EOF'
+cat > build/type_bad_struct.clc <<'EOF'
 struct Strict { n: num }
 let s = Strict("hello");
 EOF
-err=$(build/calcnat build/type_bad_struct.calc -o build/_unused.exe 2>&1 || true)
+err=$(bin/calcnat build/type_bad_struct.clc -o build/_unused.exe 2>&1 || true)
 if ! echo "$err" | grep -q "expected num, got str"; then
     echo "FAIL: calcnat struct ctor type check did not fire"
     echo "  got: $err"
@@ -627,11 +627,11 @@ if ! echo "$err" | grep -q "expected num, got str"; then
 fi
 
 # Same check at a class constructor (via init's param annotations).
-cat > build/type_bad_class.calc <<'EOF'
+cat > build/type_bad_class.clc <<'EOF'
 class StrictC { fn init(n: num) { this.n = n; } }
 let s = StrictC("hello");
 EOF
-err=$(build/calcnat build/type_bad_class.calc -o build/_unused.exe 2>&1 || true)
+err=$(bin/calcnat build/type_bad_class.clc -o build/_unused.exe 2>&1 || true)
 if ! echo "$err" | grep -q "expected num, got str"; then
     echo "FAIL: calcnat class ctor type check did not fire"
     echo "  got: $err"
@@ -640,16 +640,16 @@ fi
 
 # `any` parameter should accept anything (no compile-time error,
 # no TYPECHECK at runtime).
-cat > build/type_any_ok.calc <<'EOF'
+cat > build/type_any_ok.clc <<'EOF'
 fn flex(x): any { return x; }
 print flex("hi");
 print flex(42);
 print flex([1, 2]);
 EOF
-build/calcc   build/type_any_ok.calc build/type_any_ok.casm
-build/calcasm build/type_any_ok.casm build/type_any_ok.co
-build/calcld  build/type_any_ok.co   build/type_any_ok.cexe
-out=$(build/calcvm build/type_any_ok.cexe | strip_cr)
+bin/calcc   build/type_any_ok.clc build/type_any_ok.casm
+bin/calcasm build/type_any_ok.casm build/type_any_ok.co
+bin/calcld  build/type_any_ok.co   build/type_any_ok.cexe
+out=$(bin/calcvm build/type_any_ok.cexe | strip_cr)
 check "type_any_ok" 'hi
 42
 [1, 2]' "$out"
@@ -805,14 +805,14 @@ check "compound_assign" '15
 96' "$out"
 
 echo "[test] multi-file linking (extern fn + pub fn across .co files)"
-build/calcc   tests/multi/main.calc build/multi_main.casm
-build/calcc   tests/multi/lib.calc  build/multi_lib.casm
-build/calcasm build/multi_main.casm build/multi_main.co
-build/calcasm build/multi_lib.casm  build/multi_lib.co
+bin/calcc   tests/multi/main.clc build/multi_main.casm
+bin/calcc   tests/multi/lib.clc  build/multi_lib.casm
+bin/calcasm build/multi_main.casm build/multi_main.co
+bin/calcasm build/multi_lib.casm  build/multi_lib.co
 # main.co MUST come first: the entry point is the top-level code of
 # the first object file. lib.co contributes only function bodies.
-build/calcld  build/multi_main.co build/multi_lib.co build/multi.cexe
-out=$(build/calcvm build/multi.cexe | strip_cr)
+bin/calcld  build/multi_main.co build/multi_lib.co build/multi.cexe
+out=$(bin/calcvm build/multi.cexe | strip_cr)
 check "multi" '5
 42
 hello, world
@@ -855,10 +855,10 @@ fn
 [3, 1, 2]' "$out"
 
 # Compile-time check: `let x: num = "..."` rejected at compile time.
-cat > build/let_bad_compile.calc <<'EOF'
+cat > build/let_bad_compile.clc <<'EOF'
 let x: num = "not a number";
 EOF
-err=$(build/calcc build/let_bad_compile.calc /dev/null 2>&1 || true)
+err=$(bin/calcc build/let_bad_compile.clc /dev/null 2>&1 || true)
 if ! echo "$err" | grep -q "let x: num"; then
     echo "FAIL: let-type compile-time check did not fire"
     echo "  got: $err"
@@ -866,14 +866,14 @@ if ! echo "$err" | grep -q "let x: num"; then
 fi
 
 # Runtime check: typed let with dynamic mismatched RHS.
-cat > build/let_bad_runtime.calc <<'EOF'
+cat > build/let_bad_runtime.clc <<'EOF'
 fn make_str() { return "oops"; }
 let x: num = make_str();
 EOF
-build/calcc   build/let_bad_runtime.calc build/let_bad_runtime.casm
-build/calcasm build/let_bad_runtime.casm build/let_bad_runtime.co
-build/calcld  build/let_bad_runtime.co   build/let_bad_runtime.cexe
-err=$(build/calcvm build/let_bad_runtime.cexe 2>&1 || true)
+bin/calcc   build/let_bad_runtime.clc build/let_bad_runtime.casm
+bin/calcasm build/let_bad_runtime.casm build/let_bad_runtime.co
+bin/calcld  build/let_bad_runtime.co   build/let_bad_runtime.cexe
+err=$(bin/calcvm build/let_bad_runtime.cexe 2>&1 || true)
 if ! echo "$err" | grep -q "runtime type error"; then
     echo "FAIL: let-type runtime check did not fire"
     echo "  got: $err"
@@ -977,13 +977,13 @@ default
 # Negative test: the analysis narrows `x` to str after `x = "hello"`,
 # so calling need_num(x) MUST fail at compile time (old per-symbol
 # inference would have widened to any and deferred to runtime).
-cat > build/flow_narrow_err.calc <<'EOF'
+cat > build/flow_narrow_err.clc <<'EOF'
 fn need_num(n: num): num { return n + 1; }
 let x = 5;
 x = "hello";
 print need_num(x);
 EOF
-err=$(build/calcc build/flow_narrow_err.calc /dev/null 2>&1 || true)
+err=$(bin/calcc build/flow_narrow_err.clc /dev/null 2>&1 || true)
 if ! echo "$err" | grep -q "expected num, got str"; then
     echo "FAIL: flow-sensitive narrowing didn't catch x: str at call site"
     echo "  got: $err"
@@ -991,9 +991,9 @@ if ! echo "$err" | grep -q "expected num, got str"; then
 fi
 
 echo "[test] assembler/linker label relocation"
-build/calcasm examples/jump_demo.casm build/jump_demo.co
-build/calcld  build/jump_demo.co      build/jump_demo.cexe
-out=$(build/calcvm build/jump_demo.cexe | strip_cr)
+bin/calcasm examples/jump_demo.casm build/jump_demo.co
+bin/calcld  build/jump_demo.co      build/jump_demo.cexe
+out=$(bin/calcvm build/jump_demo.cexe | strip_cr)
 check "jump_demo" '123
 456' "$out"
 
@@ -1003,50 +1003,50 @@ check "jump_demo" '123
 # approximation. Skipped automatically if gcc is missing.
 if command -v gcc >/dev/null 2>&1; then
     echo "[test] native x86-64 backend — numeric subset (matches VM byte-for-byte)"
-    build/calcc   tests/native_basic.calc build/native_basic.casm
-    build/calcasm build/native_basic.casm build/native_basic.co
-    build/calcld  build/native_basic.co   build/native_basic.vm.cexe
-    vm_out=$(build/calcvm build/native_basic.vm.cexe | strip_cr)
+    bin/calcc   tests/native_basic.clc build/native_basic.casm
+    bin/calcasm build/native_basic.casm build/native_basic.co
+    bin/calcld  build/native_basic.co   build/native_basic.vm.cexe
+    vm_out=$(bin/calcvm build/native_basic.vm.cexe | strip_cr)
 
-    build/calcnat tests/native_basic.calc build/native_basic.s
+    bin/calcnat tests/native_basic.clc build/native_basic.s
     gcc build/native_basic.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_basic.exe
     nat_out=$(build/native_basic.exe | strip_cr)
 
     check "native_basic" "$vm_out" "$nat_out"
 
     echo "[test] native x86-64 backend — strings (literals, concat, str_*, type_of)"
-    build/calcc   tests/native_strings.calc build/native_strings.casm
-    build/calcasm build/native_strings.casm build/native_strings.co
-    build/calcld  build/native_strings.co   build/native_strings.vm.cexe
-    vm_out=$(build/calcvm build/native_strings.vm.cexe | strip_cr)
+    bin/calcc   tests/native_strings.clc build/native_strings.casm
+    bin/calcasm build/native_strings.casm build/native_strings.co
+    bin/calcld  build/native_strings.co   build/native_strings.vm.cexe
+    vm_out=$(bin/calcvm build/native_strings.vm.cexe | strip_cr)
 
-    build/calcnat tests/native_strings.calc build/native_strings.s
+    bin/calcnat tests/native_strings.clc build/native_strings.s
     gcc build/native_strings.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_strings.exe
     nat_out=$(build/native_strings.exe | strip_cr)
 
     check "native_strings" "$vm_out" "$nat_out"
 
     echo "[test] native x86-64 backend — arrays (literals, index, push/pop, array_*)"
-    # Reuse the existing tests/arrays.calc — the native backend must
+    # Reuse the existing tests/arrays.clc — the native backend must
     # produce the same output as the VM for it.
-    build/calcc   tests/arrays.calc build/native_arrays.casm
-    build/calcasm build/native_arrays.casm build/native_arrays.co
-    build/calcld  build/native_arrays.co   build/native_arrays.vm.cexe
-    vm_out=$(build/calcvm build/native_arrays.vm.cexe | strip_cr)
+    bin/calcc   tests/arrays.clc build/native_arrays.casm
+    bin/calcasm build/native_arrays.casm build/native_arrays.co
+    bin/calcld  build/native_arrays.co   build/native_arrays.vm.cexe
+    vm_out=$(bin/calcvm build/native_arrays.vm.cexe | strip_cr)
 
-    build/calcnat tests/arrays.calc build/native_arrays.s
+    bin/calcnat tests/arrays.clc build/native_arrays.s
     gcc build/native_arrays.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_arrays.exe
     nat_out=$(build/native_arrays.exe | strip_cr)
 
     check "native_arrays" "$vm_out" "$nat_out"
 
     echo "[test] native x86-64 backend — maps (literals, index, keys/values/has_key/del)"
-    build/calcc   tests/maps.calc build/native_maps.casm
-    build/calcasm build/native_maps.casm build/native_maps.co
-    build/calcld  build/native_maps.co   build/native_maps.vm.cexe
-    vm_out=$(build/calcvm build/native_maps.vm.cexe | strip_cr)
+    bin/calcc   tests/maps.clc build/native_maps.casm
+    bin/calcasm build/native_maps.casm build/native_maps.co
+    bin/calcld  build/native_maps.co   build/native_maps.vm.cexe
+    vm_out=$(bin/calcvm build/native_maps.vm.cexe | strip_cr)
 
-    build/calcnat tests/maps.calc build/native_maps.s
+    bin/calcnat tests/maps.clc build/native_maps.s
     gcc build/native_maps.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/native_maps.exe
     nat_out=$(build/native_maps.exe | strip_cr)
 
@@ -1063,23 +1063,23 @@ if command -v gcc >/dev/null 2>&1; then
                  type_enforcement completed_limitations calclib \
                  gc_stress; do
         echo "[test] native x86-64 backend — $tcase"
-        build/calcc   tests/$tcase.calc build/n_$tcase.casm
-        build/calcasm build/n_$tcase.casm build/n_$tcase.co
-        build/calcld  build/n_$tcase.co  build/n_$tcase.vm.cexe
-        vm_out=$(build/calcvm build/n_$tcase.vm.cexe | strip_cr)
+        bin/calcc   tests/$tcase.clc build/n_$tcase.casm
+        bin/calcasm build/n_$tcase.casm build/n_$tcase.co
+        bin/calcld  build/n_$tcase.co  build/n_$tcase.vm.cexe
+        vm_out=$(bin/calcvm build/n_$tcase.vm.cexe | strip_cr)
 
-        build/calcnat tests/$tcase.calc build/n_$tcase.s
+        bin/calcnat tests/$tcase.clc build/n_$tcase.s
         gcc build/n_$tcase.s src/runtime_x64.c src/regex.c -Iinclude -lwinhttp -o build/n_$tcase.exe
         nat_out=$(build/n_$tcase.exe | strip_cr)
 
         check "native_$tcase" "$vm_out" "$nat_out"
     done
 
-    echo "[test] native x86-64 backend — multi-file (extern fn + pub fn across .calc)"
-    # Reuse tests/multi: build lib.calc as library (no main), main.calc
+    echo "[test] native x86-64 backend — multi-file (extern fn + pub fn across .clc)"
+    # Reuse tests/multi: build lib.clc as library (no main), main.clc
     # as the entry, link them together with the runtime, verify output.
-    build/calcnat --lib tests/multi/lib.calc -o build/n_multi_lib.s
-    build/calcnat tests/multi/main.calc build/n_multi_lib.s -o build/n_multi.exe
+    bin/calcnat --lib tests/multi/lib.clc -o build/n_multi_lib.s
+    bin/calcnat tests/multi/main.clc build/n_multi_lib.s -o build/n_multi.exe
     nat_out=$(build/n_multi.exe | strip_cr)
     check "native_multi" '5
 42
@@ -1087,7 +1087,7 @@ hello, world
 info: Alice' "$nat_out"
 
     echo "[test] native x86-64 backend — TCO (self-tail recursion to 1M depth)"
-    build/calcnat tests/native_tco.calc -o build/native_tco.exe
+    bin/calcnat tests/native_tco.clc -o build/native_tco.exe
     nat_out=$(build/native_tco.exe | strip_cr)
     check "native_tco" '0
 1.307674368e+12
@@ -1102,7 +1102,7 @@ almost: 1' "$nat_out"
     # Native-only (the VM doesn't have these builtins). Check against
     # the literal expected output.
     rm -f build/phase1.txt build/phase1_num.txt
-    build/calcnat tests/native_phase1.calc -o build/native_phase1.exe
+    bin/calcnat tests/native_phase1.clc -o build/native_phase1.exe
     nat_out=$(build/native_phase1.exe | strip_cr)
     check "native_phase1" '1
 0
@@ -1143,14 +1143,14 @@ from-the-shell
     # on systems where that DLL is present (Windows, or wine on Linux).
     # We probe with a tiny one-liner first; skip the test cleanly if it
     # fails to load.
-    cat > build/_ffi_probe.calc <<'EOF'
+    cat > build/_ffi_probe.clc <<'EOF'
 let lib = ffi_load("msvcrt.dll");
 print lib > 0;
 EOF
-    build/calcnat build/_ffi_probe.calc -o build/_ffi_probe.exe 2>/dev/null
+    bin/calcnat build/_ffi_probe.clc -o build/_ffi_probe.exe 2>/dev/null
     if build/_ffi_probe.exe 2>/dev/null | grep -q '^1$'; then
         echo "[test] native x86-64 backend — FFI (load msvcrt.dll, call libc)"
-        build/calcnat tests/native_ffi.calc -o build/native_ffi.exe
+        bin/calcnat tests/native_ffi.clc -o build/native_ffi.exe
         nat_out=$(build/native_ffi.exe | strip_cr)
         check "native_ffi" '4
 1024
@@ -1165,7 +1165,7 @@ caught: sqrt: negative argument' "$nat_out"
     fi
 
     echo "[test] native x86-64 backend — exceptions (throw, try/catch, cross-fn unwind)"
-    build/calcnat tests/native_exceptions.calc -o build/native_exceptions.exe
+    bin/calcnat tests/native_exceptions.clc -o build/native_exceptions.exe
     nat_out=$(build/native_exceptions.exe | strip_cr)
     check "native_exceptions" 'caught: boom
 got number: 42
@@ -1184,7 +1184,7 @@ after all' "$nat_out"
     # libraries — no separate --lib step or .s arguments needed.
 
     echo "[test] demo — math_demo (sq, cube, power_int, hypot, hyperbolics, lerp)"
-    build/calcnat examples/math_demo.calc -o build/d_math.exe
+    bin/calcnat examples/math_demo.clc -o build/d_math.exe
     nat_out=$(build/d_math.exe | strip_cr)
     # Spot-check a few invariants.
     echo "$nat_out" | grep -q "sq(7)         = 49"              || { echo "FAIL: math — sq"; exit 1; }
@@ -1196,7 +1196,7 @@ after all' "$nat_out"
     echo "$nat_out" | grep -q "remap(5, 0, 10, 100, 200) = 150" || { echo "FAIL: math — remap"; exit 1; }
 
     echo "[test] demo — linsys (mat_solve, mat_det, transpose, identity)"
-    build/calcnat examples/linsys.calc -o build/d_linsys.exe
+    bin/calcnat examples/linsys.clc -o build/d_linsys.exe
     nat_out=$(build/d_linsys.exe | strip_cr)
     check "linsys" 'A =
 [[2, 1, -1], [-3, -1, 2], [-2, 1, 2]]
@@ -1217,7 +1217,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — sine_plot (writes build/sine.svg)"
     rm -f build/sine.svg
-    build/calcnat examples/sine_plot.calc -o build/d_sine.exe
+    bin/calcnat examples/sine_plot.clc -o build/d_sine.exe
     nat_out=$(build/d_sine.exe | strip_cr)
     check "sine_plot_stdout" "wrote build/sine.svg (400 points)" "$nat_out"
     if [ ! -s build/sine.svg ]; then
@@ -1229,7 +1229,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — numerical (root finding, integration, interpolation)"
-    build/calcnat examples/numerical.calc -o build/d_num.exe
+    bin/calcnat examples/numerical.clc -o build/d_num.exe
     nat_out=$(build/d_num.exe | strip_cr)
     # Spot-check a few values rather than full diff (numerical fns vary
     # in the last digit between machines).
@@ -1247,7 +1247,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — monte_carlo (PRNG class + π estimate + normal sampler)"
-    nat_out=$(build/calcnat examples/monte_carlo.calc -o build/d_mc.exe \
+    nat_out=$(bin/calcnat examples/monte_carlo.clc -o build/d_mc.exe \
         && build/d_mc.exe | strip_cr)
     # π estimate from 100k samples should be within ~0.05 of true π.
     pi_line=$(echo "$nat_out" | grep "^π estimate")
@@ -1261,7 +1261,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — csv_demo (write CSV, read back, fit, plot)"
     rm -f build/measurements.csv build/measurements.svg
-    build/calcnat examples/csv_demo.calc -o build/d_csv.exe
+    bin/calcnat examples/csv_demo.clc -o build/d_csv.exe
     nat_out=$(build/d_csv.exe | strip_cr)
     if [ ! -s build/measurements.csv ]; then
         echo "FAIL: csv_demo — measurements.csv not produced"; exit 1
@@ -1276,7 +1276,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — multi_plot (multi-series + bar + log_y + axis labels)"
     rm -f build/multi.svg build/bar.svg build/decay.svg build/labeled.svg
-    build/calcnat examples/multi_plot.calc -o build/d_mp.exe
+    bin/calcnat examples/multi_plot.clc -o build/d_mp.exe
     build/d_mp.exe > /dev/null
     for svg in build/multi.svg build/bar.svg build/decay.svg build/labeled.svg; do
         if [ ! -s "$svg" ]; then echo "FAIL: multi_plot — missing $svg"; exit 1; fi
@@ -1284,7 +1284,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — json_demo (parse/encode round-trip)"
     rm -f build/data.json
-    build/calcnat examples/json_demo.calc -o build/d_json.exe
+    bin/calcnat examples/json_demo.clc -o build/d_json.exe
     nat_out=$(build/d_json.exe | strip_cr)
     # Spot-check a few signature outputs.
     echo "$nat_out" | grep -q "Alice"           || { echo "FAIL: json — Alice"; exit 1; }
@@ -1294,7 +1294,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — ode_demo (RK4 scalar + harmonic oscillator)"
     rm -f build/ode_decay.svg build/ode_sho.svg
-    build/calcnat examples/ode_demo.calc -o build/d_ode.exe
+    bin/calcnat examples/ode_demo.clc -o build/d_ode.exe
     nat_out=$(build/d_ode.exe | strip_cr)
     # RK4 should match exp(-5) to 6+ digits; Euler will be visibly worse.
     rk4_line=$(echo "$nat_out" | grep "RK4   = ")
@@ -1307,7 +1307,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — nr_demo (Brent, spline, gamma/erf, Jacobi)"
-    build/calcnat examples/nr_demo.calc -o build/d_nr.exe
+    bin/calcnat examples/nr_demo.clc -o build/d_nr.exe
     nat_out=$(build/d_nr.exe | strip_cr)
     # Spot-check a few invariants. Tolerant of trailing digits.
     echo "$nat_out" | grep -q "cos(x) = 0 -> 1.570796"        || { echo "FAIL: nr — Brent cos";        exit 1; }
@@ -1326,7 +1326,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — nr_demo2 (LU + Romberg + RK45 + polynomial families)"
-    build/calcnat examples/nr_demo2.calc -o build/d_nr2.exe
+    bin/calcnat examples/nr_demo2.clc -o build/d_nr2.exe
     nat_out=$(build/d_nr2.exe | strip_cr)
     # LU determinant must be exactly -1 for this matrix.
     echo "$nat_out" | grep -q "det(A) = -1"                   || { echo "FAIL: nr2 — LU det";          exit 1; }
@@ -1346,7 +1346,7 @@ A * I3 == A?  1' "$nat_out"
     echo "$nat_out" | grep -qE "J_0\(0\)   = 1(\.0+[0-9]+)?"   || { echo "FAIL: nr2 — Bessel J_0(0)";   exit 1; }
 
     echo "[test] demo — nr_demo3 (Brent/golden/Nelder-Mead + heapsort/quickselect)"
-    build/calcnat examples/nr_demo3.calc -o build/d_nr3.exe
+    bin/calcnat examples/nr_demo3.clc -o build/d_nr3.exe
     nat_out=$(build/d_nr3.exe | strip_cr)
     # Quadratic min at x=2, f=1 — must land on 2 to ~8 digits.
     echo "$nat_out" | grep -qE "golden_section -> x = 2(\.0+[0-9]*)?\b" \
@@ -1368,7 +1368,7 @@ A * I3 == A?  1' "$nat_out"
         || { echo "FAIL: nr3 — median"; echo "$nat_out"; exit 1; }
 
     echo "[test] demo — nr_demo4 (Ridders + dist sampling + Newton + LM fit)"
-    build/calcnat examples/nr_demo4.calc -o build/d_nr4.exe
+    bin/calcnat examples/nr_demo4.clc -o build/d_nr4.exe
     nat_out=$(build/d_nr4.exe | strip_cr)
     # Ridders' on sin(1) must give cos(1) to ~15 digits.
     echo "$nat_out" | grep -q "exact: cos(1) = 0.5403023059" \
@@ -1389,7 +1389,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — nr_demo5 (QR + SVD + Laguerre polyroots + convolution)"
-    build/calcnat examples/nr_demo5.calc -o build/d_nr5.exe
+    bin/calcnat examples/nr_demo5.clc -o build/d_nr5.exe
     nat_out=$(build/d_nr5.exe | strip_cr)
     # QR LS solution must equal SVD LS solution to ~1e-10.
     echo "$nat_out" | grep -qE "least-squares solution:" \
@@ -1420,7 +1420,7 @@ A * I3 == A?  1' "$nat_out"
         || { echo "FAIL: nr5 — conv result wrong"; echo "$nat_out"; exit 1; }
 
     echo "[test] demo — nr_demo6 (Chebyshev + Sav-Gol + Kalman + Crank-Nicolson)"
-    build/calcnat examples/nr_demo6.calc -o build/d_nr6.exe
+    bin/calcnat examples/nr_demo6.clc -o build/d_nr6.exe
     nat_out=$(build/d_nr6.exe | strip_cr)
     # Chebyshev: error at x=0 must be below 1e-9.
     cheb_err_line=$(echo "$nat_out" | grep -E "^  x=0  exact=1  cheb=")
@@ -1444,7 +1444,7 @@ A * I3 == A?  1' "$nat_out"
     fi
 
     echo "[test] demo — nr_demo7 (Cholesky + CG + simulated annealing + MCMC)"
-    build/calcnat examples/nr_demo7.calc -o build/d_nr7.exe
+    bin/calcnat examples/nr_demo7.clc -o build/d_nr7.exe
     nat_out=$(build/d_nr7.exe | strip_cr)
     # Cholesky: NR's canonical example must produce L = [[2,0,0],[6,1,0],[-8,5,3]].
     echo "$nat_out" | grep -q "\[\[2, 0, 0\], \[6, 1, 0\], \[-8, 5, 3\]\]" \
@@ -1465,7 +1465,7 @@ A * I3 == A?  1' "$nat_out"
         || { echo "FAIL: nr7 — MCMC mean x^2 out of band"; echo "v=$mc_var"; exit 1; }
 
     echo "[test] demo — nr_demo8 (Welch + wavelet + Toeplitz + simplex LP)"
-    build/calcnat examples/nr_demo8.calc -o build/d_nr8.exe
+    bin/calcnat examples/nr_demo8.clc -o build/d_nr8.exe
     nat_out=$(build/d_nr8.exe | strip_cr)
     # Welch peak at 17 Hz (the injected tone).
     echo "$nat_out" | grep -q "peak at f = 17 Hz" \
@@ -1487,7 +1487,7 @@ A * I3 == A?  1' "$nat_out"
         || { echo "FAIL: nr8 — simplex value"; echo "$nat_out"; exit 1; }
 
     echo "[test] demo — nr_demo9 (2-D FFT + 2-D quad + power iter + B-spline)"
-    build/calcnat examples/nr_demo9.calc -o build/d_nr9.exe
+    bin/calcnat examples/nr_demo9.clc -o build/d_nr9.exe
     nat_out=$(build/d_nr9.exe | strip_cr)
     # 2-D FFT round-trip must be effectively zero.
     f2_err=$(echo "$nat_out" | grep "round-trip RMS error:" | awk '{print $NF}')
@@ -1509,7 +1509,7 @@ A * I3 == A?  1' "$nat_out"
         || { echo "FAIL: nr9 — quad2d_gl"; echo "$gl_line"; exit 1; }
 
     echo "[test] demo — nr_demo10 (Neville + GL nodes + BFGS + PCA)"
-    build/calcnat examples/nr_demo10.calc -o build/d_nr10.exe
+    bin/calcnat examples/nr_demo10.clc -o build/d_nr10.exe
     nat_out=$(build/d_nr10.exe | strip_cr)
     # Neville interp at x=1.5 of sin samples must be near sin(1.5)=0.997.
     nev_line=$(echo "$nat_out" | grep "^  x=1.5 ")
@@ -1535,7 +1535,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — fft_demo (recover 7 Hz + 18 Hz peaks)"
     rm -f build/fft_mag.svg build/fft_signal.svg
-    build/calcnat examples/fft_demo.calc -o build/d_fft.exe
+    bin/calcnat examples/fft_demo.clc -o build/d_fft.exe
     nat_out=$(build/d_fft.exe | strip_cr)
     # We injected tones at 7 Hz and 18 Hz; the FFT bin width is fs/N
     # = 0.39 Hz, so the closest detectable bins are around 7.03 and
@@ -1551,7 +1551,7 @@ A * I3 == A?  1' "$nat_out"
 
     echo "[test] demo — regression (writes build/regression.svg)"
     rm -f build/regression.svg
-    build/calcnat examples/regression.calc -o build/d_reg.exe
+    bin/calcnat examples/regression.clc -o build/d_reg.exe
     # The numeric output uses random-looking noise but is deterministic
     # given the fixed seed in the source. We just check the program ran
     # cleanly and produced a valid SVG, plus that the slope ended up
@@ -1567,23 +1567,23 @@ A * I3 == A?  1' "$nat_out"
         echo "FAIL: regression demo did not produce build/regression.svg"; exit 1
     fi
 
-    echo "[test] calcnat one-step build (input.calc -> input.exe via gcc)"
+    echo "[test] calcnat one-step build (input.clc -> input.exe via gcc)"
     # Smoke-test the simpler driver invocation: one argument in, one
     # executable out. No explicit gcc call required by the user.
-    build/calcnat tests/native_basic.calc -o build/native_basic_onestep.exe
+    bin/calcnat tests/native_basic.clc -o build/native_basic_onestep.exe
     nat_out=$(build/native_basic_onestep.exe | strip_cr)
-    vm_out=$(build/calcvm build/native_basic.vm.cexe | strip_cr)
+    vm_out=$(bin/calcvm build/native_basic.vm.cexe | strip_cr)
     check "calcnat_one_step" "$vm_out" "$nat_out"
 else
     echo "[skip] native x86-64 backend (gcc not on PATH)"
 fi
 
 # WebAssembly backend — Stage 1 (numeric subset). Skipped unless
-# python + the `wasmtime` package + build/calcwasm are all present.
-if [ -x build/calcwasm ] \
+# python + the `wasmtime` package + bin/calcwasm are all present.
+if [ -x bin/calcwasm ] \
    && python -c "import wasmtime" 2>/dev/null; then
     echo "[test] calcwasm Stage 1 (numeric subset, run via Python wasmtime host)"
-    build/calcwasm tests/wasm_basic.calc -o build/wasm_basic.wat >/dev/null
+    bin/calcwasm tests/wasm_basic.clc -o build/wasm_basic.wat >/dev/null
     out=$(python tools/wasm_host.py build/wasm_basic.wat | strip_cr)
     check "wasm_basic" '7
 55
@@ -1610,7 +1610,7 @@ if [ -x build/calcwasm ] \
 23
 3' "$out"
 else
-    echo "[skip] calcwasm (build/calcwasm missing or python wasmtime not installed)"
+    echo "[skip] calcwasm (bin/calcwasm missing or python wasmtime not installed)"
 fi
 
 echo "all tests passed"

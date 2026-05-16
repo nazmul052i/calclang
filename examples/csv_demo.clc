@@ -2,7 +2,7 @@
 // over a column.
 //
 // Build:
-//   build/calcnat examples/csv_demo.calc -o build/csv_demo.exe
+//   bin/clc examples/csv_demo.clc -o build/csv_demo.exe
 
 import "csv";
 import "stats";

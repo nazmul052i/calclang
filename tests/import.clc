@@ -1,4 +1,4 @@
-// import.calc — verify `import "name";` inlines a library's pub fns
+// import.clc — verify `import "name";` inlines a library's pub fns
 // into the current compilation unit. No --lib build step needed.
 
 import "math";

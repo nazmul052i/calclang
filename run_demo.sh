@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 make
-build/calcc examples/demo.calc build/demo.casm
-build/calcasm build/demo.casm build/demo.co
-build/calcld build/demo.co build/demo.cexe
-build/calcvm build/demo.cexe
+bin/calcc examples/demo.calc build/demo.casm
+bin/calcasm build/demo.casm build/demo.co
+bin/calcld build/demo.co build/demo.cexe
+bin/calcvm build/demo.cexe

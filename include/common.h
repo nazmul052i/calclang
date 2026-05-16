@@ -30,6 +30,22 @@ char *cl_track_strdup(const char *s);
 char *cl_read_file(const char *path);
 void  cl_write_text_file(const char *path, const char *text);
 
+/* Derive the CalcLang install root from argv[0] and seed two env vars
+   so the toolchain works from any CWD (system-installed or not):
+
+     CALC_HOME     = <bin_dir>/..           (umbrella: stdlib, runtime srcs,
+                                              include/, vendored SDL2 are all
+                                              found relative to this)
+     CALC_LIB_PATH = <bin_dir>/../lib       (stdlib search path the parser's
+                                              `import` resolution falls back to)
+
+   Each is set only if not already in the environment, so users can
+   override individually. No-op if argv0 has no directory component
+   (e.g. invoked via PATH search) — relies on existing CWD-relative
+   defaults in that case. Safe to call multiple times; call once at
+   main() entry. */
+void cl_init_install_paths(const char *argv0);
+
 /* Write `s` to `f` as a double-quoted, escape-encoded string. Used by
    every stage that produces a text-based file with embedded strings. */
 void cl_fputs_quoted(FILE *f, const char *s);

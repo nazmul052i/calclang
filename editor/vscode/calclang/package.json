@@ -1,8 +1,8 @@
 {
     "name": "calclang",
     "displayName": "CalcLang",
-    "description": "Syntax highlighting, file icons, and editor support for CalcLang (.calc) and Calc assembly (.casm)",
-    "version": "0.2.0",
+    "description": "Syntax highlighting, file icons, and editor support for CalcLang (.clc) and Calc assembly (.casm)",
+    "version": "0.3.0",
     "publisher": "calclang-local",
     "engines": {
         "vscode": "^1.61.0"
@@ -15,11 +15,11 @@
             {
                 "id": "calclang",
                 "aliases": ["CalcLang", "calclang"],
-                "extensions": [".calc"],
+                "extensions": [".clc"],
                 "configuration": "./language-configuration.json",
                 "icon": {
-                    "light": "./icons/calc.svg",
-                    "dark":  "./icons/calc.svg"
+                    "light": "./icons/clc.svg",
+                    "dark":  "./icons/clc.svg"
                 }
             },
             {
@@ -36,8 +36,8 @@
         "grammars": [
             {
                 "language": "calclang",
-                "scopeName": "source.calc",
-                "path": "./syntaxes/calc.tmLanguage.json"
+                "scopeName": "source.clc",
+                "path": "./syntaxes/clc.tmLanguage.json"
             },
             {
                 "language": "calcasm",

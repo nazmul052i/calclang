@@ -1,4 +1,4 @@
-// datetime tests — exercise lib/datetime.calc + runtime builtins.
+// datetime tests — exercise lib/datetime.clc + runtime builtins.
 
 import "datetime";
 

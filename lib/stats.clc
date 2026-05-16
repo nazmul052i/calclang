@@ -1,5 +1,5 @@
-// stats.calc — basic statistics for flat arrays of numbers.
-// Build: calcnat --lib lib/stats.calc -o build/stats.s
+// stats.clc — basic statistics for flat arrays of numbers.
+// Build: calcnat --lib lib/stats.clc -o build/stats.s
 
 pub fn sum_of(xs) {
     let s = 0;

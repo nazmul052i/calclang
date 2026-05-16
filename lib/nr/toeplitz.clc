@@ -1,4 +1,4 @@
-// toeplitz.calc — Levinson-Durbin recursion for Toeplitz / autoregressive systems.
+// toeplitz.clc — Levinson-Durbin recursion for Toeplitz / autoregressive systems.
 //
 // A Toeplitz matrix has constant diagonals: T[i][j] = r[|i - j|]. The
 // Levinson algorithm exploits this structure to solve T x = y in

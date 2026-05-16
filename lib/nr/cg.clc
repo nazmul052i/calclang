@@ -1,4 +1,4 @@
-// cg.calc — preconditioned conjugate-gradient for symmetric positive-definite
+// cg.clc — preconditioned conjugate-gradient for symmetric positive-definite
 // linear systems A x = b.
 //
 // CG is the Krylov-subspace method of choice when A is large, SPD, and you

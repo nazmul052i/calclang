@@ -1,4 +1,4 @@
-// optimizer.calc — exercises the AST-rewriting optimizer.
+// optimizer.clc — exercises the AST-rewriting optimizer.
 //
 // Each line is a value the optimizer should be able to compute at
 // compile time. We don't observe the assembly directly (that's the

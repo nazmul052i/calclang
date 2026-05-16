@@ -1,4 +1,4 @@
-// qol.calc — quality-of-life features: ternary, do-while, ctype, fmt.
+// qol.clc — quality-of-life features: ternary, do-while, ctype, fmt.
 
 // ===== Ternary =====
 print 5 > 3 ? "yes" : "no";           // yes

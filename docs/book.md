@@ -22,7 +22,7 @@ Chapters 1–7 are the core language. Chapter 8 covers multi-file builds. Chapte
 
 You'll need a working C compiler on your `PATH`:
 
-- **Windows**: MinGW-w64 (`gcc`) is the standard choice. WSL or MSYS2 also work. Native MSVC `cl.exe` isn't supported — the assembly emitted by `calcnat` is in GCC-style Intel syntax and links against the included `runtime_x64.c`.
+- **Windows**: MinGW-w64 (`gcc`) is the standard choice. WSL or MSYS2 also work. Native MSVC `cl.exe` isn't supported — the assembly emitted by the native backend is in GCC-style Intel syntax and links against the bundled `runtime_x64.c`.
 - **Linux / macOS**: system `gcc` or `clang` (the Makefile uses `gcc` by default; override with `make CC=clang`).
 
 A POSIX shell (`sh` or `bash`) is also needed to drive `make` and the test runner. Git Bash, WSL, or MSYS2 cover this on Windows.
@@ -33,30 +33,34 @@ From the repository root:
 make
 ```
 
-That produces five binaries under `build/`:
+That produces seven binaries under `bin/`:
 
-| Tool       | What it does                                                  |
-|------------|---------------------------------------------------------------|
-| `calcc`    | Source `.calc` → assembly-like `.casm` (bytecode pipeline)    |
-| `calcasm`  | `.casm` → object `.co`                                        |
-| `calcld`   | One or more `.co` files → linked `.cexe` bytecode             |
-| `calcvm`   | Bytecode interpreter that executes `.cexe`                    |
-| `calcnat`  | Source `.calc` → x86-64 assembly `.s` → linked OS executable  |
+| Tool        | What it does                                                          |
+|-------------|------------------------------------------------------------------------|
+| `clc`       | Unified gcc-style driver — the front door. Dispatches to the others.   |
+| `calcc`     | Source `.clc` → assembly-like `.casm` (bytecode pipeline front-end)    |
+| `calcasm`   | `.casm` → object `.co`                                                  |
+| `calcld`    | One or more `.co` files → linked `.cexe` bytecode                       |
+| `calcvm`    | Bytecode interpreter that executes `.cexe`                              |
+| `calcnat`   | Source `.clc` → x86-64 assembly `.s` → linked OS executable             |
+| `calcwasm`  | Source `.clc` → WebAssembly text `.wat` (Stage 1, numeric subset)       |
 
-`calcnat` is the one-stop tool: hand it a `.calc` and it produces an `.exe` (or ELF on Linux) directly, invoking `gcc` under the hood. The other four tools exist for the bytecode pipeline, which the test runner uses for verification.
+**`clc` is what you use day-to-day.** It mirrors the gcc / clang CLI: hand it a `.clc` file and it produces a native executable; pass `-o foo.wat` and you get WebAssembly; pass `-r` and it runs the program on the bytecode VM. The other six tools remain individually callable for when you want to peek at intermediate artifacts (`.casm`, `.co`, etc.) or script a specific stage.
 
-If you don't have `make`, the manual build commands are in the project README. They reduce to compiling the C sources under `src/` into the five binaries above.
+Compilation intermediates (`.casm`, `.co`, `.cexe`, `.s`, and demo executables built by `make demos`) land in `build/` — separate from the tools in `bin/`, the same split gcc/clang use between their installed binaries and your build artifacts.
+
+If you don't have `make`, the manual build commands are in the project README. They reduce to compiling the C sources under `src/` into the seven binaries above.
 
 #### Troubleshooting
 
 - `gcc: command not found` — gcc isn't on `PATH`. On Windows, ensure MinGW's `bin/` directory is in `%PATH%`. On Linux, install `build-essential` (Debian/Ubuntu) or the equivalent.
 - `make: command not found` on Windows — install Git for Windows (provides `sh`), then either use `mingw32-make` or just build from the README's manual command list.
-- Permission errors writing to `build/` — Make creates the directory; if it pre-exists with the wrong permissions, `rm -rf build` and rebuild.
+- Permission errors writing to `bin/` or `build/` — Make creates them; if they pre-exist with the wrong permissions, `rm -rf bin build` and rebuild.
 - Test failures with `\r` mismatches — the test runner uses `strip_cr` to normalise Windows-style line endings. If you see them, check that `tests/run_tests.sh` is intact.
 
 ### Hello, world
 
-Create a file `hello.calc`:
+Create a file `hello.clc`:
 
 ```calc
 print "hello, world";
@@ -65,44 +69,137 @@ print "hello, world";
 Compile and run:
 
 ```bash
-build/calcnat hello.calc
+bin/clc hello.clc
 ./hello.exe        # Windows
-./hello            # Linux/macOS (no .exe by default — see below)
+./hello.exe        # Linux/macOS — the output name is `hello.exe` on every platform
 ```
 
-That's it. `calcnat` takes one `.calc` file and produces an executable. The default output filename is the input minus `.calc` plus `.exe` on every platform — the same name regardless of OS. To pick a different name use `-o`:
+That's it. With no flags, `clc` produces a native executable. The default output filename is the input minus `.clc` plus `.exe` on every OS — the same name regardless of platform. To pick a different name use `-o`:
 
 ```bash
-build/calcnat hello.calc -o greeter.exe
+bin/clc hello.clc -o greeter.exe
 ```
 
-Behind the scenes, `calcnat` performs three steps:
-
-1. Lexes and parses `hello.calc` into an AST.
-2. Runs the x86-64 codegen, producing a `.s` assembly file in a temp directory.
-3. Invokes `gcc` to assemble and link the `.s` with the bundled runtime (`src/runtime_x64.c`), producing the final executable.
-
-If you want to see the intermediate assembly, pass `-S`:
+To skip the OS executable entirely and just run the program through the bytecode VM (faster start-up for tiny scripts; no link step):
 
 ```bash
-build/calcnat -S hello.calc hello.s
+bin/clc -r hello.clc
+# hello, world
+```
+
+If you want to see the intermediate assembly for the native build, pass `-S`:
+
+```bash
+bin/clc -S hello.clc
 cat hello.s        # human-readable Intel-syntax assembly
 ```
 
-### Two pipelines
+### The `clc` driver
 
-CalcLang has two backends. Both come from the same lexer, parser, AST, and type inferrer:
+`clc` is a thin wrapper around the six compilation tools. It locates them as siblings in the same `bin/` directory it was launched from, sets the install-paths environment up, and spawns them with the right arguments. You can keep using `bin/calcc` / `bin/calcnat` / `bin/calcwasm` directly when you need to script a specific stage, but `clc` is faster to type and handles the common cases.
+
+**Targets.** Inferred from the `-o` extension, with `-t` as an explicit override:
+
+```bash
+clc foo.clc                  # → foo.exe              (native — default)
+clc foo.clc -o app.exe       # → app.exe              (native)
+clc foo.clc -o app.wat       # → app.wat              (wasm)
+clc foo.clc -o app.casm      # → app.casm             (bytecode only — no link)
+clc -t vm foo.clc            #                         (compile + link to .cexe, no run)
+clc -t native foo.clc -o app # explicit native
+clc -t wasm foo.clc          # explicit wasm
+```
+
+**Modes.** Combine with a target, or use on their own to short-circuit:
+
+| Flag        | Meaning                                                                 |
+|-------------|--------------------------------------------------------------------------|
+| `-r`        | Compile and run on the bytecode VM (script mode — quickest feedback)     |
+| `-c`        | Compile to `.casm` only; no link, no run                                 |
+| `-S`        | Emit native assembly (`<basename>.s`)                                    |
+| `--lib`     | Native library compile — no `main`, no top-level code (for multi-file)   |
+| `--ast`     | Dump the parsed AST and exit (debug aid)                                 |
+
+**Other flags.**
+
+| Flag                     | Meaning                                                          |
+|--------------------------|-------------------------------------------------------------------|
+| `-o <path>`              | Output path                                                       |
+| `-O0` / `-O1` / `-O2`    | Optimization level (default `-O1`; passed to children as `CLC_OPT`) |
+| `-v`                     | Verbose — print every subprocess invocation                       |
+| `-h`, `--help`           | Help text                                                         |
+| `-V`, `--version`        | Version info                                                      |
+
+**Project subcommands.** `clc init <dir>` scaffolds a new project; `clc install` fetches dependencies declared in `clc.toml`. These are covered in Chapter 8 alongside the import resolution machinery they hook into.
+
+### Installing system-wide
+
+The toolchain is relocatable: every tool figures out its install location from `argv[0]` at startup, so once installed it works from any directory. To stage an install:
+
+```bash
+make install                                  # → /usr/local/calclang/
+make install PREFIX=$HOME/.local              # → ~/.local/calclang/
+make install PREFIX="$PROGRAMFILES/CalcLang"  # Windows
+```
+
+Add `<prefix>/calclang/bin` to your `PATH`, then `clc` works from any directory:
+
+```bash
+$ export PATH="$HOME/.local/calclang/bin:$PATH"      # POSIX
+$ setx PATH "%PROGRAMFILES%\CalcLang\bin;%PATH%"     # Windows (new shells)
+$ cd ~/some-project
+$ clc demo.clc -o demo.exe
+$ ./demo.exe
+hello from anywhere
+```
+
+**Install layout.** A self-contained subtree:
 
 ```
-hello.calc ─┬─► .casm ─► .co ─► .cexe ─► calcvm           (bytecode VM)
-            └─► .s ──────────── gcc ──► hello.exe / hello   (native)
+<prefix>/calclang/
+├── bin/          calcc, calcasm, calcld, calcvm, calcnat, calcwasm, clc
+├── lib/          standard library (.clc modules: math, stats, linalg, vec, regex, gui, nr/*, …)
+├── src/          runtime sources (runtime_x64.c, regex.c, runtime_gui_sdl2.c)
+├── include/      headers
+└── third_party/  vendored SDL2 + stb_truetype (GUI support)
 ```
 
-The **native path** (`calcnat`) is what you'll use day-to-day. It runs faster (no interpreter loop) and produces real OS executables. CalcLang's engineering library, complex numbers, FFI, and file I/O all live here.
+**How the tools find each other.** When any front-end tool starts, it strips its own basename from `argv[0]`, sets two environment variables, and uses them at parse / codegen time:
 
-The **bytecode path** (`calcc` → `calcasm` → `calcld` → `calcvm`) is the original implementation. It's byte-identical in output for the features it supports, and it's what the test runner cross-checks the native backend against. The VM is a useful reference implementation but lacks several native-only features (complex numbers, FFI, file I/O, exceptions, TCO).
+| Variable          | Default                       | Used by                                                    |
+|-------------------|-------------------------------|-------------------------------------------------------------|
+| `CALC_HOME`       | `<bin>/..`                    | `calcnat` (runtime sources, includes, vendored SDL2 root)   |
+| `CALC_LIB_PATH`   | `<bin>/../lib`                | parser's `import` resolution (stdlib search root)            |
+| `CALC_RUNTIME`    | `${CALC_HOME}/src/runtime_x64.c` | `calcnat` (overrides default runtime path)                |
+| `CALC_INCLUDE`    | `${CALC_HOME}/include`        | `calcnat` (overrides default header dir)                    |
 
-You don't have to pick: a single `.calc` file builds and runs through either pipeline without modification. The book uses the native path throughout. For the VM workflow, see the project README.
+Each variable respects a pre-existing user override and only auto-fills if unset. So if you want to develop a stdlib fork without reinstalling, just export `CALC_LIB_PATH=/path/to/your/lib` and `clc` will resolve imports against that instead.
+
+**Uninstall.**
+
+```bash
+make uninstall PREFIX=<same-prefix-you-used>
+```
+
+That removes the whole `<prefix>/calclang/` subtree. Your projects (`clc.toml`, source files, `deps/`) are untouched — they live wherever you keep them.
+
+### Targets — native, VM, and wasm
+
+CalcLang has three backends. All share the same lexer, parser, AST, and type inferrer:
+
+```
+hello.clc ─┬─► .s  ─► gcc  ─► hello.exe / hello   (native — `clc foo.clc`)
+            ├─► .casm ─► .co ─► .cexe ─► calcvm    (VM — `clc -r foo.clc`)
+            └─► .wat                                (wasm — `clc -o foo.wat foo.clc`)
+```
+
+**Native** (`calcnat`) is what you'll use day-to-day. It runs faster (no interpreter loop), produces real OS executables, and supports the full feature surface: engineering libraries, complex numbers, FFI, file I/O, exceptions, tail-call optimization, the SDL2 GUI bindings. `clc foo.clc` defaults here.
+
+**VM** (`calcc` → `calcasm` → `calcld` → `calcvm`) is the original implementation. Byte-identical to native for the features it supports, and the test runner cross-checks the native backend against it. The VM is a useful reference implementation but lacks several native-only features (complex numbers, FFI, file I/O, exceptions, TCO, GUI). Reach for it via `clc -r` when you want quickest feedback on a script that doesn't need those features.
+
+**WebAssembly** (`calcwasm`) is the newest backend. Stage 1 covers the numeric subset — strings, arrays, maps, and closures aren't there yet. The output is a `.wat` text module that runs on any Wasm host: `wasmtime`, `wasmer`, the Python `wasmtime` package, browsers, Node.js. Use `clc -o foo.wat foo.clc` and then your favorite Wasm runtime.
+
+You don't have to commit to one backend per source file — a `.clc` file builds and runs through any of them without modification (within each backend's feature set). The book uses the native path throughout unless explicitly noted. For VM-specific notes, see the §Same source, both pipelines coda at the end of Chapter 8.
 
 ### A first program with multiple statements
 
@@ -116,10 +213,10 @@ while (i < n) {
 }
 ```
 
-Save as `hi.calc`, then:
+Save as `hi.clc`, then:
 
 ```bash
-build/calcnat hi.calc && ./hi.exe
+bin/clc hi.clc && ./hi.exe
 # hello, world (0)
 # hello, world (1)
 # hello, world (2)
@@ -2263,7 +2360,7 @@ You can mostly tell which fits by asking: "do I write `fn methodname()` here?" I
 
 #### Returning structs from library functions
 
-CalcLang's standard library uses structs for multi-field results so callers can write `fit.slope` instead of `fit["slope"]`. From `lib/stats.calc`:
+CalcLang's standard library uses structs for multi-field results so callers can write `fit.slope` instead of `fit["slope"]`. From `lib/stats.clc`:
 
 ```calc
 pub struct LinReg { slope: num, intercept: num, r2: num }
@@ -2296,13 +2393,13 @@ Stage 2+ will lower struct declarations to a fixed flat layout: each field gets 
 
 ## Chapter 8 — Multi-file programs
 
-A single `.calc` file works for hundreds of lines. Past that, splitting into modules helps. CalcLang's module system is the simplest possible: one statement, one command, no separate library-build step.
+A single `.clc` file works for hundreds of lines. Past that, splitting into modules helps. CalcLang's module system is the simplest possible: one statement, one command, no separate library-build step.
 
 ### `import`
 
 Put `import "name";` at the top of any file. The parser inlines the named library's definitions into your program. One command builds the whole thing.
 
-**lib.calc:**
+**lib.clc:**
 
 ```calc
 pub fn add(a, b) {
@@ -2321,10 +2418,10 @@ priv fn _internal_helper(x) {
 }
 ```
 
-**main.calc:**
+**main.clc:**
 
 ```calc
-import "./lib.calc";     // co-located helper (./ + .calc = sibling file)
+import "./lib.clc";     // co-located helper (./ + .clc = sibling file)
 
 print add(2, 3);            // 5
 print greet("world");       // hello, world
@@ -2333,7 +2430,7 @@ print greet("world");       // hello, world
 Build and run:
 
 ```bash
-build/calcnat main.calc -o app.exe
+bin/clc main.clc -o app.exe
 ./app.exe
 # 5
 # hello, world
@@ -2342,9 +2439,9 @@ build/calcnat main.calc -o app.exe
 No `make libs`, no `--lib`, no `.s` files on the command line. The same model works for the standard engineering libraries:
 
 ```calc
-import "math";              // lib/math.calc — sq, cube, hypot, lerp, ...
-import "stats";             // lib/stats.calc — mean, stddev, linreg, ...
-import "nr.brent";          // lib/nr/brent.calc — root finding
+import "math";              // lib/math.clc — sq, cube, hypot, lerp, ...
+import "stats";             // lib/stats.clc — mean, stddev, linreg, ...
+import "nr.brent";          // lib/nr/brent.clc — root finding
 ```
 
 #### How it works
@@ -2360,24 +2457,39 @@ Then the regular codegen compiles everything as one program. The library's funct
 
 #### Path resolution
 
-| Form                  | Resolved as                                            |
-|-----------------------|--------------------------------------------------------|
-| `"math"`              | module spec → `lib/math.calc`                          |
-| `"nr.brent"`          | dot-syntax module spec → `lib/nr/brent.calc`           |
-| `"nr/brent"`          | slash-syntax (equivalent) → `lib/nr/brent.calc`        |
-| `"./helper.calc"`     | importer-relative                                      |
-| `"/abs/path.calc"`    | absolute — used as given                               |
-| `"lib/math.calc"`     | literal `.calc` path — cwd-relative, then importer-relative |
+The parser classifies the import string and rewrites it into a candidate path:
 
-The "module spec" rule (anything not absolute, not dot-prefixed, not ending in `.calc`, not starting with `lib/`) is the common case: `import "math"` Just Works from anywhere in the project, and nested libraries use Python-style dots (`nr.brent`) that translate to slashes (`nr/brent`) before joining with `lib/`.
+| Form                  | Rewritten as                                            |
+|-----------------------|----------------------------------------------------------|
+| `"math"`              | module spec → `lib/math.clc`                            |
+| `"nr.brent"`          | dot-syntax module spec → `lib/nr/brent.clc`             |
+| `"nr/brent"`          | slash-syntax (equivalent) → `lib/nr/brent.clc`          |
+| `"./helper.clc"`      | importer-relative — used with `./` literally             |
+| `"/abs/path.clc"`     | absolute — used as given                                 |
+| `"lib/math.clc"`      | literal `.clc` path — treated like a module-spec rewrite |
+
+The "module spec" rule (anything not absolute, not dot-prefixed, not ending in `.clc`, not starting with `lib/`) is the common case: `import "math"` Just Works from anywhere in the project, and nested libraries use Python-style dots (`nr.brent`) that translate to slashes (`nr/brent`) before joining with `lib/`.
+
+Once the parser has the rewritten path, it probes a fixed list of candidate locations and uses the first existing file. Resolution order (each row applies only when the previous one missed):
+
+| #  | Location                            | When it applies                                       |
+|----|-------------------------------------|--------------------------------------------------------|
+| 1  | Current working directory           | Always probed first.                                  |
+| 2  | `${importer_dir}/<path>`            | When parsing a file with a known source directory.    |
+| 3  | `deps/<name>/<name>.clc`            | For flat module specs (e.g. `import "greeter"` after `clc install`). |
+| 4  | `${CALC_LIB_PATH}/<rest>`           | Stdlib search root. `CALC_LIB_PATH` is auto-set to `<bin>/../lib` from `argv[0]` at toolchain startup, so this works in both in-tree and installed builds. |
+
+`deps/` shadows the stdlib when names collide — your project-local fork of a stdlib module wins. Absolute and `./`-prefixed paths skip rows 3 and 4 (they aren't module specs).
+
+If every candidate misses, the error message points at the *last* candidate tried — which is the stdlib path when `CALC_LIB_PATH` was set, otherwise the importer-relative attempt. That's usually the most useful hint: it shows where the toolchain expected to find the library, even if the file isn't there.
 
 #### Cycle detection
 
-Each canonical file path is imported at most once. If `nr/svd.calc` imports `nr.eigen`, and your program also imports `nr.eigen` directly, the eigen module is included once.
+Each canonical file path is imported at most once. If `nr/svd.clc` imports `nr.eigen`, and your program also imports `nr.eigen` directly, the eigen module is included once.
 
 ```calc
-// my_app.calc
-import "nr.svd";        // svd.calc itself does `import "nr.eigen";`
+// my_app.clc
+import "nr.svd";        // svd.clc itself does `import "nr.eigen";`
 import "nr.eigen";      // already in the import set — silently skipped
 ```
 
@@ -2388,7 +2500,7 @@ Direct circular imports (`a` imports `b` imports `a`) are also handled.
 A library's `pub` items are its documented API. `priv` items are internal helpers — the import system still inlines them (pub bodies depend on them), but they're not part of what callers should rely on. Conventionally, prefix private helpers with `_`:
 
 ```calc
-// lib/nr/svd.calc
+// lib/nr/svd.clc
 priv fn _svd_matmul(A, B) { ... }    // internal — don't call from outside
 pub  fn svd(A) { ... }                // API — what consumers use
 ```
@@ -2400,7 +2512,7 @@ If two imports both define the same symbol name, codegen rejects the program at 
 A library can declare top-level `let`s for shared constants:
 
 ```calc
-// lib.calc
+// lib.clc
 let SCALE = 1.5;     // module-level constant
 
 pub fn boost(x) {
@@ -2411,7 +2523,7 @@ pub fn boost(x) {
 But there's a catch: a top-level `pub fn` in the native backend doesn't see top-level `let`s. So this won't work the way you might hope:
 
 ```calc
-// lib.calc — BROKEN PATTERN
+// lib.clc — BROKEN PATTERN
 let counter = 0;
 pub fn bump() {
     counter = counter + 1;     // top-level `fn` can't reach top-level `let`
@@ -2434,7 +2546,7 @@ Callers do `let c = Counter(0); c.bump();` — the state rides along with the in
 
 Classes export the same way as fns:
 
-**shapes.calc:**
+**shapes.clc:**
 
 ```calc
 pub class Circle {
@@ -2443,10 +2555,10 @@ pub class Circle {
 }
 ```
 
-**main.calc:**
+**main.clc:**
 
 ```calc
-import "./shapes.calc";
+import "./shapes.clc";
 
 let c = Circle(5);
 print c.area();                        // 78.53981634
@@ -2457,15 +2569,17 @@ print c.area();                        // 78.53981634
 `import` is the default. For specialized cases there's also `extern fn`, which declares a single symbol from another compilation unit and links against a pre-built `.s` file:
 
 ```calc
-// main.calc — explicit declarations, manual link step
+// main.clc — explicit declarations, manual link step
 extern fn mean(xs: arr): num;
 extern fn stddev(xs: arr): num;
 ```
 
 ```bash
-build/calcnat --lib lib/stats.calc -o build/stats.s
-build/calcnat main.calc build/stats.s -o app.exe
+bin/calcnat --lib lib/stats.clc -o build/stats.s
+bin/calcnat main.clc build/stats.s -o app.exe
 ```
+
+(`bin/clc --lib …` and `bin/clc main.clc build/stats.s -o app.exe` work too — they forward to `calcnat`. The `calcnat` form is shown here because this section is explicitly about the lower-level tool surface.)
 
 Use `extern fn` when you want to:
 
@@ -2475,18 +2589,226 @@ Use `extern fn` when you want to:
 
 For day-to-day work, `import` is what you want.
 
+### Projects and dependencies
+
+For anything bigger than a single file, CalcLang has a package manager that handles project layout and external dependencies. v0.1 is intentionally minimal — git URLs only, no registry, no version constraints beyond exact tags — but it's enough to actually share code between projects.
+
+#### Project layout
+
+A CalcLang project is any directory containing a `clc.toml` file:
+
+```
+my-project/
+├── clc.toml          # manifest — declares project + dependencies
+├── clc.lock          # auto-generated by `clc install` — pinned commit hashes
+├── main.clc          # your code
+├── lib/              # (optional) project-local libraries
+│   └── helpers.clc
+└── deps/             # (auto-created by `clc install`) cloned dependency sources
+    └── greeter/
+        └── greeter.clc
+```
+
+Nothing in here is hardcoded except the file names. You can have several `.clc` files at top level, organize sources under any subdirectory, keep test data in `tests/`, etc. — `clc.toml` is the only special name.
+
+#### Scaffolding — `clc init`
+
+`clc init <dir>` creates a new project skeleton:
+
+```bash
+$ clc init my-project
+Created my-project/clc.toml
+Created my-project/main.clc
+
+Next steps:
+  edit my-project/clc.toml to declare dependencies
+  clc install                     # fetch deps into deps/
+  clc -r my-project/main.clc      # run
+
+$ cd my-project
+$ cat clc.toml
+# clc.toml — project manifest. See `clc --help` and the CalcLang book
+# for the package format.
+
+name = "my-project"
+version = "0.1.0"
+
+# Declare dependencies as [dependencies.<name>] sections:
+#
+#   [dependencies.vec-extras]
+#   git = "https://github.com/user/calclang-vec-extras.git"
+#   tag = "v1.0.0"          # optional; default is the default branch
+#
+# Then run `clc install` to fetch into deps/, and `import "vec-extras"`
+# from your CalcLang source will resolve against deps/vec-extras/vec-extras.clc.
+```
+
+The defaults are deliberately tiny — fill in the dep sections, then `clc install` fetches them. `clc init` won't overwrite an existing `clc.toml`; rerun it in a different directory or delete the file first.
+
+#### Manifest format — `clc.toml`
+
+The manifest is TOML-subset (the parts CalcLang's hand-rolled parser supports — top-level `key = "value"` lines, `[section.subsection]` headers, and `# comments`). No arrays, no inline tables, no numeric values: everything's a quoted string.
+
+```toml
+# Top-level fields.
+name = "my-project"
+version = "0.1.0"
+
+# One section per dependency. The section name after `dependencies.` becomes
+# the package name used in `import "..."` statements.
+[dependencies.greeter]
+git = "https://github.com/someone/calclang-greeter.git"
+tag = "v1.0.0"            # optional — defaults to the default branch HEAD
+
+[dependencies.vec-extras]
+git = "https://github.com/another/vec-extras.git"
+# tag omitted → fetches default branch
+```
+
+The supported fields per dependency:
+
+| Field   | Required? | Meaning                                                                |
+|---------|-----------|-------------------------------------------------------------------------|
+| `git`   | yes       | Git URL passed verbatim to `git clone`. Anything `git` accepts works: `https://`, `git@github.com:`, `file:///`, `ssh://...`. |
+| `tag`   | no        | Tag or branch name. When given, `git clone --depth 1 --branch <tag>`. When omitted, shallow clone of the default branch HEAD. |
+
+That's the whole schema. v0.1 intentionally omits version ranges (`^1.2`, `~1.2.3`), transitive dependency declarations, build hooks, and registry lookup — the surface stays small so the next iterations can extend cleanly.
+
+#### Installing dependencies — `clc install`
+
+`clc install` reads `clc.toml`, shallow-clones each dependency into `deps/<name>/`, captures the resolved HEAD commit hash, and writes `clc.lock`:
+
+```bash
+$ clc install
+  greeter                  clone https://github.com/someone/calclang-greeter.git @ v1.0.0
+Cloning into 'deps/greeter'...
+remote: ...
+  vec-extras               clone https://github.com/another/vec-extras.git
+Cloning into 'deps/vec-extras'...
+remote: ...
+
+Installed 2 dependency(ies). Lockfile: clc.lock
+```
+
+If a dep already exists at `deps/<name>/`, the clone is skipped — `clc install` is idempotent. To force a refresh, delete the relevant `deps/<name>/` directory and rerun.
+
+Each clone is depth-1 (no history), so it's fast and small even for large repos.
+
+#### Using a dependency
+
+After installing, your CalcLang source imports the dep by name:
+
+```calc
+import "math";          // stdlib (resolves via CALC_LIB_PATH)
+import "greeter";       // project-local dep (resolves via deps/)
+
+greet("CalcLang user");
+print "sq(8) = " + sq(8);
+```
+
+The parser's resolution machinery (described in *Path resolution* above) probes `deps/greeter/greeter.clc` before falling back to the stdlib. Project-local deps shadow stdlib by precedence — if both have a module called `vec`, the project-local one wins.
+
+**Naming convention.** A dependency named `greeter` is expected to expose `deps/greeter/greeter.clc` as its entry point. The cloned repository must contain a top-level file with that exact name. Inside that file, `pub fn` declarations are the dep's API:
+
+```calc
+// deps/greeter/greeter.clc
+pub fn greet(name: str) {
+    print "hello, " + name + " — from greeter v1.0";
+}
+```
+
+The dep can `import` its own internal helpers, the stdlib, or even other deps from the parent project. Cross-dep imports work because the parser still probes the parent project's `deps/` directory.
+
+#### The lockfile — `clc.lock`
+
+Every `clc install` writes `clc.lock` next to `clc.toml`. It records the exact state of each dep at install time:
+
+```toml
+# Auto-generated by `clc install`. Do not edit by hand; rerun
+# `clc install` to refresh.
+
+[dependencies.greeter]
+git = "https://github.com/someone/calclang-greeter.git"
+tag = "v1.0.0"
+commit = "9c9bb3874904e29ce5af4de635392a68566a05f0"
+
+[dependencies.vec-extras]
+git = "https://github.com/another/vec-extras.git"
+commit = "abc123def456..."
+```
+
+Check `clc.lock` into version control alongside `clc.toml`. The lockfile records exactly which commit your build was tested against, so collaborators (and CI) reproduce the same dep state. v0.1 doesn't yet *enforce* the lock on subsequent installs — `clc install` re-clones to the tag if the dep is missing, regardless of `commit` — but the recorded hash is the canonical way to audit "what version was this".
+
+#### A complete worked example
+
+Starting from scratch, building a project that uses two libraries:
+
+```bash
+# 1. Scaffold.
+$ clc init number-cruncher
+Created number-cruncher/clc.toml
+Created number-cruncher/main.clc
+$ cd number-cruncher
+
+# 2. Declare a dependency. Edit clc.toml to add:
+$ cat >> clc.toml <<'EOF'
+
+[dependencies.greeter]
+git = "https://github.com/someone/calclang-greeter.git"
+tag = "v1.0.0"
+EOF
+
+# 3. Fetch.
+$ clc install
+  greeter                  clone https://github.com/someone/calclang-greeter.git @ v1.0.0
+Cloning into 'deps/greeter'...
+Installed 1 dependency(ies). Lockfile: clc.lock
+
+# 4. Use it. Edit main.clc:
+$ cat > main.clc <<'EOF'
+import "math";       // stdlib
+import "greeter";    // deps/greeter/greeter.clc
+
+greet("CalcLang user");
+print "sq(8)  = " + sq(8);
+print "pi     = " + pi();
+EOF
+
+# 5. Build + run.
+$ clc main.clc -o cruncher.exe
+$ ./cruncher.exe
+hello, CalcLang user — from greeter v1.0
+sq(8)  = 64
+pi     = 3.141592654
+```
+
+For VCS hygiene, add `deps/` and `*.exe` (or whatever output name you use) to your `.gitignore`. The repo only needs `clc.toml`, `clc.lock`, and your own sources — `deps/` is regenerable from the lockfile.
+
+#### What's not in v0.1
+
+| Missing                              | When you'd want it                                                  |
+|--------------------------------------|-----------------------------------------------------------------------|
+| Version constraints (`^1.2`, `~1.2.3`) | Constraint solving across multiple consumers of the same lib.        |
+| Transitive resolution                 | Letting deps' deps install automatically.                            |
+| Conflict resolution                   | When two deps need different versions of a third dep.                |
+| A registry                            | Discovery by name instead of git URL; central index.                 |
+| `clc add <name>`                      | Editing `clc.toml` from the command line instead of by hand.         |
+| `clc publish`                         | Releasing your package to a registry.                                 |
+
+The v0.1 foundation — manifest, lockfile, `deps/` probe in the parser — is designed so each of these can be layered on without a redesign. The "Real package manager" line item in the project's roadmap is the rest of this work.
+
 ### Current limitations
 
 - **No selective import** like Python's `from X import Y, Z`. Everything from the imported file comes in.
 - **No name aliasing**. If two imports both export `mean`, codegen rejects the program. Pick names that don't collide.
-- **No package system**. `import "math"` resolves to `lib/math.calc` under cwd; there's no install-able registry.
+- **No transitive dependency resolution** in the package manager v0.1 — a dep's `clc.toml` is ignored when installing. You declare what you need directly. Layered package work will lift this.
 - **Library code is inlined per consumer**. If 10 programs all `import "math"`, each binary contains its own copy. Cheap for small libs, matters for very large ones — use `extern fn` + `--lib` to share if it matters.
 
 ### A bigger example — splitting an app
 
 Suppose you want to build a small numerical experiment:
 
-**stats.calc:**
+**stats.clc:**
 
 ```calc
 pub fn mean(xs) {
@@ -2506,7 +2828,7 @@ pub fn stddev(xs) {
 }
 ```
 
-**random.calc:**
+**random.clc:**
 
 ```calc
 pub class Rng {
@@ -2526,11 +2848,11 @@ pub class Rng {
 }
 ```
 
-**main.calc:**
+**main.clc:**
 
 ```calc
-import "./stats.calc";
-import "./random.calc";
+import "./stats.clc";
+import "./random.clc";
 
 let rng = Rng(2026);
 let samples = [];
@@ -2544,26 +2866,28 @@ print "stddev = " + stddev(samples);      // ~ 1
 Build:
 
 ```bash
-build/calcnat main.calc -o sim.exe
+bin/clc main.clc -o sim.exe
 ./sim.exe
 # mean   = -0.001234...
 # stddev = 0.998765...
 ```
 
-One command, no per-library `--lib` step. The leading `./` on each import says "look next to main.calc"; without it the parser would search `lib/stats.calc` first.
+One command, no per-library `--lib` step. The leading `./` on each import says "look next to main.clc"; without it the parser would search `lib/stats.clc` first.
 
 ### Same source, both pipelines
 
-Multi-file programs also work on the bytecode VM, but with the older `extern fn`/`--lib`/per-file `.co` model (the VM's frontend doesn't expand `import` directives across compilation units). For the VM you still write:
+Multi-file programs also work on the bytecode VM, but with the older `extern fn`/`--lib`/per-file `.co` model — the VM's frontend doesn't expand `import` directives across compilation units. For the VM, drop down to the four underlying tools:
 
 ```bash
-build/calcc   lib.calc  lib.casm
-build/calcc   main.calc main.casm
-build/calcasm lib.casm  lib.co
-build/calcasm main.casm main.co
-build/calcld  main.co lib.co  app.cexe     # main MUST come first — its top-level code is the entry
-build/calcvm  app.cexe
+bin/calcc   lib.clc  lib.casm
+bin/calcc   main.clc main.casm
+bin/calcasm lib.casm  lib.co
+bin/calcasm main.casm main.co
+bin/calcld  main.co lib.co  app.cexe     # main MUST come first — its top-level code is the entry
+bin/calcvm  app.cexe
 ```
+
+For a single-file VM run, `clc -r foo.clc` collapses the whole `calcc → calcasm → calcld → calcvm` chain into one command (intermediates land in `build/`). The chain above is only needed when you're linking multiple object files manually.
 
 The two pipelines produce byte-identical output for the features they share. For new code, prefer the native backend + `import`.
 
@@ -2839,10 +3163,10 @@ fn loop() {
 
 #### Worked example: Tetris
 
-`examples/tetris.calc` is a complete terminal Tetris built with `read_key`, `sleep_ms`, `time_ms`, and ANSI escapes. About 300 lines total: a `struct Piece` for the seven tetrominoes, a `struct Game` for board + piece state + RNG + score, collision/rotation/line-clear logic, and a render path that builds each frame as one big ANSI string before writing it (single `write` per frame avoids visible tearing).
+`examples/tetris.clc` is a complete terminal Tetris built with `read_key`, `sleep_ms`, `time_ms`, and ANSI escapes. About 300 lines total: a `struct Piece` for the seven tetrominoes, a `struct Game` for board + piece state + RNG + score, collision/rotation/line-clear logic, and a render path that builds each frame as one big ANSI string before writing it (single `write` per frame avoids visible tearing).
 
 ```bash
-build/calcnat examples/tetris.calc -o build/tetris.exe
+bin/clc examples/tetris.clc -o build/tetris.exe
 build/tetris.exe
 ```
 
@@ -2850,7 +3174,7 @@ Controls are arrow keys to move/rotate, space to hard-drop, `q` to quit. The "gh
 
 ### Date and time
 
-`time_ms()` is a monotonic counter useful for game-loop pacing. For wall-clock dates — "what year is it", "format this timestamp", "is this date before that one" — CalcLang ships four runtime builtins plus `lib/datetime.calc`.
+`time_ms()` is a monotonic counter useful for game-loop pacing. For wall-clock dates — "what year is it", "format this timestamp", "is this date before that one" — CalcLang ships four runtime builtins plus `lib/datetime.clc`.
 
 #### Builtins
 
@@ -2863,7 +3187,7 @@ Controls are arrow keys to move/rotate, space to hard-drop, `q` to quit. The "gh
 
 `%Y %m %d %H %M %S %A %B %a %b %j %Z` are all supported (anything `strftime(3)` accepts). All wall-clock math is in UTC for now — timezone-aware variants will come with locale support.
 
-#### `lib/datetime.calc` — DateTime records and helpers
+#### `lib/datetime.clc` — DateTime records and helpers
 
 ```calc
 import "datetime";
@@ -2925,7 +3249,7 @@ Engine internals: regex source → AST → recursive backtracking matcher with c
 | `regex_replace(pattern, text, replacement)`  | Replace all matches; `$0`-`$9` in `replacement` substitute groups     |
 | `regex_split(pattern, text)`                 | Split text on every match → array of segments                         |
 
-#### `lib/regex.calc` — ergonomic helpers + validators
+#### `lib/regex.clc` — ergonomic helpers + validators
 
 ```calc
 import "regex";
@@ -2982,7 +3306,7 @@ print make_arr()[1:3];          // works on any expression
 
 CalcLang already had `lib/linalg`, `lib/stats`, `lib/nr/`, etc. for numerical work, but every element-wise operation forced you to write a loop. The scientific bundle adds NumPy/Fortran-style ergonomics on top.
 
-#### `lib/vec.calc` — element-wise array ops, broadcasting, BLAS-1
+#### `lib/vec.clc` — element-wise array ops, broadcasting, BLAS-1
 
 ```calc
 import "vec";
@@ -3009,7 +3333,7 @@ print vec_norm(vec_sub(y, mean_curve));        // L2 error
 | `arange(start, stop, step)`   | Half-open numeric range                          |
 | `vec_zeros(n)` / `_ones(n)` / `_full(n, v)` | Construction helpers              |
 
-#### `lib/stats.calc` — extended reductions
+#### `lib/stats.clc` — extended reductions
 
 The original `mean / variance / stddev / min_of / max_of / linreg / histogram` set is now joined by Fortran-intrinsic-style helpers:
 
@@ -3026,7 +3350,7 @@ The original `mean / variance / stddev / min_of / max_of / linreg / histogram` s
 | `zscore(xs)`                    | `(x − mean) / stddev` for every element     |
 | `normalize(xs)`                 | Min-max normalize to `[0, 1]`               |
 
-#### `lib/constants.calc` — math, physics, conversions
+#### `lib/constants.clc` — math, physics, conversions
 
 Everything in SI units. Defined-exactly constants from the 2019 SI revision get their exact CODATA values; the rest match CODATA 2018.
 
@@ -3064,7 +3388,7 @@ if (!is_finite(r)) { throw "blew up at x = " + x; }
 
 ### HTTP client
 
-`lib/http.calc` plus four runtime builtins give you a basic HTTP client backed by WinHTTP on Windows. Enough for "fetch this JSON" and "POST this form" patterns — most engineering scripts that talk to a REST API.
+`lib/http.clc` plus four runtime builtins give you a basic HTTP client backed by WinHTTP on Windows. Enough for "fetch this JSON" and "POST this form" patterns — most engineering scripts that talk to a REST API.
 
 #### Builtins
 
@@ -3081,7 +3405,7 @@ print http_status();                  // 200
 print body;                            // {"args": {"hello": "calclang"}, ...}
 ```
 
-#### `lib/http.calc` — typed responses + JSON helpers
+#### `lib/http.clc` — typed responses + JSON helpers
 
 ```calc
 import "http";
@@ -3237,7 +3561,7 @@ gui_close();
 
 #### Widget kit
 
-`lib/gui.calc` builds an immediate-mode widget kit on top of the primitives — buttons, checkboxes, sliders, colored panels:
+`lib/gui.clc` builds an immediate-mode widget kit on top of the primitives — buttons, checkboxes, sliders, colored panels:
 
 ```calc
 import "gui";
@@ -3264,7 +3588,7 @@ while (!gui_should_close()) {
 gui_close();
 ```
 
-Widgets available in `lib/gui.calc`:
+Widgets available in `lib/gui.clc`:
 
 - **`button(x, y, w, h, label)`** — returns `1` if clicked this frame.
 - **`checkbox(x, y, size, state)`** — returns the new state (toggles when clicked).
@@ -3277,19 +3601,19 @@ Plus color helpers: `Color(r, g, b)`, `rgb(r, g, b)`, `col_dark()`, `col_panel()
 
 #### Worked example: a form
 
-`examples/gui_form_demo.calc` is a small settings panel: two text inputs (`name`, `api_key`), a dropdown (`backend`), a checkbox (`dark_mode`), and a slider (`volume`). The whole loop is ~30 lines of immediate-mode code on top of `lib/gui.calc`. When you close the window, the final values are printed to stdout.
+`examples/gui_form_demo.clc` is a small settings panel: two text inputs (`name`, `api_key`), a dropdown (`backend`), a checkbox (`dark_mode`), and a slider (`volume`). The whole loop is ~30 lines of immediate-mode code on top of `lib/gui.clc`. When you close the window, the final values are printed to stdout.
 
 ```bash
-build/calcnat examples/gui_form_demo.calc -o build/gui_form_demo.exe
+bin/clc examples/gui_form_demo.clc -o build/gui_form_demo.exe
 build/gui_form_demo.exe
 ```
 
 #### Worked example: GUI Tetris
 
-`examples/tetris_gui.calc` is the same Tetris game logic as `examples/tetris.calc`, but the render pass uses `gui_rect`/`gui_rect_outline` instead of ANSI block printing, and input comes from `gui_key_pressed` instead of `read_key`. Score / lines / level / next-piece preview are rendered in the side panel using the embedded bitmap font (`gui_text` at scale 3 for the big numbers).
+`examples/tetris_gui.clc` is the same Tetris game logic as `examples/tetris.clc`, but the render pass uses `gui_rect`/`gui_rect_outline` instead of ANSI block printing, and input comes from `gui_key_pressed` instead of `read_key`. Score / lines / level / next-piece preview are rendered in the side panel using the embedded bitmap font (`gui_text` at scale 3 for the big numbers).
 
 ```bash
-build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe
+bin/clc examples/tetris_gui.clc -o build/tetris_gui.exe
 build/tetris_gui.exe
 ```
 
@@ -3350,10 +3674,10 @@ print r;        // [(1, 0), (6.12e-17, 1), (-1, 1.22e-16), (-1.83e-16, -1)]
 
 #### When complex matters
 
-CalcLang's complex support is what makes FFT, polynomial root finding, and frequency-domain filtering possible without hand-packing `{re, im}` pairs into maps. The standard library's `lib/fft.calc` evaluates the Cooley-Tukey radix-2 FFT directly using `complex(...)` and the polymorphic arithmetic operators — the code reads like the math.
+CalcLang's complex support is what makes FFT, polynomial root finding, and frequency-domain filtering possible without hand-packing `{re, im}` pairs into maps. The standard library's `lib/fft.clc` evaluates the Cooley-Tukey radix-2 FFT directly using `complex(...)` and the polymorphic arithmetic operators — the code reads like the math.
 
 ```calc
-// Snippet from lib/fft.calc (paraphrased):
+// Snippet from lib/fft.clc (paraphrased):
 fn fft_step(x) {
     let n = len(x);
     if (n == 1) { return x; }
@@ -3604,8 +3928,8 @@ This works whether `f` is a self-call or a different function — but the curren
 
 With these three additions, you can:
 
-- Write a `linalg.calc` library: matrices as arrays-of-arrays, operations defined on top.
-- Write a `plot.calc` library: stream SVG to a file as you generate it, or write CSV and shell out to gnuplot.
+- Write a `linalg.clc` library: matrices as arrays-of-arrays, operations defined on top.
+- Write a `plot.clc` library: stream SVG to a file as you generate it, or write CSV and shell out to gnuplot.
 - Do signal-processing math directly: complex arithmetic without manually packing `{re, im}` pairs.
 
 The next phases of the language (tail-call optimization, exceptions, dynamic linking / FFI) extend what you can express; these three are about *interoperating* with the outside world.
@@ -3658,7 +3982,7 @@ print atan2(1, 1) * 4;      // 3.141592654    (== pi)
 print log(e());             // 1
 ```
 
-For reproducible random numbers, use `lib/random.calc`'s `Rng` class instead of the bare `random()` builtin.
+For reproducible random numbers, use `lib/random.clc`'s `Rng` class instead of the bare `random()` builtin.
 
 ### Strings
 
@@ -3726,7 +4050,7 @@ for (let i = 0; i < 20; i = i + 2) { push(evens, i); }
 print evens;                                 // [0, 2, 4, ..., 18]
 ```
 
-Note: `array_sort` doesn't accept a custom comparator. For non-default sort orders, use `lib/nr/sort.calc`'s `heapsort_idx` to get a permutation, or sort a derived key array.
+Note: `array_sort` doesn't accept a custom comparator. For non-default sort orders, use `lib/nr/sort.clc`'s `heapsort_idx` to get a permutation, or sort a derived key array.
 
 ### Maps
 
@@ -3994,9 +4318,9 @@ Sig codes: `d` (double), `i` (int), `s` (C string), `v` (void). Format: `"<ret>:
 
 Three CalcLang modules under `lib/` give you the basics for numerical and visualization work, written entirely on top of the language features we've built up so far.
 
-### `lib/math.calc` — convenience math helpers
+### `lib/math.clc` — convenience math helpers
 
-The calclib builtins cover the standard scalar math (`sqrt`, `pow`, trig, `log`, etc.). `lib/math.calc` adds the small helpers that come up over and over in numerical code:
+The calclib builtins cover the standard scalar math (`sqrt`, `pow`, trig, `log`, etc.). `lib/math.clc` adds the small helpers that come up over and over in numerical code:
 
 ```calc
 extern fn sq(x: num): num;
@@ -4044,7 +4368,7 @@ Use it from any program:
 import "math";
 ```
 
-### `lib/linalg.calc` — matrices
+### `lib/linalg.clc` — matrices
 
 Matrices are arrays-of-arrays: `m[r][c]` is the (r, c) element. Every operation allocates a fresh result; nothing mutates in place except the explicit `mat_set`.
 
@@ -4063,7 +4387,7 @@ print mat_det(A);          // -1
 
 Available: `mat_zeros`, `mat_ones`, `mat_eye`, `mat_from_rows`; `mat_shape`, `mat_rows`, `mat_cols`, `mat_get`, `mat_set`; `mat_add`, `mat_sub`, `mat_scale`, `mat_mul`, `mat_vec_mul`, `mat_transpose`; `mat_solve` (Gaussian elimination with partial pivoting), `mat_det` (via the same LU sweep, with sign tracking).
 
-### `lib/stats.calc` — statistics
+### `lib/stats.clc` — statistics
 
 ```calc
 extern fn mean(xs: arr): num;
@@ -4078,7 +4402,7 @@ print stddev(xs);          // 2.156385878
 
 Available: `sum_of`, `mean`, `variance` (sample, n-1 denominator), `stddev`, `median`, `min_of`, `max_of`, `range_of`, `correlate` (Pearson r), `linreg` (returns `{"slope", "intercept", "r2"}`), `histogram` (returns `{"edges", "counts"}`).
 
-### `lib/plot.calc` — SVG plots
+### `lib/plot.clc` — SVG plots
 
 Generates standalone SVG files you can open in any browser. Streams via `file_append` so plots with thousands of points stay memory-bounded.
 
@@ -4096,7 +4420,7 @@ plot_line("sine.svg", xs, ys, "sin(x) over [0, 4π]");
 
 Available: `plot_line` (single series, polyline), `plot_scatter` (one circle per point), `plot_data_with_fit` (scatter + line overlay — useful for regression visualisations). All plots get axes with five tick labels per axis.
 
-### `lib/numeric.calc` — root finding, integration, interpolation
+### `lib/numeric.clc` — root finding, integration, interpolation
 
 ```calc
 extern fn bisect(f: fn, a: num, b: num, tol: num): num;
@@ -4117,7 +4441,7 @@ Available: `bisect`, `newton`, `secant` (root finding); `trapezoidal`, `simpson`
 
 The root-finders and integrators take **functions as arguments** — CalcLang's first-class fns let you pass `fn(x) { return cos(x); }` straight in. No callback boilerplate.
 
-### `lib/random.calc` — reproducible PRNG
+### `lib/random.clc` — reproducible PRNG
 
 A class-based PRNG: the state lives in `this.state`, and methods generate distributions on top.
 
@@ -4139,7 +4463,7 @@ The underlying generator is the linear-congruential Numerical-Recipes scheme. Re
 
 Why a class? Top-level `fn`s in the native backend don't see top-level `let`s, so a module-level stateful PRNG would be awkward. Wrapping it in a class lets `this.state` ride along with each method call via the existing closure machinery — clean and natural.
 
-### `lib/csv.calc` — CSV I/O
+### `lib/csv.clc` — CSV I/O
 
 ```calc
 extern fn csv_write(path: str, rows: arr);
@@ -4161,7 +4485,7 @@ print to_num(loaded[0]["x"]);       // 0     (convert when you need numbers)
 
 Deliberately simple: split on `\n` and `,`. Doesn't handle quoted fields with embedded commas. Cells come back as strings — convert with `to_num` where needed. Strips Windows-style `\r` on read so files round-trip cross-platform.
 
-### Extended `lib/linalg.calc`: `mat_inv`, vector / matrix norms
+### Extended `lib/linalg.clc`: `mat_inv`, vector / matrix norms
 
 ```calc
 extern fn mat_inv(a: arr): arr;
@@ -4193,7 +4517,7 @@ extern fn plot_line_labeled(filename: str, xs: arr, ys: arr, title: str,
 - **`plot_logy`** plots with a log-scale y-axis (all y values must be > 0). Useful for exponential decay or wide dynamic-range data.
 - **`plot_line_labeled`** is `plot_line` with explicit x/y axis labels (the y-label is rotated 90° at the left edge).
 
-### `lib/json.calc` — JSON parser + encoder
+### `lib/json.clc` — JSON parser + encoder
 
 ```calc
 extern fn json_parse(src: str);
@@ -4214,7 +4538,7 @@ print m["flag"];                          // 1   (true -> 1)
 
 `true` and `false` become `1` and `0`; `null` becomes `0` (CalcLang has no distinct boolean or null Value). Strings are decoded with `\n` / `\t` / `\r` / `\"` / `\\` / `\/`. Round-trips `num`/`str`/`arr`/`map` cleanly.
 
-### `lib/ode.calc` — ODE solvers
+### `lib/ode.clc` — ODE solvers
 
 Fourth-order Runge-Kutta for both scalar and vector ODEs.
 
@@ -4239,7 +4563,7 @@ Each solver returns `{"ts": [...], "ys": [...]}`. For scalar ODEs `ys[i]` is a n
 
 `euler` is provided for didactic comparison — same call shape, but linear convergence. At the same step count it lags RK4 substantially.
 
-### `lib/fft.calc` — Cooley-Tukey FFT using complex numbers
+### `lib/fft.clc` — Cooley-Tukey FFT using complex numbers
 
 ```calc
 extern fn fft(x: arr): arr;          // forward DFT
@@ -4261,13 +4585,13 @@ let mag = fft_magnitude(X);
 
 Input length must be a power of 2. The forward `fft` accepts either real (`num`) or complex (`cpx`) values — real inputs are auto-promoted by the complex-number arithmetic. The output is always an array of `cpx`. `ifft(fft(x))` round-trips to within machine epsilon (~1e-16).
 
-CalcLang's first-class complex type means there's no manual `{re, im}` packing — the inner-loop arithmetic in `lib/fft.calc` is the literal mathematical form: `let t = w * O[k]; result[k] = E[k] + t;`.
+CalcLang's first-class complex type means there's no manual `{re, im}` packing — the inner-loop arithmetic in `lib/fft.clc` is the literal mathematical form: `let t = w * O[k]; result[k] = E[k] + t;`.
 
 ### `lib/nr/` — Numerical-Recipes-style algorithms
 
 A separate directory of more substantial numerical algorithms, in the spirit of Press et al.'s *Numerical Recipes in C*. Each one is a well-known piece of canonical numerical computing, implemented from the NR explanations / pseudocode.
 
-#### `lib/nr/brent.calc` — Brent's root finder
+#### `lib/nr/brent.clc` — Brent's root finder
 
 A bracketed root finder that combines bisection's reliability with secant / inverse-quadratic interpolation's speed. Always converges (the bracket only shrinks) and usually does so superlinearly. The standard "robust" choice for one-dimensional root finding.
 
@@ -4280,7 +4604,7 @@ print brent_root(f, 0, pi(), 0.0000000001, 100);   // 1.5707963268...
 
 Caller must bracket the root (`f(a) * f(b) < 0`). Converges in ~10 iterations for typical engineering tolerances.
 
-#### `lib/nr/spline.calc` — natural cubic spline
+#### `lib/nr/spline.clc` — natural cubic spline
 
 Smooth interpolation through a sequence of (xs, ys) knots. Two-step interface (the NR style): pre-compute second derivatives once with `spline_setup`, reuse for every interpolation query.
 
@@ -4300,7 +4624,7 @@ print spline_eval(xs, ys, y2, 1.0);   // 0.84... (close to sin(1) = 0.8415)
 
 The spline reproduces ys exactly at the knots. Off-knot error scales with the fourth power of the knot spacing — 7 evenly-spaced knots over [0, 2π] gives max error ~0.004 against the true sine.
 
-#### `lib/nr/special.calc` — gamma, beta, erf
+#### `lib/nr/special.clc` — gamma, beta, erf
 
 Special functions that come up everywhere in stats and physics.
 
@@ -4320,7 +4644,7 @@ print erf(1);              // 0.8427...
 
 `lgamma` uses the Lanczos approximation (6-term, g = 5). `gamma` is `exp(lgamma)` plus reflection-formula handling for non-positive non-integer x. `erf` uses Abramowitz & Stegun's rational Chebyshev approximation (7.1.26), accurate to about 7 decimal places — plenty for engineering work. `erfc` is `1 - erf`.
 
-#### `lib/nr/eigen.calc` — Jacobi eigenvalue decomposition
+#### `lib/nr/eigen.clc` — Jacobi eigenvalue decomposition
 
 For real symmetric matrices: returns all eigenvalues and the full eigenvector matrix. O(n³) per sweep, O(log(1/eps)) sweeps — solid for small to medium problems (a few hundred rows). Not the right tool for huge dense matrices (use a real LAPACK binding for those), but plenty for engineering work on smallish matrices.
 
@@ -4337,7 +4661,7 @@ let V = eig["vectors"];   // V[r][i] is the r-th component of the i-th eigenvect
 
 Each iteration finds the largest off-diagonal element and rotates it to zero with a Givens-like 2×2 plane rotation. The product of all rotations is the full eigenvector matrix; the diagonal of the rotated matrix converges to the eigenvalues. Residuals `|A v - λ v|` come out at machine epsilon (~1e-13) for well-conditioned problems.
 
-#### `lib/nr/lu.calc` — LU decomposition
+#### `lib/nr/lu.clc` — LU decomposition
 
 Doolittle LU with partial pivoting (NR §2.3). The big payoff over Gauss-Jordan is reuse: one factorization, then any number of right-hand sides solved cheaply, and the determinant comes out as a side effect.
 
@@ -4355,7 +4679,7 @@ print lu_solve(lu, [0,  1,   4]);     // (reuses the factorization)
 
 `lu_decompose` returns `{"L", "U", "P", "sign"}` — L is unit lower-triangular, U upper-triangular, P the row permutation as an index array, and sign is ±1 (parity of row swaps).
 
-#### `lib/nr/romberg.calc` — Romberg integration
+#### `lib/nr/romberg.clc` — Romberg integration
 
 Recursively-refined trapezoidal estimates plus Richardson extrapolation along each row of the table — cancels successive orders of the Taylor remainder. For smooth integrands this typically reaches machine precision in 5-10 levels (NR §4.3).
 
@@ -4366,7 +4690,7 @@ let sin_fn = fn(x) { return sin(x); };
 print romberg(sin_fn, 0, pi(), 0.0000000001, 12);    // 2 (to machine epsilon)
 ```
 
-#### `lib/nr/rk45.calc` — adaptive Runge-Kutta-Cash-Karp
+#### `lib/nr/rk45.clc` — adaptive Runge-Kutta-Cash-Karp
 
 Six function evaluations per step give both a 5th-order and a 4th-order estimate; their difference is the local error estimate. We use it to grow the step when the integrand is tame and shrink it when it's stiff. NR §16.2.
 
@@ -4383,7 +4707,7 @@ print sol["steps_rejected"];   // 0
 
 Returns `{"ts", "ys", "steps_accepted", "steps_rejected"}`. The timestamps are non-uniform — that's the whole point. For a stiff problem like `y' = -100(y - 1)`, RK45 hammers through the boundary layer with many tiny steps and then takes large strides afterward; constant-step RK4 would have to use the smallest step throughout.
 
-#### `lib/nr/poly.calc` — orthogonal-polynomial families
+#### `lib/nr/poly.clc` — orthogonal-polynomial families
 
 Three-term recurrences for Chebyshev T_n, Legendre P_n, Hermite H_n (physicists'), Laguerre L_n; rational approximations for Bessel J_0 and J_1 (NR §5.5 / §6.5).
 
@@ -4403,7 +4727,7 @@ print bessel_J0(2.4048);       // 1.3e-05  (≈ 0; that's a Bessel zero)
 
 All recurrences are evaluated bottom-up — numerically stable and O(n) per evaluation.
 
-#### `lib/nr/minimize.calc` — 1-D and N-D minimization
+#### `lib/nr/minimize.clc` — 1-D and N-D minimization
 
 Three routines, in order of increasing power:
 
@@ -4429,7 +4753,7 @@ let rosen = fn(v) {
 print simplex_min(rosen, [-1.2, 1], 0.5, 1e-10)["x"];   // [~1, ~1]
 ```
 
-#### `lib/nr/sort.calc` — heapsort and quickselect
+#### `lib/nr/sort.clc` — heapsort and quickselect
 
 ```calc
 extern fn heapsort(arr: arr): arr;             // in-place, O(n log n) worst-case
@@ -4442,7 +4766,7 @@ extern fn median(arr: arr): num;
 
 NR §8.3 (heapsort) and §8.5 (selection).
 
-#### `lib/nr/diff.calc` — Ridders' numerical differentiation
+#### `lib/nr/diff.clc` — Ridders' numerical differentiation
 
 Centered differences have a competing pair of errors: truncation O(h²) and roundoff O(eps/h). Ridders' method starts with a generous h, repeatedly halves it, and Neville-extrapolates up the resulting table — driving the truncation error well below the roundoff floor. NR §5.7.
 
@@ -4459,9 +4783,9 @@ print r["err"];                                   // ~1e-15
 
 `gradient` and `jacobian` build on `dfridr` to handle the multivariate cases — useful with `newton_num` below or any other gradient-driven solver.
 
-#### `lib/nr/random_dist.calc` — extra distributions
+#### `lib/nr/random_dist.clc` — extra distributions
 
-Builds on `lib/random.calc`'s `Rng` (already provides uniform / Box-Muller normal / exponential / Poisson). Each function here takes an `Rng` instance and produces one sample from the named distribution. NR §7.3.
+Builds on `lib/random.clc`'s `Rng` (already provides uniform / Box-Muller normal / exponential / Poisson). Each function here takes an `Rng` instance and produces one sample from the named distribution. NR §7.3.
 
 ```calc
 extern fn gamma_sample(rng: map, shape: num, scale: num): num;
@@ -4476,9 +4800,9 @@ extern fn triangular_sample(rng: map, a: num, b: num, c: num): num;
 
 `gamma_sample` uses the Marsaglia–Tsang 2000 squeeze method (with the U^(1/shape) boost for shape < 1). chi² / beta / Student's t are derived from it.
 
-#### `lib/nr/newton.calc` — Newton-Raphson for nonlinear systems
+#### `lib/nr/newton.clc` — Newton-Raphson for nonlinear systems
 
-Solves F(x) = 0 for F: Rⁿ → Rⁿ. Each step solves J·dx = -F via the LU factorization from `lib/nr/lu.calc`. An Armijo back-tracking line search widens the basin of convergence (the full Newton step is halved until ||F|| actually decreases). NR §9.6–9.7.
+Solves F(x) = 0 for F: Rⁿ → Rⁿ. Each step solves J·dx = -F via the LU factorization from `lib/nr/lu.clc`. An Armijo back-tracking line search widens the basin of convergence (the full Newton step is halved until ||F|| actually decreases). NR §9.6–9.7.
 
 ```calc
 extern fn newton_n(F: fn, J: fn, x0: arr, tol: num, max_iter: num): map;
@@ -4496,7 +4820,7 @@ print r["x"];     // [4, 3]
 
 `newton_num` computes the Jacobian numerically (Ridders') — convenient when an analytic Jacobian is hard, at the cost of n + 1 extra function calls per step.
 
-#### `lib/nr/fitnl.calc` — Levenberg-Marquardt nonlinear least squares
+#### `lib/nr/fitnl.clc` — Levenberg-Marquardt nonlinear least squares
 
 Fits y_i ≈ model(x_i; a) by minimizing Σ (y_i - model)². At each step builds the curvature matrix αⱼₖ = Σ (∂model/∂aⱼ)(∂model/∂aₖ) with a Marquardt diagonal boost (1+λ), solves α·δa = β = Σ rᵢ ∂model/∂aⱼ for a step, and adjusts λ depending on whether χ² decreased. Returns the fitted parameters, final χ², and the covariance matrix C = α⁻¹ (with λ=0) for parameter uncertainties. NR §15.5.
 
@@ -4516,7 +4840,7 @@ print fit["covar"];      // parameter covariance matrix
 
 The `dyda` array is the gradient with respect to a — supplying it directly (rather than finite-differencing) is faster and more accurate.
 
-#### `lib/nr/qr.calc` — QR decomposition (Householder)
+#### `lib/nr/qr.clc` — QR decomposition (Householder)
 
 For A (m × n with m ≥ n), `qr_decompose` returns `{"Q", "R"}` where Q is m × m orthogonal and R is m × n upper triangular. `qr_solve` then handles both square systems and overdetermined least-squares problems via back-substitution on R. Householder reflections are the numerically-stable canonical choice (NR §2.10).
 
@@ -4529,7 +4853,7 @@ let qr = qr_decompose(A);
 let x = qr_solve(qr, [3, 2, 4, 5]);   // 4 x 3 LS, x in R^3
 ```
 
-#### `lib/nr/svd.calc` — singular value decomposition
+#### `lib/nr/svd.clc` — singular value decomposition
 
 For A (m × n with m ≥ n), `svd(A)` returns `{"U", "S", "V"}` with U (m × n) having orthonormal columns, S the n singular values sorted descending, V (n × n) orthogonal. Implementation forms A^T A and Jacobi-eigendecomposes it — about half the precision of Golub-Reinsch but ~80 lines of CalcLang. `svd_solve` does rank-revealing LS / minimum-norm solve; `svd_pinv` returns the Moore-Penrose pseudo-inverse. NR §2.6.
 
@@ -4542,7 +4866,7 @@ let r = svd(B);
 print r["S"];     // singular values, biggest first
 ```
 
-#### `lib/nr/polyroots.calc` — Laguerre polynomial roots
+#### `lib/nr/polyroots.clc` — Laguerre polynomial roots
 
 `poly_roots(coefs)` returns all `n = degree` complex roots of P(x) = Σ coefs[i] x^i. Laguerre's method has cubic convergence from almost any starting point and handles repeated / complex roots gracefully. After each root is found we deflate by synthetic division; a final polish pass re-runs Laguerre on the original polynomial to wipe out deflation roundoff. NR §9.5.
 
@@ -4558,7 +4882,7 @@ for (let i = 0; i < len(roots); i = i + 1) { print roots[i]; }
 
 Each root is returned as a CalcLang complex value; real roots come back with imaginary part essentially zero.
 
-#### `lib/nr/conv.calc` — convolution / correlation
+#### `lib/nr/conv.clc` — convolution / correlation
 
 ```calc
 extern fn conv_direct(a: arr, b: arr): arr;
@@ -4567,9 +4891,9 @@ extern fn corr_direct(a: arr, b: arr): arr;
 extern fn correlate_fft(a: arr, b: arr): arr;
 ```
 
-Direct is O(nm); use it for short signals or short kernels. FFT-backed variants run in O((n+m) log(n+m)) — zero-pad to the next power of two, transform both, multiply (or multiply by the conjugate, for correlation), and inverse-transform. Built on `lib/fft.calc`. NR §13.1–13.2.
+Direct is O(nm); use it for short signals or short kernels. FFT-backed variants run in O((n+m) log(n+m)) — zero-pad to the next power of two, transform both, multiply (or multiply by the conjugate, for correlation), and inverse-transform. Built on `lib/fft.clc`. NR §13.1–13.2.
 
-#### `lib/nr/cheb.calc` — Chebyshev approximation
+#### `lib/nr/cheb.clc` — Chebyshev approximation
 
 `cheb_fit(f, a, b, n)` returns a map with the `n` Chebyshev coefficients for f on [a, b]. `cheb_eval` does the Clenshaw recurrence in O(n) without ever building the individual T_k. `cheb_deriv` / `cheb_integral` produce the coefficient table of f' / ∫f exactly — useful for adaptive quadrature pipelines where you want both. NR §5.8–5.9.
 
@@ -4585,7 +4909,7 @@ print cheb_eval(cheb_deriv(cm), 1.0);     // -0.508326... = f'(1)
 
 For smooth f, 8–16 coefficients usually reach machine precision.
 
-#### `lib/nr/savgol.calc` — Savitzky-Golay smoothing / differentiation
+#### `lib/nr/savgol.clc` — Savitzky-Golay smoothing / differentiation
 
 ```calc
 extern fn savgol_coeffs(nl: num, nr: num, m: num, ld: num): arr;
@@ -4596,7 +4920,7 @@ A Savitzky-Golay filter fits a low-order polynomial to a sliding window and read
 
 `nl`/`nr` are points to the left / right of the window center. `m` is the polynomial order. `ld` is the derivative order (0 = smoothing). Window length is `nl + nr + 1`.
 
-#### `lib/nr/kalman.calc` — discrete-time Kalman filter
+#### `lib/nr/kalman.clc` — discrete-time Kalman filter
 
 ```calc
 extern fn kf_new(x0: arr, P0: arr, F: arr, B: arr, H: arr, Q: arr, R: arr): map;
@@ -4605,7 +4929,7 @@ extern fn kf_step(kf: map, u: arr, z: arr): map;
 
 Generic linear-Gaussian state-space estimator. Each step does predict (`x' = F x + B u`, `P' = F P F^T + Q`) and update with measurement z (`K = P H^T (H P H^T + R)^{-1}`, etc.). For a stationary scalar value with sensor variance R and small process variance Q, the steady-state Kalman gain settles around √(Q/R) and the filter dramatically out-performs the raw measurement.
 
-#### `lib/nr/pde.calc` — Crank-Nicolson 1-D diffusion
+#### `lib/nr/pde.clc` — Crank-Nicolson 1-D diffusion
 
 ```calc
 extern fn heat_1d(u0: arr, alpha: num, dx: num, dt: num,
@@ -4616,7 +4940,7 @@ Solves `du/dt = α d²u/dx²` on `[0, L]` with Dirichlet boundary conditions. Cr
 
 Returns `{"u_final", "history"}`, where `history` is the full per-step state — drop it in your caller if you only need the final field.
 
-#### `lib/nr/cholesky.calc` — Cholesky factorization
+#### `lib/nr/cholesky.clc` — Cholesky factorization
 
 For symmetric positive-definite A, `chol_decompose` returns L (lower-triangular) such that A = L L^T. Half the work and storage of LU and never needs pivoting (NR §2.9).
 
@@ -4633,7 +4957,7 @@ print chol_logdet(L);       // log(det(A)) — stable for huge determinants
 
 `chol_logdet` avoids forming the determinant explicitly — useful when det(A) underflows or overflows.
 
-#### `lib/nr/cg.calc` — conjugate gradient
+#### `lib/nr/cg.clc` — conjugate gradient
 
 ```calc
 extern fn cg_solve(A: arr, b: arr, x0: arr, tol: num, max_iter: num): map;
@@ -4642,7 +4966,7 @@ extern fn pcg_solve(A: arr, b: arr, x0: arr, apply_Minv: fn, tol: num, max_iter:
 
 The standard Krylov-subspace method for SPD systems. Converges in O(√cond(A)) iterations to a given tolerance — much faster than direct factorization for large, sparse, or structured problems. `pcg_solve` accepts a preconditioner as a closure that maps a residual to M⁻¹r, supporting fully matrix-free workflows.
 
-#### `lib/nr/anneal.calc` — simulated annealing
+#### `lib/nr/anneal.clc` — simulated annealing
 
 ```calc
 extern fn anneal_solve(f: fn, x0, propose: fn, t_start: num, t_end: num,
@@ -4653,7 +4977,7 @@ extern fn anneal_continuous(f: fn, x0: arr, step: num, t_start: num, t_end: num,
 
 Generic minimizer that walks a Metropolis chain whose temperature decays on a geometric schedule. Uphill moves are accepted with probability exp(−ΔF/T) — escapes local minima while T is high, refines as T cools. `anneal_solve` takes any state and a problem-specific `propose(x, T, rng)`. `anneal_continuous` is the convenience wrapper for x ∈ Rⁿ with Gaussian random-walk proposals. NR §10.9.
 
-#### `lib/nr/mcmc.calc` — Metropolis-Hastings sampler
+#### `lib/nr/mcmc.clc` — Metropolis-Hastings sampler
 
 ```calc
 extern fn metropolis(log_pi: fn, x0, propose: fn, log_q_ratio,
@@ -4664,7 +4988,7 @@ extern fn metropolis_rw(log_pi: fn, x0: arr, step: num,
 
 Markov-chain Monte Carlo for sampling from an unnormalized target. Operates in log-space for numerical stability across many decades of probability. `metropolis_rw` is the symmetric random-walk variant for Rⁿ. Returns the post-burn-in, thinned samples plus the acceptance rate (target ~25–40% for Gaussian walks).
 
-#### `lib/nr/welch.calc` — Welch's periodogram
+#### `lib/nr/welch.clc` — Welch's periodogram
 
 ```calc
 extern fn welch(xs: arr, fs: num, n_per_seg: num, overlap_frac: num): map;
@@ -4673,7 +4997,7 @@ extern fn hann_window(N: num): arr;
 
 Splits the signal into overlapping Hann-windowed segments, FFTs each, and averages |X(f)|² across segments. The averaging reduces estimator variance vs a single periodogram; the taper reduces leakage. Output is `{"freqs", "psd"}` of length `n_per_seg/2 + 1`. NR §13.4.
 
-#### `lib/nr/wavelet.calc` — discrete wavelet transforms
+#### `lib/nr/wavelet.clc` — discrete wavelet transforms
 
 ```calc
 extern fn haar_forward(xs: arr): arr;     extern fn haar_inverse(ys: arr): arr;
@@ -4682,7 +5006,7 @@ extern fn d4_forward(xs: arr): arr;       extern fn d4_inverse(ys: arr): arr;
 
 Two transform families: the simplest possible (Haar) and Daubechies's compactly-supported orthogonal D4. Length must be a power of two; output layout is `[final-approx, coarse-detail, ..., finest-detail]`. Both transforms round-trip to machine epsilon. NR §13.10.
 
-#### `lib/nr/toeplitz.calc` — Levinson-Durbin
+#### `lib/nr/toeplitz.clc` — Levinson-Durbin
 
 ```calc
 extern fn levinson_solve(r: arr, y: arr): arr;
@@ -4691,7 +5015,7 @@ extern fn yule_walker(autocorr: arr, p: num): map;
 
 Levinson exploits the constant-diagonal structure of a symmetric Toeplitz matrix `T[i][j] = r[|i-j|]` to solve `T x = y` in O(n²) instead of O(n³). `yule_walker` builds on it: given an autocorrelation sequence, returns the AR(p) coefficients and the residual variance σ². NR §2.8, §13.6.
 
-#### `lib/nr/simplex_lp.calc` — linear programming
+#### `lib/nr/simplex_lp.clc` — linear programming
 
 ```calc
 extern fn simplex_lp(c: arr, A: arr, b: arr): map;
@@ -4700,7 +5024,7 @@ extern fn simplex_lp(c: arr, A: arr, b: arr): map;
 
 Two-phase simplex method with big-M handling for negative RHS entries. Returns `{"status", "x", "value"}` where status ∈ {0=optimal, 1=unbounded, 2=infeasible}. NR §10.8. Cast minimization problems by negating `c`; cast `>=` constraints by negating the row.
 
-#### `lib/nr/fft2d.calc` — two-dimensional FFT
+#### `lib/nr/fft2d.clc` — two-dimensional FFT
 
 ```calc
 extern fn fft2(X: arr): arr;
@@ -4709,7 +5033,7 @@ extern fn ifft2(Y: arr): arr;
 
 Both dimensions must be powers of two. The implementation is straightforward separable: FFT each row, then FFT each column. NR §12.4.
 
-#### `lib/nr/quad2d.calc` — two-dimensional quadrature
+#### `lib/nr/quad2d.clc` — two-dimensional quadrature
 
 ```calc
 extern fn quad2d_gl(f: fn, ax, bx, ay, by, n: num): num;
@@ -4718,7 +5042,7 @@ extern fn quad2d_adaptive(f: fn, ax, bx, ay, by, tol: num): num;
 
 `quad2d_gl` evaluates an n-point Gauss-Legendre tensor product (n ∈ {2, 3, 4, 5}). The fixed rule is exact for polynomials up to degree 2n-1 in each variable — beautiful for smooth integrands, poor for sharply peaked ones. `quad2d_adaptive` recursively bisects until each cell's estimate matches the sum of its four sub-cell estimates within tol — handles peaks gracefully. NR §4.5.
 
-#### `lib/nr/power_eigen.calc` — power and inverse iteration
+#### `lib/nr/power_eigen.clc` — power and inverse iteration
 
 ```calc
 extern fn power_iterate(A: arr, x0: arr, tol: num, max_iter: num): map;
@@ -4727,7 +5051,7 @@ extern fn inverse_iterate(A: arr, sigma: num, x0: arr, tol: num, max_iter: num):
 
 `power_iterate` finds the dominant eigenvalue (largest in absolute value) by repeatedly multiplying by A and renormalizing. The Rayleigh quotient at each step gives a quadratically-convergent estimate of the eigenvalue. `inverse_iterate` solves `(A - σI) y = x` each step (via LU once, reused thereafter) — converges to the eigenvalue nearest σ. Together they cover the "I want one specific eigenvalue" use case that the full Jacobi solver overshoots for. NR §11.7.
 
-#### `lib/nr/bspline.calc` — B-spline evaluation and fitting
+#### `lib/nr/bspline.clc` — B-spline evaluation and fitting
 
 ```calc
 extern fn bspline_basis(knots: arr, k: num, x: num): arr;
@@ -4738,7 +5062,7 @@ extern fn bspline_clamped_knots(a, b: num, n_interior, k: num): arr;
 
 `k` is the order (k = 4 gives cubics). The Cox-de Boor recurrence evaluates the B-spline basis in O(k) per query. `bspline_fit` builds the design matrix `B[i][j] = B_j(x_i)`, then QR-solves `B c = y` for the least-squares coefficients — handy when you have noisy data and want smooth interpolation. `bspline_clamped_knots` gives the standard clamped uniform knot vector (repeated endpoints) for convenience.
 
-#### `lib/nr/neville.calc` — Neville polynomial interpolation
+#### `lib/nr/neville.clc` — Neville polynomial interpolation
 
 ```calc
 extern fn neville_interp(xs: arr, ys: arr, x: num): map;
@@ -4747,7 +5071,7 @@ extern fn neville_interp(xs: arr, ys: arr, x: num): map;
 
 Builds the degree-(n-1) polynomial through n samples and evaluates it at x. The Neville tableau gives both the value and an internal error indicator at no extra cost (NR §3.1). Use this when you have a few high-quality samples and want a built-in error bar; for dense data prefer a cubic spline to dodge the Runge phenomenon at high order.
 
-#### `lib/nr/glnodes.calc` — arbitrary-order Gauss-Legendre nodes/weights
+#### `lib/nr/glnodes.clc` — arbitrary-order Gauss-Legendre nodes/weights
 
 ```calc
 extern fn gauleg(n: num, a: num, b: num): map;            // -> {"x", "w"}
@@ -4758,17 +5082,17 @@ Computes the n-point Gauss-Legendre nodes by Newton iteration on `P_n(x) = 0` st
 
 For smooth integrands this gives spectral accuracy: `int_0^pi sin(x) dx` reaches machine precision by n = 10.
 
-#### `lib/nr/bfgs.calc` — BFGS quasi-Newton minimization
+#### `lib/nr/bfgs.clc` — BFGS quasi-Newton minimization
 
 ```calc
 extern fn bfgs_min(f: fn, grad: fn, x0: arr, tol: num, max_iter: num): map;
 ```
 
-BFGS maintains a rank-2 inverse-Hessian approximation built from successive (Δx, Δgradient) pairs. After a few steps the approximation gets good enough that convergence becomes superlinear — typically beats Nelder-Mead by an order of magnitude once `n` exceeds ~5. The implementation uses an Armijo back-tracking line search; pass an analytic gradient (or build one with `lib/nr/diff.calc`'s `gradient`). NR §10.7.
+BFGS maintains a rank-2 inverse-Hessian approximation built from successive (Δx, Δgradient) pairs. After a few steps the approximation gets good enough that convergence becomes superlinear — typically beats Nelder-Mead by an order of magnitude once `n` exceeds ~5. The implementation uses an Armijo back-tracking line search; pass an analytic gradient (or build one with `lib/nr/diff.clc`'s `gradient`). NR §10.7.
 
 The demo solves the standard Rosenbrock function and an extended 5-D variant to f* ~ 1e-25 in fewer than 50 iterations.
 
-#### `lib/nr/pca.calc` — Principal Component Analysis
+#### `lib/nr/pca.clc` — Principal Component Analysis
 
 ```calc
 extern fn pca_fit(X: arr): map;            // returns {"mean", "axes", "var", "scores"}
@@ -4782,36 +5106,36 @@ Centers the data matrix and SVDs it. The columns of V are the principal directio
 Every demo is a single `import "..."; ...` source file. The Makefile targets are one-liners:
 
 ```bash
-make math_demo            # examples/math_demo.calc — sq, cube, hypot, lerp, ...
-make sine_plot            # examples/sine_plot.calc — writes build/sine.svg
-make regression           # examples/regression.calc — linear regression + plot
-make linsys               # examples/linsys.calc — Ax = b via LU
-make numerical            # examples/numerical.calc — roots, integrals, interp
-make monte_carlo          # examples/monte_carlo.calc — PRNG class + π estimate
-make csv_demo             # examples/csv_demo.calc — CSV write/read/fit/plot
-make multi_plot           # examples/multi_plot.calc — multi-series + bar + log-Y
-make json_demo            # examples/json_demo.calc — JSON round-trip
-make ode_demo             # examples/ode_demo.calc — exp-decay + SHO via RK4
-make fft_demo             # examples/fft_demo.calc — spectrum of a synthetic signal
-make nr_demo              # examples/nr_demo.calc — Brent + spline + special + Jacobi
-make nr_demo2             # examples/nr_demo2.calc — LU + Romberg + RK45 + poly families
-make nr_demo3             # examples/nr_demo3.calc — minimization + sort/select
-make nr_demo4             # examples/nr_demo4.calc — Ridders' + dist + Newton + LM
-make nr_demo5             # examples/nr_demo5.calc — QR + SVD + polyroots + conv
-make nr_demo6             # examples/nr_demo6.calc — Chebyshev + Sav-Gol + Kalman + CN
-make nr_demo7             # examples/nr_demo7.calc — Cholesky + CG + annealing + MCMC
-make nr_demo8             # examples/nr_demo8.calc — Welch + wavelets + Toeplitz + simplex
-make nr_demo9             # examples/nr_demo9.calc — 2-D FFT + 2-D quad + power eig + B-spline
-make nr_demo10            # examples/nr_demo10.calc — Neville + GL + BFGS + PCA
+make math_demo            # examples/math_demo.clc — sq, cube, hypot, lerp, ...
+make sine_plot            # examples/sine_plot.clc — writes build/sine.svg
+make regression           # examples/regression.clc — linear regression + plot
+make linsys               # examples/linsys.clc — Ax = b via LU
+make numerical            # examples/numerical.clc — roots, integrals, interp
+make monte_carlo          # examples/monte_carlo.clc — PRNG class + π estimate
+make csv_demo             # examples/csv_demo.clc — CSV write/read/fit/plot
+make multi_plot           # examples/multi_plot.clc — multi-series + bar + log-Y
+make json_demo            # examples/json_demo.clc — JSON round-trip
+make ode_demo             # examples/ode_demo.clc — exp-decay + SHO via RK4
+make fft_demo             # examples/fft_demo.clc — spectrum of a synthetic signal
+make nr_demo              # examples/nr_demo.clc — Brent + spline + special + Jacobi
+make nr_demo2             # examples/nr_demo2.clc — LU + Romberg + RK45 + poly families
+make nr_demo3             # examples/nr_demo3.clc — minimization + sort/select
+make nr_demo4             # examples/nr_demo4.clc — Ridders' + dist + Newton + LM
+make nr_demo5             # examples/nr_demo5.clc — QR + SVD + polyroots + conv
+make nr_demo6             # examples/nr_demo6.clc — Chebyshev + Sav-Gol + Kalman + CN
+make nr_demo7             # examples/nr_demo7.clc — Cholesky + CG + annealing + MCMC
+make nr_demo8             # examples/nr_demo8.clc — Welch + wavelets + Toeplitz + simplex
+make nr_demo9             # examples/nr_demo9.clc — 2-D FFT + 2-D quad + power eig + B-spline
+make nr_demo10            # examples/nr_demo10.clc — Neville + GL + BFGS + PCA
 make demos                # all of the above
 ```
 
-The Makefile is one `define DEMO_template`:
+The Makefile is one `define DEMO_template` (with `$(BIN)` for the tool dir and `$(BUILD)` for outputs — these are split since the `bin/` / `build/` separation):
 
 ```makefile
 define DEMO_template
-$(1): all
-	$$(BUILD)/calcnat examples/$(1).calc -o $$(BUILD)/$(1)
+$(1): all $$(BUILD)
+	$$(BIN)/calcnat examples/$(1).clc -o $$(BUILD)/$(1)
 	$$(BUILD)/$(1)
 endef
 $(eval $(call DEMO_template,math_demo))
@@ -4822,11 +5146,11 @@ $(eval $(call DEMO_template,sine_plot))
 By hand, every demo is the same shape:
 
 ```bash
-build/calcnat examples/sine_plot.calc -o build/sine_plot.exe
+bin/clc examples/sine_plot.clc -o build/sine_plot.exe
 build/sine_plot.exe                       # writes build/sine.svg
 ```
 
-The example does `import "plot";` itself; the parser pulls in `lib/plot.calc` (and any libraries that `plot.calc` imports, transitively). No `--lib` step.
+The example does `import "plot";` itself; the parser pulls in `lib/plot.clc` (and any libraries that `plot.clc` imports, transitively). No `--lib` step.
 
 ### Worked example: linear regression with plot
 
@@ -4882,7 +5206,7 @@ Three worked programs that exercise most of the language. Each is short enough t
 ### Program 1: descriptive statistics
 
 ```calc
-// stats.calc — compute mean, median, and mode of a list of numbers.
+// stats.clc — compute mean, median, and mode of a list of numbers.
 
 class Stats {
     fn init(xs) {
@@ -4935,7 +5259,7 @@ print "mode   = " + s.mode();      // mode   = 4
 Compile and run:
 
 ```bash
-build/calcnat stats.calc
+bin/clc stats.clc
 ./stats.exe
 ```
 
@@ -4949,7 +5273,7 @@ Walk-through of the techniques:
 ### Program 2: word frequency from a file
 
 ```calc
-// word_freq.calc — count word frequencies in a text file.
+// word_freq.clc — count word frequencies in a text file.
 
 fn lower_alpha_only(s) {
     let out = "";
@@ -5020,7 +5344,7 @@ This pulls together file I/O, exceptions, string manipulation, maps, and partial
 ### Program 3: complex-arithmetic ODE — the damped harmonic oscillator
 
 ```calc
-// damped.calc — simulate y'' + 2 zeta omega y' + omega^2 y = 0
+// damped.clc — simulate y'' + 2 zeta omega y' + omega^2 y = 0
 // using the standard exp(lambda t) ansatz with complex eigenvalues.
 
 let omega = 1.0;
@@ -5272,7 +5596,7 @@ That's it — no new stack frame, no `call` / `ret`. The result is a flat-stack 
 `codegen_wasm.c` is the third backend, alongside the bytecode codegen and the x86-64 native codegen. It walks the same AST and emits **WebAssembly text format** (`.wat`) — the same language the browser, Node.js, wasmtime, wasmer, and every other Wasm runtime understands. One output file, every CPU and OS.
 
 ```
-foo.calc  ──calcwasm──>  foo.wat  ──wasm runtime──>  output
+foo.clc  ──calcwasm──>  foo.wat  ──wasm runtime──>  output
                                        ↓
                             wasmtime / wasmer / node / browser
                             (Windows x86, macOS ARM, Linux ARM, Raspberry Pi, ...)
@@ -5321,7 +5645,7 @@ The reference host is `tools/wasm_host.py` — a 100-line Python script using th
 
 ```bash
 pip install wasmtime
-build/calcwasm tests/wasm_basic.calc -o build/wasm_basic.wat
+bin/calcwasm tests/wasm_basic.clc -o build/wasm_basic.wat
 python tools/wasm_host.py build/wasm_basic.wat
 ```
 
@@ -5632,7 +5956,7 @@ If a native-only feature is misbehaving, run the same source through the bytecod
 When a numeric inner loop is slow or behaves weirdly, dump the assembly:
 
 ```bash
-build/calcnat -S myprog.calc myprog.s
+bin/clc -S myprog.clc       # writes myprog.s
 ```
 
 Look for `call cl_op_plus` etc. — if you see those on a hot path, the type inferrer didn't prove both operands `num` and you're paying the polymorphic-dispatch tax. Add type annotations or simplify the expression.
@@ -5642,12 +5966,9 @@ Look for `call cl_op_plus` etc. — if you see those on a hot path, the type inf
 Both backends are designed to produce byte-identical output. When the native output looks wrong:
 
 ```bash
-build/calcc   myprog.calc build/m.casm && \
-build/calcasm build/m.casm build/m.co && \
-build/calcld  build/m.co   build/m.cexe && \
-build/calcvm  build/m.cexe > vm.out
+bin/clc -r myprog.clc > vm.out          # VM run (compile + execute through .cexe)
 
-build/calcnat myprog.calc -o m.exe && \
+bin/clc myprog.clc -o m.exe && \
 ./m.exe > nat.out
 
 diff vm.out nat.out

@@ -1,4 +1,4 @@
-// format.calc — printf, println, fmt with both % and {} placeholders.
+// format.clc — printf, println, fmt with both % and {} placeholders.
 
 // printf — like C: no trailing newline; caller controls via \n.
 printf "x = %d\n", 42;

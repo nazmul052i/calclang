@@ -1,4 +1,5 @@
-# Build output
+# Build output (compiler binaries) and intermediates
+bin/
 build/
 *.o
 *.obj

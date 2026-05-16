@@ -1,4 +1,4 @@
-// conv.calc — convolution and correlation, direct and FFT-based.
+// conv.clc — convolution and correlation, direct and FFT-based.
 //
 // Direct: O(n m). Use when at least one signal is short.
 // FFT:    O((n+m) log(n+m)). Use for long signals against long kernels.

@@ -1,8 +1,8 @@
-// gui_form_demo.calc — exercise the widget kit: button, text_input,
+// gui_form_demo.clc — exercise the widget kit: button, text_input,
 // dropdown, checkbox, slider. Build a tiny "settings" panel.
 //
 // One-time setup:    tools/setup_sdl2.sh
-// Build + run:       build/calcnat examples/gui_form_demo.calc -o build/gui_form_demo.exe
+// Build + run:       bin/clc examples/gui_form_demo.clc -o build/gui_form_demo.exe
 //                    build/gui_form_demo.exe
 
 import "gui";

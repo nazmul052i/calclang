@@ -1,6 +1,6 @@
 // Tetris — SDL2-backed GUI version.
 //
-//   build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe
+//   bin/clc examples/tetris_gui.clc -o build/tetris_gui.exe
 //   build/tetris_gui.exe
 //
 // Controls:
@@ -29,7 +29,7 @@ fn board_pad() { return 20; }       // px from window edge to board edge
 // =====================================================================
 
 struct Piece {
-    color: any,            // Color record from lib/gui.calc
+    color: any,            // Color record from lib/gui.clc
     rotations: arr,        // 4 rotations × 4 cells; each cell = [dx, dy]
 }
 

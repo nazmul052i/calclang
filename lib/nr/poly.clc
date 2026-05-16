@@ -1,4 +1,4 @@
-// poly.calc — orthogonal-polynomial families.
+// poly.clc — orthogonal-polynomial families.
 //
 // Chebyshev, Legendre, Hermite, Laguerre via their three-term
 // recurrences (fastest and most numerically stable evaluation).

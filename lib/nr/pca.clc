@@ -1,4 +1,4 @@
-// pca.calc — Principal Component Analysis via SVD.
+// pca.clc — Principal Component Analysis via SVD.
 //
 // Given an m x n data matrix (m samples, n features), centers each
 // column at zero mean and computes the SVD of the centered data:

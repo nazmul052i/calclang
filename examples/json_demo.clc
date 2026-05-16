@@ -1,7 +1,7 @@
 // JSON round-trip + read from disk + use the data.
 //
 // Build:
-//   build/calcnat examples/json_demo.calc -o build/json_demo.exe
+//   bin/clc examples/json_demo.clc -o build/json_demo.exe
 
 import "json";
 

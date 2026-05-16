@@ -211,6 +211,32 @@ char *cl_read_file(const char *path) {
     return buf;
 }
 
+void cl_init_install_paths(const char *argv0) {
+    if (!argv0 || !*argv0) return;
+
+    /* Strip the basename to get <bin_dir>. */
+    char dir[768];
+    cl_strncpy_z(dir, argv0, sizeof dir);
+    char *s = strrchr(dir, '/');
+    char *b = strrchr(dir, '\\');
+    char *cut = (s && (!b || s > b)) ? s : b;
+    if (!cut) return;                               /* bare name — no directory */
+    *cut = '\0';
+
+    /* Forward slashes work on both POSIX and Windows fopen / -I paths.
+       Buffers are static because putenv on some libcs retains the pointer. */
+    if (!getenv("CALC_HOME")) {
+        static char home_env[1024];
+        snprintf(home_env, sizeof home_env, "CALC_HOME=%s/..", dir);
+        putenv(home_env);
+    }
+    if (!getenv("CALC_LIB_PATH")) {
+        static char lib_env[1024];
+        snprintf(lib_env, sizeof lib_env, "CALC_LIB_PATH=%s/../lib", dir);
+        putenv(lib_env);
+    }
+}
+
 void cl_write_text_file(const char *path, const char *text) {
     FILE *f = fopen(path, "wb");
     if (!f) { perror(path); exit(1); }

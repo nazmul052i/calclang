@@ -1,12 +1,12 @@
-// plot.calc — minimal SVG plot generation.
+// plot.clc — minimal SVG plot generation.
 //
 // Each plot function streams to a file via file_append rather than
 // building one giant string; that keeps memory bounded for plots
 // with thousands of points and avoids the O(n²) cost of repeated
 // string concatenation.
 
-// Internal: find min/max so plot.calc stays standalone (doesn't need
-// to link against stats.calc).
+// Internal: find min/max so plot.clc stays standalone (doesn't need
+// to link against stats.clc).
 priv fn p_min(xs) {
     let m = xs[0];
     for i in 1..len(xs) {

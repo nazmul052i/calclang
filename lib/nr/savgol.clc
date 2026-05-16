@@ -1,4 +1,4 @@
-// savgol.calc — Savitzky-Golay smoothing / differentiation filters.
+// savgol.clc — Savitzky-Golay smoothing / differentiation filters.
 //
 // A Savitzky-Golay filter convolves the data with a fixed kernel that
 // effectively fits a low-order polynomial to a sliding window, then

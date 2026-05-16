@@ -1,4 +1,4 @@
-// fft.calc — Cooley-Tukey radix-2 FFT, built on CalcLang's first-
+// fft.clc — Cooley-Tukey radix-2 FFT, built on CalcLang's first-
 // class complex numbers.
 //
 // Input: array of values (each either a num or a cpx; nums are

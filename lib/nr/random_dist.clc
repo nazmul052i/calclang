@@ -1,6 +1,6 @@
-// random_dist.calc — samplers for continuous and discrete distributions.
+// random_dist.clc — samplers for continuous and discrete distributions.
 //
-// The `lib/random.calc` Rng already covers uniform / Box-Muller normal /
+// The `lib/random.clc` Rng already covers uniform / Box-Muller normal /
 // exponential / Poisson. These are the rest of the NR-canon distributions
 // (NR §7.3, §7.4). Each routine takes an Rng instance as its first
 // argument and uses its uniform01() / normal(...) methods.

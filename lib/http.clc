@@ -1,4 +1,4 @@
-// http.calc — small HTTP convenience layer on the http_* builtins.
+// http.clc — small HTTP convenience layer on the http_* builtins.
 // Most engineering scripts that fetch data want one of three things:
 // a JSON response parsed into a CalcLang value, a download-to-string
 // for further processing, or a one-shot POST with a JSON body and

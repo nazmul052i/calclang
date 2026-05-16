@@ -1,10 +1,10 @@
-// linalg.calc — basic linear algebra for CalcLang.
+// linalg.clc — basic linear algebra for CalcLang.
 //
 // Matrices are arrays-of-arrays: m[r][c] is the (r, c) element.
 // All ops allocate fresh result matrices; they don't mutate inputs
 // (except mat_set, which is explicitly in-place).
 //
-// Build as a library: `calcnat --lib lib/linalg.calc -o build/linalg.s`
+// Build as a library: `calcnat --lib lib/linalg.clc -o build/linalg.s`
 // then link into your program via the multi-file native pipeline.
 
 // ===== Construction =====

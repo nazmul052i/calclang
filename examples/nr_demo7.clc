@@ -1,7 +1,7 @@
 // Tier-7 NR demo: Cholesky, conjugate gradient, simulated annealing, Metropolis MCMC.
 //
 // Build:
-//   build/calcnat examples/nr_demo7.calc -o build/nr_demo7.exe
+//   bin/clc examples/nr_demo7.clc -o build/nr_demo7.exe
 
 import "nr.cholesky";
 import "nr.cg";

@@ -646,7 +646,7 @@ static const RtBuiltin RT_BUILTINS[] = {
     {"is_finite",       "cl_builtin_is_finite",       1},
     {"is_normal",       "cl_builtin_is_normal",       1},
 
-    /* SDL2-backed GUI primitives. See lib/gui.calc for the widget
+    /* SDL2-backed GUI primitives. See lib/gui.clc for the widget
        helpers built on top. */
     {"gui_init",        "cl_builtin_gui_init",        3},
     {"gui_close",       "cl_builtin_gui_close",       0},

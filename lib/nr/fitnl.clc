@@ -1,4 +1,4 @@
-// fitnl.calc — Levenberg-Marquardt nonlinear least-squares fit.
+// fitnl.clc — Levenberg-Marquardt nonlinear least-squares fit.
 //
 // Fits y_i ≈ model(x_i; a) by minimizing chi^2 = sum_i (y_i - model)^2.
 // At each step, build the curvature matrix (J^T J + lambda diag(J^T J))
@@ -10,7 +10,7 @@
 //   model(x_i, a) -> {"y": y_pred, "dyda": [dy/da_0, dy/da_1, ...]}
 //
 // This avoids a finite-difference Jacobian and matches NR §15.5's API.
-// (A finite-diff variant could wrap dfridr from diff.calc — left for
+// (A finite-diff variant could wrap dfridr from diff.clc — left for
 // the caller if they want it.)
 //
 // Reference: Numerical Recipes §15.5, Marquardt (1963).
@@ -22,7 +22,7 @@
 //    "iters":    iterations used,
 //    "converged":0 or 1}
 //
-// Depends on lu_decompose / lu_solve from lib/nr/lu.calc.
+// Depends on lu_decompose / lu_solve from lib/nr/lu.clc.
 
 import "nr.lu";
 

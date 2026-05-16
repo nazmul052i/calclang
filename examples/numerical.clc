@@ -1,7 +1,7 @@
 // Numerical methods showcase: root finding + integration.
 //
 // Build:
-//   build/calcnat examples/numerical.calc -o build/numerical.exe
+//   bin/clc examples/numerical.clc -o build/numerical.exe
 
 import "numeric";
 

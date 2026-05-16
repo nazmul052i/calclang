@@ -1,4 +1,4 @@
-// welch.calc — Welch's method for power spectral density estimation.
+// welch.clc — Welch's method for power spectral density estimation.
 //
 // Splits the signal into overlapping windows, applies a tapering window
 // (Hann), runs the FFT, averages |X(f)|^2 across windows. The averaging

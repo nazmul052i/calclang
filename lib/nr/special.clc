@@ -1,4 +1,4 @@
-// special.calc — special functions: gamma, log-gamma, beta, erf, erfc.
+// special.clc — special functions: gamma, log-gamma, beta, erf, erfc.
 //
 // References: Numerical Recipes chapter 6.
 //   lgamma: Lanczos approximation, 6 terms, g = 5.

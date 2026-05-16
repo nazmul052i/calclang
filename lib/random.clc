@@ -1,4 +1,4 @@
-// random.calc — a reproducible random-number generator.
+// random.clc — a reproducible random-number generator.
 //
 // Wrapped in a class so the PRNG state lives in `this.state` and
 // methods can mutate it. (Top-level `fn`s in the native backend

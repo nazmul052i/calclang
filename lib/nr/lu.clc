@@ -1,4 +1,4 @@
-// lu.calc — LU decomposition of a square matrix, with partial
+// lu.clc — LU decomposition of a square matrix, with partial
 // pivoting. Once decomposed, the factors can be reused to solve any
 // number of right-hand sides cheaply, or to compute the determinant.
 //

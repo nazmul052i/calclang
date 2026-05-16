@@ -1,4 +1,4 @@
-// minimize.calc — 1-D and multi-D function minimization.
+// minimize.clc — 1-D and multi-D function minimization.
 //
 // golden_section : robust 1-D bracketed minimizer (slow but bullet-proof).
 // brent_min      : 1-D minimizer combining golden section with parabolic

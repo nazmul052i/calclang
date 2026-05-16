@@ -1,4 +1,4 @@
-// csv.calc — read and write CSV files.
+// csv.clc — read and write CSV files.
 //
 // This is a deliberately simple parser: split lines on '\n', split
 // each line on ','. It DOES NOT handle quoted fields with embedded

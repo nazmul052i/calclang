@@ -1,4 +1,4 @@
-// glnodes.calc — generate Gauss-Legendre nodes/weights for arbitrary order.
+// glnodes.clc — generate Gauss-Legendre nodes/weights for arbitrary order.
 //
 // On [-1, 1], the n-point GL nodes are the roots of P_n(x). We find them
 // by Newton iteration starting from the standard Chebyshev-like initial

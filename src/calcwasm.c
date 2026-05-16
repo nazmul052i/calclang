@@ -10,8 +10,8 @@
    calcwasm — WebAssembly text-format driver (Stage 1, numeric subset).
 
    Modes:
-     calcwasm foo.calc                  -> foo.wat
-     calcwasm foo.calc -o out.wat       -> out.wat
+     calcwasm foo.clc                   -> foo.wat
+     calcwasm foo.clc -o out.wat        -> out.wat
 
    The output is a syntactically valid `.wat` (WebAssembly text format)
    module. To execute it you'll need a Wasm runtime — wasmtime, wasmer,
@@ -24,7 +24,7 @@ const char *codegen_wasm(const Program *prog);
 
 static void usage(void) {
     fprintf(stderr,
-        "usage: calcwasm <input.calc> [-o <out.wat>]\n"
+        "usage: calcwasm <input.clc> [-o <out.wat>]\n"
         "\n"
         "Emits a .wat (WebAssembly text format) module covering the\n"
         "numeric subset of CalcLang. Run with wasmtime/wasmer/etc.\n");
@@ -46,6 +46,7 @@ static char *replace_ext(const char *path, const char *new_ext) {
 }
 
 int main(int argc, char **argv) {
+    cl_init_install_paths(argv[0]);
     const char *input = NULL;
     const char *output = NULL;
 

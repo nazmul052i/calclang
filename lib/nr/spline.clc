@@ -1,4 +1,4 @@
-// spline.calc — natural cubic spline interpolation.
+// spline.clc — natural cubic spline interpolation.
 //
 // Two-step interface in the Numerical Recipes style:
 //

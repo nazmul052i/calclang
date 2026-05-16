@@ -3,7 +3,7 @@
 > What's in, what's deferred, where the seams are. Update this file
 > whenever a significant feature lands or a planned one moves.
 
-Last updated: 2026-05-14 (commit `d5e1fae`)
+Last updated: 2026-05-15 (post-`clc` driver / `bin/` split / `.clc` extension)
 
 ---
 
@@ -11,17 +11,30 @@ Last updated: 2026-05-14 (commit `d5e1fae`)
 
 A statically-compiled, dynamically-typed scripting language with three
 back-ends and a real engineering / scientific standard library.
-~6,500 lines of C in the compiler + runtime, ~15,000 lines of
-CalcLang in `lib/` and `examples/`, ~5,500-line book in
-`docs/book.md`. Builds in ~3 s on a laptop.
+~15,500 lines of C in the compiler + runtime, ~11,000 lines of
+CalcLang in `lib/` and `examples/`, ~5,800-line book in
+`docs/book.md`. Builds in ~3 s on a laptop. Source files use the
+`.clc` extension; compiler tools live in `bin/`.
 
 ### Pipelines
+
+The unified `clc` driver (gcc-flavored CLI) is the front door:
+
+```
+clc foo.clc                   # native build → foo.exe
+clc -o foo.wat foo.clc        # wasm
+clc -o foo.casm foo.clc       # bytecode only
+clc -r foo.clc                # compile + run on VM
+clc -S foo.clc                # emit native assembly
+```
+
+Under the hood `clc` dispatches to the same six tools:
 
 | Tool         | Front-end              | What it emits                | Run with               |
 |--------------|------------------------|------------------------------|------------------------|
 | `calcc`      | full parser            | `.casm` text bytecode        | `calcasm` → `calcld` → `calcvm` |
 | `calcnat`    | same parser            | x86-64 assembly via gcc      | direct `.exe`          |
-| `calcwasm`   | same parser            | WebAssembly text (`.wat`)    | `wasmtime`, browser, Node — runs on *any* CPU/OS |
+| `calcwasm`   | same parser            | WebAssembly text (`.wat`)    | `wasmtime`, browser, Node — runs on *any* Wasm host (numeric subset today) |
 
 The VM is portable C and runs anywhere a C compiler targets — already
 the answer for "does this work on ARM" until the Wasm backend covers
@@ -40,8 +53,8 @@ strings/arrays.
 - Functions: top-level, anonymous closures, first-class fns,
   classes-as-callable, optional type annotations + per-arg compile-time
   checks
-- Modules: `import "name"` (bare → `lib/name.calc`), `import "nr.brent"`
-  (dot syntax), `import "./helper.calc"` (importer-relative), cycle
+- Modules: `import "name"` (bare → `lib/name.clc`), `import "nr.brent"`
+  (dot syntax), `import "./helper.clc"` (importer-relative), cycle
   detection, single-command builds
 - Operators: full set — arithmetic, comparison, logical, bitwise
   (`& | ^ ~ << >>`), compound assignment, hex / binary literals
@@ -114,11 +127,11 @@ strings/arrays.
 
 ### Examples shipped
 
-- `tetris.calc` — terminal Tetris (ANSI escapes)
-- `tetris_gui.calc` — SDL2 windowed Tetris with score panel
-- `gui_form_demo.calc` — settings form (button / checkbox /
+- `tetris.clc` — terminal Tetris (ANSI escapes)
+- `tetris_gui.clc` — SDL2 windowed Tetris with score panel
+- `gui_form_demo.clc` — settings form (button / checkbox /
   slider / dropdown / text_input)
-- `engineering_dashboard.calc` — menubar + scrollable table +
+- `engineering_dashboard.clc` — menubar + scrollable table +
   plot + modal alerts + native file dialogs
 - `nr_demo` through `nr_demo10` — Numerical-Recipes examples
 - `math_demo`, `sine_plot`, `regression`, `linsys`, `numerical`,
@@ -152,11 +165,14 @@ the `wasmtime` Python package is installed.
 | `c2e2294`    | text_input + dropdown widgets, focus tracking                  |
 | `539fd2f`    | Clipping, scrollable table, plot, menubar, modal, file dialogs |
 | `0afb9f4`    | GUI text — anti-aliased TTF via stb_truetype                   |
-| `9319cb0`    | `datetime` — wall-clock date/time + lib/datetime.calc          |
+| `9319cb0`    | `datetime` — wall-clock date/time + lib/datetime.clc          |
 | `e5d72dc`    | Regex engine — full PCRE subset, 5 builtins, lib/regex         |
 | `14340a7`    | HTTP client + typed-integer helpers + debugger-lite            |
 | `f5ff1ef`    | Vec ops + extended stats + constants + NaN/Inf predicates      |
 | `d5e1fae`    | `m[i, j]` chained indexing + 1-D slicing `m[lo:hi]`            |
+| (this work)  | `bin/` split + `clc` gcc-style driver + `.clc` extension hard cut |
+| (this work)  | install-aware paths (`CALC_HOME`/`CALC_LIB_PATH` from `argv[0]`) + `make install` |
+| (this work)  | package manager v0.1 — `clc init`, `clc install`, `clc.toml` + `clc.lock`, `deps/` probe |
 
 ---
 
@@ -176,10 +192,10 @@ the `wasmtime` Python package is installed.
 | **OPC-UA package**                | Wrap `open62541` via new builtins. ~3 sessions: connect/read/write → browse/subscribe → security. Deferred per user. |
 | **GUI text editor primitives**    | Selection, multi-line wrap, syntax highlighting hooks. Stage 2 of the GUI text-input work. |
 | **Native file dialogs on POSIX**  | Currently Win32-only via comdlg32. Linux needs zenity / GTK FileChooser; macOS NSOpenPanel via Cocoa. |
-| **Interactive plot widget**       | Extend `lib/gui.calc::plot_xy` with mouse zoom/pan, multi-series legend, log-scale toggle. ~1 session. |
+| **Interactive plot widget**       | Extend `lib/gui.clc::plot_xy` with mouse zoom/pan, multi-series legend, log-scale toggle. ~1 session. |
 | **NumPy `.npy` / HDF5 I/O**       | Exchange data with Python/SciPy. NPY is ~1 session; HDF5 needs a binding. |
 | **Date/time — timezones**         | Today's UTC-only datetime needs a timezone lib; bind to ICU or zoneinfo. |
-| **Real package manager**          | Versioned dependencies, registry, lockfiles. Multi-session. |
+| **Real package manager**          | Versioned dependencies, registry, lockfiles. Multi-session. v0.1 (`clc init` / `install` / `clc.toml` / `deps/` probe with git URLs only) has landed; what's missing is version constraints (`^1.2`, `~1.2.3`), transitive resolution, conflict resolution, a registry, and `clc add` / `clc publish`. |
 | **LSP server**                    | Editor integration with completion, go-to-definition, hover. Multi-session. |
 
 ### Smaller / fixable in a single session
@@ -190,10 +206,10 @@ the `wasmtime` Python package is installed.
 - **Selective imports** — `from "stats" import mean, stddev`
 - **`const` qualifier** — compile-time immutable bindings
 - **`enum` type** — named integer constants
-- **Numeric spinner widget** in `lib/gui.calc`
+- **Numeric spinner widget** in `lib/gui.clc`
 - **POSIX raw-mode terminal** — `read_key` currently has the termios path; needs testing on real Linux/macOS
-- **Tree widget** in `lib/gui.calc`
-- **Status-bar widget** in `lib/gui.calc`
+- **Tree widget** in `lib/gui.clc`
+- **Status-bar widget** in `lib/gui.clc`
 - **Drag and drop between widgets**
 
 ### Known wart fixes

@@ -1,4 +1,4 @@
-// json.calc — JSON parser and encoder.
+// json.clc — JSON parser and encoder.
 //
 // Supported: objects {"k": v}, arrays [v, v], strings, numbers,
 // `true` → 1, `false` → 0, `null` → 0.

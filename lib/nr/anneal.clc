@@ -1,4 +1,4 @@
-// anneal.calc — simulated annealing for combinatorial and continuous optimization.
+// anneal.clc — simulated annealing for combinatorial and continuous optimization.
 //
 // Generic minimizer: walks a Metropolis chain whose temperature decays
 // on a geometric schedule. Accepts moves that improve the objective,

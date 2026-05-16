@@ -1,4 +1,4 @@
-// simplex_lp.calc — two-phase simplex method for linear programming.
+// simplex_lp.clc — two-phase simplex method for linear programming.
 //
 // Solves:
 //   maximize    c^T x

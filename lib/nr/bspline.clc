@@ -1,4 +1,4 @@
-// bspline.calc — B-spline basis evaluation and curve fitting.
+// bspline.clc — B-spline basis evaluation and curve fitting.
 //
 // B-splines are the standard local-support polynomial basis for fitting,
 // smoothing, and CAD. Order k means each basis function is non-zero on

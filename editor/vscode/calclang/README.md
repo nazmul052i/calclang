@@ -1,9 +1,9 @@
 # CalcLang for VSCode
 
-A minimal extension that gives `.calc` and `.casm` files proper editor support:
+A minimal extension that gives `.clc` and `.casm` files proper editor support:
 
 - Syntax highlighting (keywords, types, calclib builtins, strings, numbers, comments, operators)
-- **File icons** in the explorer and tabs — a purple **CL** badge for `.calc` files and an orange **AS** badge for `.casm` / `.co` / `.cexe` files
+- **File icons** in the explorer and tabs — a purple **CL** badge for `.clc` files and an orange **AS** badge for `.casm` / `.co` / `.cexe` files
 - Block-comment toggle (`/* ... */`) and line-comment toggle (`//`)
 - Auto-closing `{}`, `[]`, `()`, and `""`
 - Bracket matching and surrounding pairs
@@ -14,7 +14,7 @@ No language server (yet) — no IntelliSense, no go-to-definition. Just colors, 
 
 | Extension       | Icon            | Color hex     |
 |-----------------|-----------------|---------------|
-| `.calc`         | rounded **CL**  | `#5E35B1` (indigo) |
+| `.clc`         | rounded **CL**  | `#5E35B1` (indigo) |
 | `.casm` / `.co` / `.cexe` | rounded **AS**  | `#E64A19` (deep orange) |
 
 Both icons are SVGs in `icons/`; you can swap the `<rect>` `fill` or `<text>` content if you want to rebrand.
@@ -32,7 +32,7 @@ VSCode 1.61.0 or later (file-icon support on language contributions was added in
    %USERPROFILE%\.vscode\extensions\calclang\
    ```
 
-3. Reopen VSCode and open a `.calc` file. It should now show syntax highlighting in the status bar's language indicator.
+3. Reopen VSCode and open a `.clc` file. It should now show syntax highlighting in the status bar's language indicator.
 
 ## Install (macOS / Linux)
 
@@ -62,16 +62,17 @@ After changing any of the JSON files, run `Developer: Reload Window` from the Co
 
 ## Optional: a one-keystroke "compile and run" task
 
-Drop this into `.vscode/tasks.json` in your CalcLang project. Press `Ctrl+Shift+B` (default Build keybinding) on an open `.calc` file and it'll compile, link, and run it through the VM:
+Drop this into `.vscode/tasks.json` in your CalcLang project. Press `Ctrl+Shift+B` (default Build keybinding) on an open `.clc` file and it'll compile and run it through the VM via the `clc` driver:
 
 ```json
 {
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run current .calc",
+            "label": "Run current .clc",
             "type": "shell",
-            "command": "${workspaceFolder}/build/calcc.exe ${file} ${fileDirname}/${fileBasenameNoExtension}.casm && ${workspaceFolder}/build/calcasm.exe ${fileDirname}/${fileBasenameNoExtension}.casm ${fileDirname}/${fileBasenameNoExtension}.co && ${workspaceFolder}/build/calcld.exe ${fileDirname}/${fileBasenameNoExtension}.co ${fileDirname}/${fileBasenameNoExtension}.cexe && ${workspaceFolder}/build/calcvm.exe ${fileDirname}/${fileBasenameNoExtension}.cexe",
+            "command": "${workspaceFolder}/bin/clc.exe",
+            "args": ["-r", "${file}"],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -86,7 +87,7 @@ Drop this into `.vscode/tasks.json` in your CalcLang project. Press `Ctrl+Shift+
 }
 ```
 
-On macOS / Linux replace `.exe` with empty (`/build/calcc`, etc.).
+On macOS / Linux drop the `.exe` (`${workspaceFolder}/bin/clc`). Swap `-r` for `-o ${fileDirname}/${fileBasenameNoExtension}.exe` if you'd rather build a native executable than run on the VM.
 
 ## What it doesn't do (yet)
 

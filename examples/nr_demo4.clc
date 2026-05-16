@@ -2,7 +2,7 @@
 // Newton-Raphson on a nonlinear system, Levenberg-Marquardt fit.
 //
 // Build:
-//   build/calcnat examples/nr_demo4.calc -o build/nr_demo4.exe
+//   bin/clc examples/nr_demo4.clc -o build/nr_demo4.exe
 
 import "nr.diff";
 import "nr.random_dist";

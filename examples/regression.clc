@@ -1,7 +1,7 @@
 // Generate noisy linear data, fit a line, plot data + fit overlay.
 //
 // Build:
-//   build/calcnat examples/regression.calc -o build/regression.exe
+//   bin/clc examples/regression.clc -o build/regression.exe
 //   build/regression.exe
 
 import "stats";

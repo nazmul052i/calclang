@@ -1,8 +1,8 @@
-// engineering_dashboard.calc — a small "engineering tool" UI that
+// engineering_dashboard.clc — a small "engineering tool" UI that
 // exercises the full widget kit: menu bar, table, plot, scrollable
 // regions, modal dialogs, native file dialogs.
 //
-//   build/calcnat examples/engineering_dashboard.calc -o build/eng_dash.exe
+//   bin/clc examples/engineering_dashboard.clc -o build/eng_dash.exe
 //   build/eng_dash.exe
 //
 // The dashboard shows a synthetic sensor-readings dataset and lets

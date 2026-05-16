@@ -1,4 +1,4 @@
-// neville.calc — Neville's algorithm for polynomial interpolation.
+// neville.clc — Neville's algorithm for polynomial interpolation.
 //
 // Given n data points (x_i, y_i), constructs the unique degree-(n-1)
 // polynomial passing through them and evaluates it at a target x.
@@ -14,7 +14,7 @@
 //
 // Use Neville when you have a few high-quality samples and want both
 // the interpolated value and a built-in error indicator. For dense
-// data, prefer the spline (lib/nr/spline.calc) — Neville's polynomial
+// data, prefer the spline (lib/nr/spline.clc) — Neville's polynomial
 // can oscillate wildly (Runge phenomenon) at high order.
 
 pub fn neville_interp(xs, ys, x) {

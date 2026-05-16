@@ -1,4 +1,4 @@
-// sort.calc — heapsort and quickselect.
+// sort.clc — heapsort and quickselect.
 //
 // heapsort     : O(n log n) worst-case, in-place. Slightly slower than a
 //                tuned quicksort on random input, but no pathological cases.

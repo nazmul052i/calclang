@@ -1,4 +1,4 @@
-// numeric.calc — root finding, numerical integration, interpolation,
+// numeric.clc — root finding, numerical integration, interpolation,
 // polynomial evaluation. Functions take other functions as arguments
 // (CalcLang's first-class fns make this clean).
 

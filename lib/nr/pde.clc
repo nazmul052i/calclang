@@ -1,4 +1,4 @@
-// pde.calc — Crank-Nicolson scheme for the 1-D diffusion (heat) equation.
+// pde.clc — Crank-Nicolson scheme for the 1-D diffusion (heat) equation.
 //
 // Solves:
 //   du/dt = alpha * d^2 u / dx^2,   0 <= x <= L,   t in [0, T],

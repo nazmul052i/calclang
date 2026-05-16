@@ -1,4 +1,4 @@
-// polyroots.calc — find all roots of a polynomial by Laguerre's method.
+// polyroots.clc — find all roots of a polynomial by Laguerre's method.
 //
 // Given coefficients c = [c_0, c_1, ..., c_n] representing
 //   P(x) = c_0 + c_1 x + c_2 x^2 + ... + c_n x^n,

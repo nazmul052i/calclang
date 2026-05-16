@@ -1,7 +1,7 @@
 // Multi-series plot + bar chart + log-Y plot.
 //
 // Build:
-//   build/calcnat examples/multi_plot.calc -o build/multi_plot.exe
+//   bin/clc examples/multi_plot.clc -o build/multi_plot.exe
 
 import "plot";
 

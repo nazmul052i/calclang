@@ -4,7 +4,7 @@
    Compiled and linked alongside `runtime_x64.c` whenever CalcLang
    programs use any `gui_*` function. Adds a small set of immediate-mode
    primitives — window/clear/rect/line/poll/key/mouse — and a simple
-   widget kit lives on top in CalcLang at `lib/gui.calc`.
+   widget kit lives on top in CalcLang at `lib/gui.clc`.
 
    This file is in addition to (not in place of) `runtime_x64.c`. It
    shares the Value model and helpers from there via the public

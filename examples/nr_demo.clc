@@ -3,7 +3,7 @@
 // the Jacobi eigenvalue decomposition.
 //
 // Build:
-//   build/calcnat examples/nr_demo.calc -o build/nr_demo.exe
+//   bin/clc examples/nr_demo.clc -o build/nr_demo.exe
 
 import "nr.brent";
 import "nr.spline";

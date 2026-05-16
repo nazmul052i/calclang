@@ -1,4 +1,4 @@
-// math.calc — convenience math functions built on top of the calclib builtins.
+// math.clc — convenience math functions built on top of the calclib builtins.
 //
 // CalcLang ships with the standard math operators and `pow(b, e)`,
 // `sqrt(x)`, `exp(x)`, `log(x)`, etc. This module adds the small
@@ -7,7 +7,7 @@
 // radian conversion, sign, hypot, log to an arbitrary base.
 //
 // Build:
-//   build/calcnat --lib lib/math.calc -o build/calclib/math.s
+//   bin/clc --lib lib/math.clc -o build/calclib/math.s
 
 // ===== Powers =====
 

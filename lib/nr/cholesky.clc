@@ -1,4 +1,4 @@
-// cholesky.calc — Cholesky decomposition of a symmetric positive-definite matrix.
+// cholesky.clc — Cholesky decomposition of a symmetric positive-definite matrix.
 //
 // For SPD A, decomposes A = L L^T with L lower-triangular and positive
 // diagonal. Half the storage and half the work of LU for the same

@@ -1,4 +1,4 @@
-// romberg.calc — Romberg integration. Builds a triangular table of
+// romberg.clc — Romberg integration. Builds a triangular table of
 // trapezoidal estimates with successively finer step size, then
 // applies Richardson extrapolation along each row to cancel
 // successive orders of the Taylor remainder. The result usually

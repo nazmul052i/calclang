@@ -1,4 +1,4 @@
-// constants.calc — mathematical, physical, and conversion constants
+// constants.clc — mathematical, physical, and conversion constants
 // for scientific code. Values use the 2019 SI revision (exact base
 // units) where the definition is exact; CODATA-recommended values
 // otherwise. All values are in SI units unless the name says

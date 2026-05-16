@@ -4,6 +4,24 @@ Reverse-chronological. Tracks language- and library-level changes. Bug-fix-only 
 
 ## Unreleased
 
+### Package manager v0.1 — `clc init`, `clc install`, `clc.toml`
+
+Per-project manifest, lockfile, and `deps/` fallback in import resolution. Git URLs only — no registry, no version constraints beyond exact tags, no transitive resolution.
+
+- **`clc.toml`** at project root — TOML-subset format. Top-level `name` / `version`, plus one `[dependencies.<name>]` section per dep with `git = "..."` and optional `tag = "..."`.
+- **`clc init [<dir>]`** — scaffolds `clc.toml` + a `main.clc` stub with sensible defaults.
+- **`clc install`** — reads `clc.toml`, shallow-clones each dep (via `git clone --depth 1 [--branch <tag>]`) into `deps/<name>/`, writes `clc.lock` pinning the resolved commit hash for each.
+- **Parser import resolution** gains a `deps/<name>/<name>.clc` probe (after CWD and importer-relative, before the stdlib `CALC_LIB_PATH` fallback). Project deps shadow stdlib by precedence. Only fires for non-nested module specs — `import "nr.poly"` still targets stdlib.
+
+### Toolchain: installable, gcc-style driver, `.clc` extension
+
+CalcLang is now a self-contained installable toolchain rather than a repo-rooted one. `make install PREFIX=…` stages `bin/`, `lib/`, runtime sources, headers, and vendored SDL2 + stb into `<prefix>/calclang/`; `make uninstall` removes it.
+
+- **`clc` driver** (`src/clc.c`) — unified gcc-flavored CLI. `clc foo.clc` builds native, `-o foo.wat` builds wasm, `-c` emits bytecode, `-S` emits assembly, `-r` runs on the VM. `-O0/-O1/-O2`, `-v`, `--help`, `--version` supported. Wraps the existing six tools (`calcc`, `calcasm`, `calcld`, `calcvm`, `calcnat`, `calcwasm`), which remain individually callable.
+- **`bin/` split** — compiler binaries live in `bin/`; intermediates stay in `build/`. Mirrors the gcc/clang convention.
+- **`.clc` extension** — source files use `.clc` (was `.calc`). Hard cut: 139 file renames, parser-side import resolution and `calcnat`'s arg parser both updated. VS Code extension migrated.
+- **Install-aware path resolution** — front-end tools (`calcc`, `calcnat`, `calcwasm`) call `cl_init_install_paths(argv[0])` at main entry, which sets two env vars from the tool's own location: `CALC_HOME` (umbrella install root) and `CALC_LIB_PATH` (stdlib search). The parser falls back to `CALC_LIB_PATH/<rest>` when an `import "lib/..."` isn't found CWD- or importer-relative. `calcnat` honors `CALC_HOME` when constructing the gcc command-line for `src/runtime_x64.c`, `src/regex.c`, `src/runtime_gui_sdl2.c`, headers, and the vendored SDL2 root. Each env var respects user override and only auto-fills if unset.
+
 ### Numerical-Recipes library (branch `numerical-library`)
 
 Ten tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo10` exercise each.
@@ -29,14 +47,14 @@ Ten tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo1
 
 ### Engineering stdlib expansion (tier 2)
 
-- New `lib/json.calc` — JSON parser + encoder with escape decoding and the standard subset of types.
-- New `lib/ode.calc` — fourth-order Runge-Kutta for scalar and vector ODEs, plus Euler for comparison.
-- New `lib/fft.calc` — recursive Cooley-Tukey radix-2 FFT using CalcLang's first-class complex numbers; round-trips at machine epsilon.
-- `lib/plot.calc` extended — `plot_lines` (multi-series with legend), `plot_bar`, `plot_logy`, `plot_line_labeled`.
+- New `lib/json.clc` — JSON parser + encoder with escape decoding and the standard subset of types.
+- New `lib/ode.clc` — fourth-order Runge-Kutta for scalar and vector ODEs, plus Euler for comparison.
+- New `lib/fft.clc` — recursive Cooley-Tukey radix-2 FFT using CalcLang's first-class complex numbers; round-trips at machine epsilon.
+- `lib/plot.clc` extended — `plot_lines` (multi-series with legend), `plot_bar`, `plot_logy`, `plot_line_labeled`.
 
 ### Engineering stdlib (tier 1)
 
-- `lib/linalg.calc`, `lib/stats.calc`, `lib/numeric.calc`, `lib/random.calc`, `lib/csv.calc`, `lib/plot.calc` — first batch of CalcLang-implemented engineering libraries: matrices (with `solve`, `det`, `inv`, norms), descriptive statistics, root finding + numerical integration + interpolation, class-based reproducible PRNG, CSV I/O, SVG plotting.
+- `lib/linalg.clc`, `lib/stats.clc`, `lib/numeric.clc`, `lib/random.clc`, `lib/csv.clc`, `lib/plot.clc` — first batch of CalcLang-implemented engineering libraries: matrices (with `solve`, `det`, `inv`, norms), descriptive statistics, root finding + numerical integration + interpolation, class-based reproducible PRNG, CSV I/O, SVG plotting.
 - Demo programs under `examples/`: `linsys`, `sine_plot`, `regression`, `numerical`, `monte_carlo`, `csv_demo`.
 
 ### Phase 4 — dynamic linking + first-class FFI
@@ -71,7 +89,7 @@ Ten tiers of NR-canon modules under `lib/nr/`. Demos `nr_demo` through `nr_demo1
 ### Native backend completeness
 
 - Multi-file native linking via `--lib` flag in `calcnat`.
-- Simpler driver: `calcnat foo.calc` produces `foo.exe` directly (invokes gcc internally with the runtime).
+- Simpler driver: `calcnat foo.clc` produces `foo.exe` directly (invokes gcc internally with the runtime).
 - Garbage collection: mark-and-sweep with conservative stack scanning (Windows + Linux).
 - Strings, arrays, maps, closures, classes, first-class fn refs (user *and* calclib builtin), all 52 calclib builtins, polymorphic comparisons + truthiness.
 

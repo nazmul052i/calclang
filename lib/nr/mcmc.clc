@@ -1,4 +1,4 @@
-// mcmc.calc — Metropolis-Hastings MCMC sampler.
+// mcmc.clc — Metropolis-Hastings MCMC sampler.
 //
 // Draws samples from any (possibly unnormalized) target distribution
 // pi(x) by walking a Markov chain whose stationary distribution is pi.

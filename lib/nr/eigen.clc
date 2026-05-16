@@ -1,4 +1,4 @@
-// eigen.calc — Jacobi eigenvalue decomposition for real symmetric
+// eigen.clc — Jacobi eigenvalue decomposition for real symmetric
 // matrices.
 //
 // Each iteration finds the largest off-diagonal element, rotates it

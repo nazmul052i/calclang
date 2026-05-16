@@ -2,7 +2,7 @@
 // Toeplitz / Levinson, simplex linear programming.
 //
 // Build:
-//   build/calcnat examples/nr_demo8.calc -o build/nr_demo8.exe
+//   bin/clc examples/nr_demo8.clc -o build/nr_demo8.exe
 
 import "nr.welch";
 import "nr.wavelet";

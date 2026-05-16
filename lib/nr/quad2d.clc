@@ -1,4 +1,4 @@
-// quad2d.calc — fixed-order 2-D Gauss-Legendre quadrature, plus an
+// quad2d.clc — fixed-order 2-D Gauss-Legendre quadrature, plus an
 // adaptive version that subdivides until each sub-rectangle's
 // estimate stabilizes.
 //

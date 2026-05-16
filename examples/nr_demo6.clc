@@ -2,7 +2,7 @@
 // Kalman filter, Crank-Nicolson 1-D diffusion.
 //
 // Build:
-//   build/calcnat examples/nr_demo6.calc -o build/nr_demo6.exe
+//   bin/clc examples/nr_demo6.clc -o build/nr_demo6.exe
 
 import "nr.cheb";
 import "nr.savgol";

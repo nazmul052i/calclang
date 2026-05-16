@@ -1,7 +1,7 @@
-// math_demo.calc — exercise lib/math.calc.
+// math_demo.clc — exercise lib/math.clc.
 //
 // Build:
-//   build/calcnat examples/math_demo.calc -o build/math_demo.exe
+//   bin/clc examples/math_demo.clc -o build/math_demo.exe
 
 import "math";
 

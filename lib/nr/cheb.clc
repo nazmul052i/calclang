@@ -1,4 +1,4 @@
-// cheb.calc — Chebyshev approximation of a real function on [a, b].
+// cheb.clc — Chebyshev approximation of a real function on [a, b].
 //
 // Given f and an interval, returns the coefficients c_0, ..., c_{n-1}
 // of the truncated Chebyshev series

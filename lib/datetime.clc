@@ -1,4 +1,4 @@
-// datetime.calc — date/time records and helpers built on the
+// datetime.clc — date/time records and helpers built on the
 // epoch_ms / time_components / time_make / time_format runtime
 // builtins. All times are UTC; no timezone math (yet — local-time
 // support belongs in a later iteration).

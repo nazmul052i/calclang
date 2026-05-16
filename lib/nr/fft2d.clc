@@ -1,4 +1,4 @@
-// fft2d.calc — two-dimensional FFT by row-then-column transforms.
+// fft2d.clc — two-dimensional FFT by row-then-column transforms.
 //
 // For a real or complex matrix X of size M x N (both powers of two),
 // returns X transformed. Cost: O(MN log(MN)).

@@ -1234,60 +1234,117 @@ static void parse_import(Parser *p, Program *out) {
     /* Path resolution. In order:
          - Absolute path:                used as-is.
          - "./..." or "../...":          importer-relative.
-         - Path ending in ".calc":       used as a literal path (cwd then
+         - Path ending in ".clc":        used as a literal path (cwd then
                                          importer-relative fallback).
          - Anything else:                module spec — rewritten to
-                                         "lib/<spec>.calc". Works for both
+                                         "lib/<spec>.clc". Works for both
                                          flat names ("math") and nested
                                          libs ("nr/poly").
 
        Examples:
-         import "math";          ->  lib/math.calc
-         import "nr/poly";        ->  lib/nr/poly.calc
-         import "./helper.calc";  ->  importer-dir/helper.calc
-         import "lib/math.calc";  ->  as a literal path */
+         import "math";          ->  lib/math.clc
+         import "nr/poly";        ->  lib/nr/poly.clc
+         import "./helper.clc";   ->  importer-dir/helper.clc
+         import "lib/math.clc";   ->  as a literal path */
     const char *raw = path_tok.text;
     int is_abs = raw[0] == '/' || raw[0] == '\\' ||
                  (raw[0] != '\0' && raw[1] == ':');
     int is_dot = raw[0] == '.' && (raw[1] == '/' || raw[1] == '\\'
                  || (raw[1] == '.' && (raw[2] == '/' || raw[2] == '\\')));
-    /* Path-like if it ends in .calc OR starts with lib/. */
+    /* Path-like if it ends in .clc OR starts with lib/. */
     size_t rlen = strlen(raw);
-    int ends_calc = rlen >= 5 && strcmp(raw + rlen - 5, ".calc") == 0;
+    int ends_clc = rlen >= 4 && strcmp(raw + rlen - 4, ".clc") == 0;
     int starts_lib = (rlen >= 4 && (strncmp(raw, "lib/", 4) == 0 || strncmp(raw, "lib\\", 4) == 0));
 
     char rewritten[512];
     const char *path = raw;
-    if (!is_abs && !is_dot && !ends_calc && !starts_lib) {
+    if (!is_abs && !is_dot && !ends_clc && !starts_lib) {
         /* Module spec — flat ("math"), nested with slash ("nr/poly"),
            or nested with dot ("nr.poly"). Both separators are accepted;
            dots get translated to slashes Python-style before joining.
-           Final form: lib/<spec>.calc. */
+           Final form: lib/<spec>.clc. */
         char tmp[512];
         size_t i = 0;
         for (const char *q = raw; *q && i + 1 < sizeof tmp; q++) {
             tmp[i++] = (*q == '.') ? '/' : *q;
         }
         tmp[i] = '\0';
-        snprintf(rewritten, sizeof rewritten, "lib/%s.calc", tmp);
+        snprintf(rewritten, sizeof rewritten, "lib/%s.clc", tmp);
         path = rewritten;
     }
 
+    /* Build the candidate list in resolution order, then take the first
+       existing file. Order: cwd-relative > importer-relative > stdlib
+       (from CALC_LIB_PATH, only for "lib/..." paths). Absolute paths
+       skip probing — used as-is. Dot-prefixed paths are importer-rel
+       when there's an importer, cwd-rel otherwise. */
     char full_path[1024];
-    if (is_abs || is_dot || p->source_dir[0] == '\0') {
+    if (is_abs) {
         cl_strncpy_z(full_path, path, sizeof full_path);
-        if (is_dot && p->source_dir[0] != '\0') {
-            snprintf(full_path, sizeof full_path, "%s%s", p->source_dir, path);
-        }
     } else {
-        /* Probe cwd-relative first, fall back to importer-relative. */
-        FILE *test = fopen(path, "rb");
-        if (test) {
-            fclose(test);
-            cl_strncpy_z(full_path, path, sizeof full_path);
+        const char *cands[4];
+        int  ncands = 0;
+        char importer_rel[1024];
+        char stdlib_path[1024];
+
+        if (is_dot) {
+            if (p->source_dir[0] != '\0') {
+                snprintf(importer_rel, sizeof importer_rel, "%s%s", p->source_dir, path);
+                cands[ncands++] = importer_rel;
+            } else {
+                cands[ncands++] = path;
+            }
         } else {
-            snprintf(full_path, sizeof full_path, "%s%s", p->source_dir, path);
+            cands[ncands++] = path;                 /* cwd-relative */
+            if (p->source_dir[0] != '\0') {
+                snprintf(importer_rel, sizeof importer_rel, "%s%s", p->source_dir, path);
+                cands[ncands++] = importer_rel;
+            }
+            /* Stdlib + project-deps fallbacks: only for paths that
+               started life as a module spec (which the rewrite gives a
+               "lib/" prefix), or an explicit "lib/foo.clc". */
+            int has_lib_prefix = (strncmp(path, "lib/", 4) == 0 || strncmp(path, "lib\\", 4) == 0);
+            if (has_lib_prefix) {
+                /* `rest` is what the user wrote after the implicit `lib/`
+                   — e.g. for `import "vec-extras"` rest = "vec-extras.clc",
+                   stripping ".clc" gives the module name. */
+                const char *rest = path + 4;
+
+                /* Project deps: probe deps/<name>/<name>.clc for the
+                   leaf (non-nested) case. v0.1 only resolves flat names
+                   through deps/; nested module specs ("nr.poly" → "nr/poly")
+                   still target stdlib only. */
+                char deps_path[1024];
+                if (!strchr(rest, '/') && !strchr(rest, '\\')) {
+                    char name[256];
+                    size_t rl = strlen(rest);
+                    if (rl >= 4 && strcmp(rest + rl - 4, ".clc") == 0) rl -= 4;
+                    if (rl > 0 && rl < sizeof name) {
+                        memcpy(name, rest, rl); name[rl] = '\0';
+                        snprintf(deps_path, sizeof deps_path, "deps/%s/%s.clc", name, name);
+                        cands[ncands++] = deps_path;
+                    }
+                }
+
+                /* Stdlib search root (from CALC_LIB_PATH, set by
+                   cl_init_install_paths). Always last so deps shadow. */
+                const char *lib_env = getenv("CALC_LIB_PATH");
+                if (lib_env) {
+                    snprintf(stdlib_path, sizeof stdlib_path, "%s/%s", lib_env, rest);
+                    cands[ncands++] = stdlib_path;
+                }
+            }
         }
+
+        int found = 0;
+        for (int i = 0; i < ncands; i++) {
+            FILE *t = fopen(cands[i], "rb");
+            if (t) { fclose(t); cl_strncpy_z(full_path, cands[i], sizeof full_path); found = 1; break; }
+        }
+        /* Not found — use the last candidate so the error from cl_read_file
+           points at the most-specific attempted location (stdlib if probed,
+           importer-rel otherwise). */
+        if (!found) cl_strncpy_z(full_path, cands[ncands - 1], sizeof full_path);
     }
 
     /* Cycle detection. A library that's already been imported (directly

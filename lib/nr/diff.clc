@@ -1,4 +1,4 @@
-// diff.calc — numerical differentiation by Ridders' polynomial extrapolation.
+// diff.clc — numerical differentiation by Ridders' polynomial extrapolation.
 //
 // Centered differences (f(x+h) - f(x-h)) / (2h) have truncation error O(h^2)
 // and roundoff error O(eps / h). The sweet spot moves with h, and a single

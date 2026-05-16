@@ -68,5 +68,5 @@ echo "Helvetica on macOS, DejaVu Sans on Linux) — nothing else to install."
 echo
 echo "Now rebuild calcnat and try a GUI demo:"
 echo "    make                                     # builds calcnat + everything else"
-echo "    build/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe"
+echo "    bin/calcnat examples/tetris_gui.calc -o build/tetris_gui.exe"
 echo "    build/tetris_gui.exe"

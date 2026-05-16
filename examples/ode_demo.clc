@@ -1,7 +1,7 @@
 // Solve ODEs with RK4 and plot the trajectory.
 //
 // Build:
-//   build/calcnat examples/ode_demo.calc -o build/ode_demo.exe
+//   bin/clc examples/ode_demo.clc -o build/ode_demo.exe
 
 import "ode";
 import "plot";

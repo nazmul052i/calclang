@@ -1,7 +1,7 @@
 // Tier-9 NR demo: 2-D FFT, 2-D quadrature, power iteration, B-splines.
 //
 // Build:
-//   build/calcnat examples/nr_demo9.calc -o build/nr_demo9.exe
+//   bin/clc examples/nr_demo9.clc -o build/nr_demo9.exe
 
 import "nr.fft2d";
 import "nr.quad2d";

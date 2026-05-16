@@ -1,4 +1,4 @@
-// ode.calc — ordinary differential equation solvers.
+// ode.clc — ordinary differential equation solvers.
 //
 // Scalar form: y' = f(t, y).
 //   The user supplies f as a function of (t, y) returning the

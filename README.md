@@ -41,7 +41,7 @@ After `make demos`, open `build/sine.svg`, `build/regression.svg`, `build/fft_ma
 A real compiled educational toolchain:
 
 ```text
-CalcLang source (.calc)
+CalcLang source (.clc)
   ├─► .casm ─► .co ─► .cexe ─► calcvm        (bytecode VM)
   └─► .s ──────────── gcc ──► .exe / ELF      (native x86-64)
 ```
@@ -60,57 +60,57 @@ Language features:
 
 **Engineering libraries** under [lib/](lib/) — all written in CalcLang on top of the language and the native runtime:
 
-- **`math.calc`** — convenience math helpers: `sq`, `cube`, `power`, `power_int` (fast integer power), `nth_root`, `cbrt`, `hypot`, `sign`, hyperbolics, degree/radian, `log_base`, `log2`, `clamp`, `lerp`, `remap`.
-- **`linalg.calc`** — matrices, `mat_solve`/`mat_det`/`mat_inv`, vector and matrix norms.
-- **`stats.calc`** — mean, stddev, median, Pearson correlation, linear regression, histogram.
-- **`numeric.calc`** — root finding (bisect / Newton / secant), integration (trapezoidal / Simpson / adaptive), polynomial eval and derivative, linear interpolation.
-- **`random.calc`** — class-based reproducible PRNG with uniform, normal (Box-Muller), Poisson, exponential, choice, shuffle.
-- **`csv.calc`** — read/write tabular data with optional headers.
-- **`plot.calc`** — SVG line / scatter / multi-series / bar / log-Y / labeled plots, streamed to disk.
-- **`json.calc`** — JSON parser + encoder for round-tripping data.
-- **`ode.calc`** — fourth-order Runge-Kutta for scalar and vector ODEs (plus Euler for comparison).
-- **`fft.calc`** — Cooley-Tukey radix-2 FFT using CalcLang's first-class complex numbers.
+- **`math.clc`** — convenience math helpers: `sq`, `cube`, `power`, `power_int` (fast integer power), `nth_root`, `cbrt`, `hypot`, `sign`, hyperbolics, degree/radian, `log_base`, `log2`, `clamp`, `lerp`, `remap`.
+- **`linalg.clc`** — matrices, `mat_solve`/`mat_det`/`mat_inv`, vector and matrix norms.
+- **`stats.clc`** — mean, stddev, median, Pearson correlation, linear regression, histogram.
+- **`numeric.clc`** — root finding (bisect / Newton / secant), integration (trapezoidal / Simpson / adaptive), polynomial eval and derivative, linear interpolation.
+- **`random.clc`** — class-based reproducible PRNG with uniform, normal (Box-Muller), Poisson, exponential, choice, shuffle.
+- **`csv.clc`** — read/write tabular data with optional headers.
+- **`plot.clc`** — SVG line / scatter / multi-series / bar / log-Y / labeled plots, streamed to disk.
+- **`json.clc`** — JSON parser + encoder for round-tripping data.
+- **`ode.clc`** — fourth-order Runge-Kutta for scalar and vector ODEs (plus Euler for comparison).
+- **`fft.clc`** — Cooley-Tukey radix-2 FFT using CalcLang's first-class complex numbers.
 
 Plus, under [`lib/nr/`](lib/nr/) (extended via the `numerical-library` branch), **Numerical-Recipes-style algorithms**:
 
-- **`nr/brent.calc`** — Brent's root finder (robust bracketed method with inverse-quadratic interpolation).
-- **`nr/spline.calc`** — natural cubic spline interpolation (two-step `setup`/`eval` interface, NR style).
-- **`nr/special.calc`** — gamma / lgamma / beta / erf / erfc via Lanczos + Abramowitz rational Chebyshev.
-- **`nr/eigen.calc`** — Jacobi eigenvalue decomposition for real symmetric matrices (eigenvalues + eigenvectors).
-- **`nr/lu.calc`** — Doolittle LU decomposition with partial pivoting; solves, determinant, factorization reuse for multiple RHS.
-- **`nr/romberg.calc`** — Romberg integration: trapezoidal table + Richardson extrapolation, machine-precision in 5-10 levels.
-- **`nr/rk45.calc`** — adaptive Cash-Karp RK45 with step-size control; handles stiff problems.
-- **`nr/poly.calc`** — orthogonal-polynomial families: Chebyshev T_n, Legendre P_n, Hermite H_n, Laguerre L_n, Bessel J_0/J_1.
-- **`nr/minimize.calc`** — 1-D minimization (golden section, Brent's parabolic method) and Nelder–Mead downhill simplex for N-D.
-- **`nr/sort.calc`** — heapsort (in-place, with optional index-companion permutation) and quickselect / median (O(n) average).
-- **`nr/diff.calc`** — numerical differentiation by Ridders' polynomial extrapolation: scalar `deriv`, multivariate `gradient` / `jacobian`.
-- **`nr/random_dist.calc`** — gamma (Marsaglia–Tsang), chi², beta, Student's t, Cauchy, binomial, geometric, and triangular sampling on top of `Rng`.
-- **`nr/newton.calc`** — Newton-Raphson for nonlinear systems with Armijo line search; analytic or numerical Jacobian.
-- **`nr/fitnl.calc`** — Levenberg-Marquardt nonlinear least squares with parameter covariance estimate.
-- **`nr/qr.calc`** — QR decomposition via Householder reflections; solves square and over-determined least-squares systems.
-- **`nr/svd.calc`** — singular value decomposition (via A^T A + Jacobi); pseudo-inverse and rank-revealing LS solve.
-- **`nr/polyroots.calc`** — all roots of a real or complex polynomial via Laguerre's method with synthetic-division deflation and a polish pass.
-- **`nr/conv.calc`** — direct and FFT-based linear convolution and cross-correlation.
-- **`nr/cheb.calc`** — Chebyshev approximation of a function on [a, b] with Clenshaw evaluation and exact coefficient-level differentiation / integration.
-- **`nr/savgol.calc`** — Savitzky-Golay filter coefficients and apply (smoothing or derivatives) — preserves peaks far better than a moving average.
-- **`nr/kalman.calc`** — discrete-time Kalman filter (predict + update) for arbitrary linear Gaussian state-space models.
-- **`nr/pde.calc`** — Crank-Nicolson scheme for the 1-D heat equation, unconditionally stable, second-order accurate.
-- **`nr/cholesky.calc`** — Cholesky factorization for SPD matrices: decompose, solve, log-determinant, inverse.
-- **`nr/cg.calc`** — conjugate-gradient solver for SPD linear systems (basic and preconditioned variants).
-- **`nr/anneal.calc`** — simulated annealing for combinatorial and continuous global optimization with user-supplied proposal.
-- **`nr/mcmc.calc`** — Metropolis-Hastings sampler in log-space; symmetric random-walk convenience wrapper for R^n targets.
-- **`nr/welch.calc`** — Welch periodogram for power spectral density estimation with Hann tapering and overlapping segments.
-- **`nr/wavelet.calc`** — discrete wavelet transforms: Haar and Daubechies-4 forward and inverse; periodic boundary handling.
-- **`nr/toeplitz.calc`** — Levinson-Durbin recursion for symmetric Toeplitz systems in O(n²) and the Yule-Walker AR estimator built on top.
-- **`nr/simplex_lp.calc`** — two-phase simplex method for `max c^T x s.t. A x <= b, x >= 0`; reports optimal / unbounded / infeasible.
-- **`nr/fft2d.calc`** — two-dimensional FFT and inverse via row-then-column transforms (built on `lib/fft.calc`).
-- **`nr/quad2d.calc`** — 2-D Gauss-Legendre quadrature (orders 2-5) and adaptive recursive 2-D integration.
-- **`nr/power_eigen.calc`** — power iteration for the dominant eigenvalue and inverse iteration for the eigenvalue closest to a shift.
-- **`nr/bspline.calc`** — B-spline basis evaluation (Cox-de Boor), spline evaluation, and least-squares curve fitting on arbitrary knot vectors.
-- **`nr/neville.calc`** — Neville's algorithm: polynomial interpolation through few points with built-in error estimate.
-- **`nr/glnodes.calc`** — generate Gauss-Legendre nodes / weights at arbitrary order via Newton iteration on Bonnet's recurrence; `integrate_gauleg` wraps it.
-- **`nr/bfgs.calc`** — BFGS quasi-Newton minimization with Armijo back-tracking line search; uses analytic gradients.
-- **`nr/pca.calc`** — Principal Component Analysis via SVD of the centered data matrix; returns variances, axes, and scores.
+- **`nr/brent.clc`** — Brent's root finder (robust bracketed method with inverse-quadratic interpolation).
+- **`nr/spline.clc`** — natural cubic spline interpolation (two-step `setup`/`eval` interface, NR style).
+- **`nr/special.clc`** — gamma / lgamma / beta / erf / erfc via Lanczos + Abramowitz rational Chebyshev.
+- **`nr/eigen.clc`** — Jacobi eigenvalue decomposition for real symmetric matrices (eigenvalues + eigenvectors).
+- **`nr/lu.clc`** — Doolittle LU decomposition with partial pivoting; solves, determinant, factorization reuse for multiple RHS.
+- **`nr/romberg.clc`** — Romberg integration: trapezoidal table + Richardson extrapolation, machine-precision in 5-10 levels.
+- **`nr/rk45.clc`** — adaptive Cash-Karp RK45 with step-size control; handles stiff problems.
+- **`nr/poly.clc`** — orthogonal-polynomial families: Chebyshev T_n, Legendre P_n, Hermite H_n, Laguerre L_n, Bessel J_0/J_1.
+- **`nr/minimize.clc`** — 1-D minimization (golden section, Brent's parabolic method) and Nelder–Mead downhill simplex for N-D.
+- **`nr/sort.clc`** — heapsort (in-place, with optional index-companion permutation) and quickselect / median (O(n) average).
+- **`nr/diff.clc`** — numerical differentiation by Ridders' polynomial extrapolation: scalar `deriv`, multivariate `gradient` / `jacobian`.
+- **`nr/random_dist.clc`** — gamma (Marsaglia–Tsang), chi², beta, Student's t, Cauchy, binomial, geometric, and triangular sampling on top of `Rng`.
+- **`nr/newton.clc`** — Newton-Raphson for nonlinear systems with Armijo line search; analytic or numerical Jacobian.
+- **`nr/fitnl.clc`** — Levenberg-Marquardt nonlinear least squares with parameter covariance estimate.
+- **`nr/qr.clc`** — QR decomposition via Householder reflections; solves square and over-determined least-squares systems.
+- **`nr/svd.clc`** — singular value decomposition (via A^T A + Jacobi); pseudo-inverse and rank-revealing LS solve.
+- **`nr/polyroots.clc`** — all roots of a real or complex polynomial via Laguerre's method with synthetic-division deflation and a polish pass.
+- **`nr/conv.clc`** — direct and FFT-based linear convolution and cross-correlation.
+- **`nr/cheb.clc`** — Chebyshev approximation of a function on [a, b] with Clenshaw evaluation and exact coefficient-level differentiation / integration.
+- **`nr/savgol.clc`** — Savitzky-Golay filter coefficients and apply (smoothing or derivatives) — preserves peaks far better than a moving average.
+- **`nr/kalman.clc`** — discrete-time Kalman filter (predict + update) for arbitrary linear Gaussian state-space models.
+- **`nr/pde.clc`** — Crank-Nicolson scheme for the 1-D heat equation, unconditionally stable, second-order accurate.
+- **`nr/cholesky.clc`** — Cholesky factorization for SPD matrices: decompose, solve, log-determinant, inverse.
+- **`nr/cg.clc`** — conjugate-gradient solver for SPD linear systems (basic and preconditioned variants).
+- **`nr/anneal.clc`** — simulated annealing for combinatorial and continuous global optimization with user-supplied proposal.
+- **`nr/mcmc.clc`** — Metropolis-Hastings sampler in log-space; symmetric random-walk convenience wrapper for R^n targets.
+- **`nr/welch.clc`** — Welch periodogram for power spectral density estimation with Hann tapering and overlapping segments.
+- **`nr/wavelet.clc`** — discrete wavelet transforms: Haar and Daubechies-4 forward and inverse; periodic boundary handling.
+- **`nr/toeplitz.clc`** — Levinson-Durbin recursion for symmetric Toeplitz systems in O(n²) and the Yule-Walker AR estimator built on top.
+- **`nr/simplex_lp.clc`** — two-phase simplex method for `max c^T x s.t. A x <= b, x >= 0`; reports optimal / unbounded / infeasible.
+- **`nr/fft2d.clc`** — two-dimensional FFT and inverse via row-then-column transforms (built on `lib/fft.clc`).
+- **`nr/quad2d.clc`** — 2-D Gauss-Legendre quadrature (orders 2-5) and adaptive recursive 2-D integration.
+- **`nr/power_eigen.clc`** — power iteration for the dominant eigenvalue and inverse iteration for the eigenvalue closest to a shift.
+- **`nr/bspline.clc`** — B-spline basis evaluation (Cox-de Boor), spline evaluation, and least-squares curve fitting on arbitrary knot vectors.
+- **`nr/neville.clc`** — Neville's algorithm: polynomial interpolation through few points with built-in error estimate.
+- **`nr/glnodes.clc`** — generate Gauss-Legendre nodes / weights at arbitrary order via Newton iteration on Bonnet's recurrence; `integrate_gauleg` wraps it.
+- **`nr/bfgs.clc`** — BFGS quasi-Newton minimization with Armijo back-tracking line search; uses analytic gradients.
+- **`nr/pca.clc`** — Principal Component Analysis via SVD of the centered data matrix; returns variances, axes, and scores.
 
 ## Hello world
 
@@ -119,7 +119,7 @@ print "hello, world";
 ```
 
 ```bash
-build/calcnat hello.calc
+bin/calcnat hello.clc
 ./hello.exe              # Windows; on Linux: ./hello
 ```
 
@@ -190,7 +190,7 @@ Supported features:
 
 - decimal numbers (IEEE 754 doubles)
 - string literals: `"hello"` with escapes `\n \t \r \\ \"` (max 127 chars per literal)
-- declarations: `let name = expr;` or with an optional type annotation `let name: T = expr;` (T is checked at compile time when the RHS is a literal, and at runtime via `TYPECHECK_TOP` for everything else). The compiler infers types from the RHS — `let x = 5;` records `x` as `num`, `let s = to_str(42);` records `s` as `str`. Type inference is **flow-sensitive**: each *use* of a variable is typed at the program point it occurs, so `let x = 5; x = "hi"; print x + "!";` correctly types `x` as `num` in the first use and `str` in the second. At branch joins types are unioned (so if one arm of an `if` assigns `num` and the other `str`, post-join `x` is the union and behaves like `any` for static checks); loops iterate to a fixpoint. This catches errors at compile time that the older per-symbol inference would have deferred to runtime — see [tests/flow_inference.calc](tests/flow_inference.calc)
+- declarations: `let name = expr;` or with an optional type annotation `let name: T = expr;` (T is checked at compile time when the RHS is a literal, and at runtime via `TYPECHECK_TOP` for everything else). The compiler infers types from the RHS — `let x = 5;` records `x` as `num`, `let s = to_str(42);` records `s` as `str`. Type inference is **flow-sensitive**: each *use* of a variable is typed at the program point it occurs, so `let x = 5; x = "hi"; print x + "!";` correctly types `x` as `num` in the first use and `str` in the second. At branch joins types are unioned (so if one arm of an `if` assigns `num` and the other `str`, post-join `x` is the union and behaves like `any` for static checks); loops iterate to a fixpoint. This catches errors at compile time that the older per-symbol inference would have deferred to runtime — see [tests/flow_inference.clc](tests/flow_inference.clc)
 - assignment: `name = expr;` (reassigns the nearest visible binding; the variable must already exist)
 - variables can hold either a number or a string — the type can change across reassignments
 - `print expr;` (numbers print with `%.10g`, strings print as-is)
@@ -214,7 +214,7 @@ Supported features:
 - arrays: `[a, b, c]` literal (heterogeneous, mutable), `arr[i]` read, `arr[i] = v;` write, **chained writes `m[i][j] = v;` and indexed compound assignment `m[i] += v;` / `arr[i]++;` work too**, reference semantics (`let b = a;` aliases); empty `[]` is falsy
 - maps: `{ "k": v, ... }` literal, `m[k]` read, `m[k] = v;` write. Keys can be strings or numbers; values can be any type. Reference semantics like arrays; empty `{}` is falsy. Reading a missing key is a runtime error — guard with `has_key` first
 - **struct-like field access**: `obj.field` is sugar for `obj["field"]` on both reads and writes, and composes freely with `[]` indexing: `team.members[0].name = "Bob";` works. There is no separate struct kind — maps with `.` access cover the ergonomic gap
-- **classes**: `class Name { fn init(p1, p2) {...} fn method() {...} }` declares a constructor. `let obj = Name(a, b);` builds an instance; `obj.field` reads/writes data, `obj.method(args)` dispatches a method. `this` inside a method refers to the receiver. Classes are pure parser-level sugar — a class desugars to a constructor function that builds a map, attaches each method as a closure capturing `this`, then inlines the init body. Methods are first-class function values: `let f = obj.method; f();` works, and `pub class` exports the constructor for cross-file use. See [tests/classes.calc](tests/classes.calc) for the full surface.
+- **classes**: `class Name { fn init(p1, p2) {...} fn method() {...} }` declares a constructor. `let obj = Name(a, b);` builds an instance; `obj.field` reads/writes data, `obj.method(args)` dispatches a method. `this` inside a method refers to the receiver. Classes are pure parser-level sugar — a class desugars to a constructor function that builds a map, attaches each method as a closure capturing `this`, then inlines the init body. Methods are first-class function values: `let f = obj.method; f();` works, and `pub class` exports the constructor for cross-file use. See [tests/classes.clc](tests/classes.clc) for the full surface.
 - **indirect calls**: any expression that evaluates to a function value can be called with `(args)` — `obj.method(args)`, `arr[i](args)`, `make_fn()()` all parse and dispatch correctly
 - **calclib**: 52 functions baked into the VM, called by bare name. See the calclib reference below
 - `{ ... }` block introduces a new variable scope
@@ -238,25 +238,25 @@ CalcLang can compile and link multiple source files together. Public (`pub`) fun
 
 ```bash
 # Compile each source independently:
-build/calcc.exe   examples/multi/stats.calc  build/stats.casm
-build/calcc.exe   examples/multi/report.calc build/report.casm
+bin/calcc.exe   examples/multi/stats.clc  build/stats.casm
+bin/calcc.exe   examples/multi/report.clc build/report.casm
 
 # Assemble each .casm to an object file:
-build/calcasm.exe build/stats.casm  build/stats.co
-build/calcasm.exe build/report.casm build/report.co
+bin/calcasm.exe build/stats.casm  build/stats.co
+bin/calcasm.exe build/report.casm build/report.co
 
 # Link: the FIRST .co is the entry point — its top-level code runs
 # first. Library files (functions only, no top-level work) come after.
-build/calcld.exe  build/report.co build/stats.co build/multi.cexe
+bin/calcld.exe  build/report.co build/stats.co build/multi.cexe
 
-build/calcvm.exe  build/multi.cexe
+bin/calcvm.exe  build/multi.cexe
 ```
 
 `extern fn name(params): T;` is implicitly public — only `pub` symbols cross the file boundary. The linker resolves the reference against another object file's `SYMS` section; private functions (bare `fn`) remain in `LOCALSYMS` and cannot be referenced from outside.
 
 ## VSCode editor support
 
-A small extension under `editor/vscode/calclang/` provides syntax highlighting, bracket matching, and comment-toggle for `.calc` and `.casm` files. Copy that folder into your VSCode extensions directory and reload — full instructions in [editor/vscode/calclang/README.md](editor/vscode/calclang/README.md).
+A small extension under `editor/vscode/calclang/` provides syntax highlighting, bracket matching, and comment-toggle for `.clc` and `.casm` files. Copy that folder into your VSCode extensions directory and reload — full instructions in [editor/vscode/calclang/README.md](editor/vscode/calclang/README.md).
 
 ## Build
 
@@ -267,12 +267,91 @@ make
 On Windows with MinGW/MSYS2:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/lexer.c src/ast.c src/parser.c src/symbol_table.c src/codegen.c src/type_infer.c src/calcc.c -o build/calcc.exe
-gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calcasm.c -o build/calcasm.exe
-gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calcld.c -o build/calcld.exe
-gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/calcvm.c -o build/calcvm.exe
-gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/lexer.c src/ast.c src/parser.c src/codegen_x64.c src/type_infer.c src/calcnat.c -o build/calcnat.exe
+gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/lexer.c src/ast.c src/parser.c src/symbol_table.c src/codegen.c src/type_infer.c src/calcc.c -o bin/calcc.exe
+gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calcasm.c -o bin/calcasm.exe
+gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calcld.c -o bin/calcld.exe
+gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/calcvm.c -o bin/calcvm.exe
+gcc -std=c11 -Wall -Wextra -pedantic -Iinclude src/common.c src/calclib.c src/lexer.c src/ast.c src/parser.c src/codegen_x64.c src/type_infer.c src/calcnat.c -o bin/calcnat.exe
 ```
+
+## Install
+
+The toolchain installs as a self-contained subtree at `$(PREFIX)/calclang/` (default `/usr/local/calclang/`). After install, `clc` works from any directory — no need to run from the repo root.
+
+```bash
+make install                                     # → /usr/local/calclang/
+make install PREFIX=$HOME/.local                 # → ~/.local/calclang/
+make install PREFIX="$PROGRAMFILES/CalcLang"     # Windows
+```
+
+Then add `<prefix>/calclang/bin` to your `PATH`. The tree contains:
+
+```
+<prefix>/calclang/
+├── bin/          calcc, calcasm, calcld, calcvm, calcnat, calcwasm, clc
+├── lib/          standard library (.clc modules — math, stats, linalg, vec, nr/*, …)
+├── src/          native runtime sources (runtime_x64.c, regex.c, runtime_gui_sdl2.c)
+├── include/      headers
+└── third_party/  vendored SDL2 + stb_truetype (GUI support)
+```
+
+Each tool derives `CALC_HOME = <bin>/..` from `argv[0]` at startup, so the layout above is found wherever you installed it. Override individual paths if needed (`CALC_HOME`, `CALC_LIB_PATH`, `CALC_RUNTIME`, `CALC_INCLUDE`).
+
+To remove:
+
+```bash
+make uninstall PREFIX=<same-prefix-you-used>
+```
+
+## Projects and dependencies
+
+`clc` has a minimal package manager (v0.1) for declaring external dependencies. Per-project layout:
+
+```
+my-project/
+├── clc.toml      # manifest: project name, version, [dependencies.X] sections
+├── clc.lock      # auto-generated by `clc install` — pins exact commit hashes
+├── main.clc      # your code
+└── deps/         # cloned dependency sources (gitignored)
+```
+
+Start a project:
+
+```bash
+clc init my-project
+cd my-project
+```
+
+Declare dependencies in `clc.toml`:
+
+```toml
+name = "my-project"
+version = "0.1.0"
+
+[dependencies.greeter]
+git = "https://github.com/someone/calclang-greeter.git"
+tag = "v1.0.0"          # optional; default branch HEAD if omitted
+```
+
+Fetch them:
+
+```bash
+clc install
+```
+
+This shallow-clones each dep into `deps/<name>/` and writes `clc.lock` with pinned commit hashes. Your CalcLang source then imports the dep by its name:
+
+```calc
+import "greeter";       // resolves against deps/greeter/greeter.clc
+import "math";          // still resolves against the installed stdlib
+
+greet("world");
+print sq(7);
+```
+
+Resolution order for `import "X"` is: CWD → importer-relative → `deps/X/X.clc` → `${CALC_LIB_PATH}/X.clc`. Project-local deps shadow the stdlib when names collide.
+
+**v0.1 scope.** Git URLs only (no registry, no version constraints beyond exact tags), no transitive dependency resolution. The convention `deps/<name>/<name>.clc` is the dep's entry point — packages are expected to expose that top-level file with `pub fn`s.
 
 ## Run Demo
 
@@ -283,10 +362,10 @@ make example
 Manual pipeline:
 
 ```bash
-build/calcc examples/demo.calc build/demo.casm
-build/calcasm build/demo.casm build/demo.co
-build/calcld build/demo.co build/demo.cexe
-build/calcvm build/demo.cexe
+bin/calcc examples/demo.clc build/demo.casm
+bin/calcasm build/demo.casm build/demo.co
+bin/calcld build/demo.co build/demo.cexe
+bin/calcvm build/demo.cexe
 ```
 
 Expected output:
@@ -301,7 +380,7 @@ Expected output:
 ## Show AST
 
 ```bash
-build/calcc --ast examples/demo.calc build/demo.casm
+bin/calcc --ast examples/demo.clc build/demo.casm
 ```
 
 ## Run Tests
@@ -338,7 +417,7 @@ src/calcvm.c             VM runtime: executes .cexe
 
 include/codegen_x64.h    native backend API
 src/codegen_x64.c        AST -> x86-64 assembly (Intel syntax)
-src/calcnat.c            native compiler driver: .calc -> .s
+src/calcnat.c            native compiler driver: .clc -> .s
 
 include/runtime.h        NaN-boxed Value + runtime entry points
 src/runtime_x64.c        native runtime library (linked with output)
@@ -440,11 +519,11 @@ In addition to the VM pipeline, CalcLang ships a **native** backend that emits x
 
 ```bash
 # One-step build: calcnat invokes gcc internally and links the runtime.
-build/calcnat tests/native_basic.calc
+bin/calcnat tests/native_basic.clc
 ./tests/native_basic.exe        # or pass `-o build/foo.exe` for a custom output
 
 # Still works if you want the intermediate assembly:
-build/calcnat -S tests/native_basic.calc build/native_basic.s
+bin/calcnat -S tests/native_basic.clc build/native_basic.s
 gcc build/native_basic.s src/runtime_x64.c -Iinclude -o build/native_basic.exe
 ```
 
@@ -496,7 +575,7 @@ The scan is **conservative**: any 8-byte stack word that looks like a payload po
 
 **Build with -O0** (the default gcc setting used by the test runner and the `make native` target). At -O0 the compiler keeps every C local and parameter on the stack, so the conservative scan can see them. Higher optimization levels may keep Value arguments only in registers across calls, which could let live values get swept — annotate with `volatile` if you need an optimized build.
 
-The test suite includes `tests/gc_stress.calc`, which runs 50000 iterations each allocating a string + array + map + closure box updates, forcing many collections, and verifies that retained state (an accumulating closure cell + a survivor map + a top-level string variable) survives every cycle byte-identical to the VM.
+The test suite includes `tests/gc_stress.clc`, which runs 50000 iterations each allocating a string + array + map + closure box updates, forcing many collections, and verifies that retained state (an accumulating closure cell + a survivor map + a top-level string variable) survives every cycle byte-identical to the VM.
 
 ### FFI — dynamic linking + first-class C calls
 
@@ -542,8 +621,8 @@ See [docs/book.md §9.5](docs/book.md) for examples. These five additions land i
 `extern fn` + `pub fn` work in native mode too. Compile each unit with `--lib` (suppresses `main` and top-level statements), then pass all the assembly files to the entry-point invocation:
 
 ```bash
-build/calcnat --lib tests/multi/lib.calc -o build/multi_lib.s
-build/calcnat tests/multi/main.calc build/multi_lib.s -o build/multi.exe
+bin/calcnat --lib tests/multi/lib.clc -o build/multi_lib.s
+bin/calcnat tests/multi/main.clc build/multi_lib.s -o build/multi.exe
 ./build/multi.exe
 ```
 
@@ -563,7 +642,7 @@ The language stays small on purpose. It still does not include:
 
 Recursion *does* work in both backends.
 
-Closures *do* support mutation and transitive capture in the VM backend — captures are heap-boxed and an inner function can read or write a local declared any number of scopes outward (see [tests/the_rest.calc](tests/the_rest.calc)).
+Closures *do* support mutation and transitive capture in the VM backend — captures are heap-boxed and an inner function can read or write a local declared any number of scopes outward (see [tests/the_rest.clc](tests/the_rest.clc)).
 
 No remaining major native chunks. Possible follow-ups:
 

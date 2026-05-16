@@ -1,6 +1,6 @@
 // Tetris — terminal version.
 //
-//   build/calcnat examples/tetris.calc -o build/tetris.exe
+//   bin/clc examples/tetris.clc -o build/tetris.exe
 //   build/tetris.exe
 //
 // Controls:

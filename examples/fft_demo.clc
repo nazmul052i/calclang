@@ -2,7 +2,7 @@
 // recover the dominant frequencies from the magnitude spectrum.
 //
 // Build:
-//   build/calcnat examples/fft_demo.calc -o build/fft_demo.exe
+//   bin/clc examples/fft_demo.clc -o build/fft_demo.exe
 
 import "fft";
 import "random";

@@ -1,7 +1,7 @@
 // Tier-3 NR demo: 1-D / N-D function minimization and sorting / selection.
 //
 // Build:
-//   build/calcnat examples/nr_demo3.calc -o build/nr_demo3.exe
+//   bin/clc examples/nr_demo3.clc -o build/nr_demo3.exe
 
 import "nr.minimize";
 import "nr.sort";

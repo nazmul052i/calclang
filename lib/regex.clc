@@ -1,4 +1,4 @@
-// regex.calc — thin CalcLang shim over the regex_* runtime builtins.
+// regex.clc — thin CalcLang shim over the regex_* runtime builtins.
 //
 // The runtime gives us five primitives: regex_match, regex_find,
 // regex_find_all, regex_replace, regex_split. This file adds a few

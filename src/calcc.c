@@ -3,11 +3,12 @@
 #include "optimizer.h"
 
 static void usage(void) {
-    fprintf(stderr, "usage: calcc [--ast] input.calc output.casm\n");
+    fprintf(stderr, "usage: calcc [--ast] input.clc output.casm\n");
     exit(1);
 }
 
 int main(int argc, char **argv) {
+    cl_init_install_paths(argv[0]);
     int show_ast = 0;
     const char *in = NULL, *out = NULL;
     if (argc == 4 && strcmp(argv[1], "--ast") == 0) {

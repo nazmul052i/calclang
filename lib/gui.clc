@@ -1,4 +1,4 @@
-// gui.calc — small immediate-mode widget kit on top of the gui_*
+// gui.clc — small immediate-mode widget kit on top of the gui_*
 // builtins. The widgets here aren't styled to match any OS theme —
 // they're a flat, dark-friendly look meant to be readable in any
 // terminal-like window setup. Customize colors via the helpers.

@@ -1,4 +1,4 @@
-// bfgs.calc — BFGS quasi-Newton minimization with Wolfe line search.
+// bfgs.clc — BFGS quasi-Newton minimization with Wolfe line search.
 //
 // Minimizes f : R^n -> R given a gradient. Each iteration approximates
 // the inverse Hessian by a rank-2 update built from the most recent
@@ -14,7 +14,7 @@
 //
 //   f    : fn(arr) -> num
 //   grad : fn(arr) -> arr  (analytic gradient — if you only have f, build
-//          one from lib/nr/diff.calc's gradient())
+//          one from lib/nr/diff.clc's gradient())
 
 priv fn _bg_zero(rows, cols) {
     let m = [];

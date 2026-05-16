@@ -1,0 +1,9 @@
+#ifndef CALCLANG_VERSION_H
+#define CALCLANG_VERSION_H
+
+#define CLC_VERSION       "0.1.0"
+#define CLC_VERSION_MAJOR 0
+#define CLC_VERSION_MINOR 1
+#define CLC_VERSION_PATCH 0
+
+#endif

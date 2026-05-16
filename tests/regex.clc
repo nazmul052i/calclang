@@ -1,5 +1,5 @@
 // Regex test — exercise every feature in src/regex.c via the
-// regex_* builtins and lib/regex.calc helpers.
+// regex_* builtins and lib/regex.clc helpers.
 
 import "regex";
 
@@ -62,7 +62,7 @@ let parts = regex_split("\\s*,\\s*", "alpha, beta , gamma,delta");
 print len(parts);                                            // 4
 for p in parts { print p; }                                  // alpha beta gamma delta
 
-// ---- Validators (lib/regex.calc) -------------------------------
+// ---- Validators (lib/regex.clc) -------------------------------
 print is_integer("42");          // 1
 print is_integer("-7");          // 1
 print is_integer("3.14");        // 0

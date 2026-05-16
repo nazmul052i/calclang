@@ -2,7 +2,7 @@
 // Gauss-Legendre, BFGS quasi-Newton, PCA via SVD.
 //
 // Build:
-//   build/calcnat examples/nr_demo10.calc -o build/nr_demo10.exe
+//   bin/clc examples/nr_demo10.clc -o build/nr_demo10.exe
 
 import "nr.neville";
 import "nr.glnodes";

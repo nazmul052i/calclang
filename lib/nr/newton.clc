@@ -1,4 +1,4 @@
-// newton.calc — Newton-Raphson for systems of nonlinear equations.
+// newton.clc — Newton-Raphson for systems of nonlinear equations.
 //
 // Solves F(x) = 0 where F : R^n -> R^n. At each step we form the Jacobian
 // J = dF/dx, solve J dx = -F for dx, and update x <- x + dx. Quadratic
@@ -14,8 +14,8 @@
 //
 // Reference: Numerical Recipes §9.6, §9.7.
 //
-// Depends on lu_decompose / lu_solve from lib/nr/lu.calc and (for the
-// _num variant) jacobian() from lib/nr/diff.calc.
+// Depends on lu_decompose / lu_solve from lib/nr/lu.clc and (for the
+// _num variant) jacobian() from lib/nr/diff.clc.
 
 import "nr.lu";
 import "nr.diff";

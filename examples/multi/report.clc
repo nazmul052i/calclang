@@ -1,4 +1,4 @@
-// report.calc — uses the public functions from stats.calc.
+// report.clc — uses the public functions from stats.clc.
 // The `extern` declarations tell the compiler about functions that
 // live in another object file; the linker resolves them at link time.
 

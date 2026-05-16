@@ -11,12 +11,12 @@
    calcnat — CalcLang native compiler driver.
 
    Modes:
-     calcnat foo.calc                  -> foo.exe  (full build via gcc)
-     calcnat foo.calc -o out.exe       -> out.exe  (explicit output)
-     calcnat -S foo.calc out.s         -> assembly only
-     calcnat --lib foo.calc out.s      -> assembly only, library mode
+     calcnat foo.clc                   -> foo.exe  (full build via gcc)
+     calcnat foo.clc -o out.exe        -> out.exe  (explicit output)
+     calcnat -S foo.clc out.s          -> assembly only
+     calcnat --lib foo.clc out.s       -> assembly only, library mode
                                             (no `main`, no top-level)
-     calcnat --lib foo.calc -o out.s   -> same; `-o` accepted everywhere
+     calcnat --lib foo.clc -o out.s    -> same; `-o` accepted everywhere
 
    In full-build mode the driver invokes the system `gcc` to assemble
    the generated `.s` and link it against `src/runtime_x64.c` from
@@ -26,17 +26,17 @@
 
    For multi-file builds, compile each unit with `--lib -o foo.s`,
    then pass all the `.s` files plus the runtime to gcc yourself, OR
-   use `calcnat main.calc lib1.s lib2.s -o app.exe` — extra arguments
+   use `calcnat main.clc lib1.s lib2.s -o app.exe` — extra arguments
    ending in `.s`, `.o`, or `.c` are forwarded to gcc unchanged. */
 
 static void usage(void) {
     fprintf(stderr,
         "usage:\n"
-        "  calcnat <input.calc> [-o <out>] [extra files...]\n"
-        "  calcnat -S <input.calc> <out.s>\n"
-        "  calcnat --lib <input.calc> [-o <out.s>]\n"
+        "  calcnat <input.clc> [-o <out>] [extra files...]\n"
+        "  calcnat -S <input.clc> <out.s>\n"
+        "  calcnat --lib <input.clc> [-o <out.s>]\n"
         "\n"
-        "By default, produces an executable (input.calc -> input.exe).\n"
+        "By default, produces an executable (input.clc -> input.exe).\n"
         "Use -S to emit assembly only, or --lib for library compilation\n"
         "(no `main` / no top-level code; output defaults to input.s).\n");
     exit(1);
@@ -57,6 +57,7 @@ static int has_ext(const char *s, const char *ext) {
 }
 
 int main(int argc, char **argv) {
+    cl_init_install_paths(argv[0]);
     int  library_mode = 0;
     int  asm_only     = 0;
     const char *in    = NULL;
@@ -74,14 +75,14 @@ int main(int argc, char **argv) {
             if (++i >= argc) usage();
             out = argv[i];
         } else if (a[0] == '-')             { usage(); }
-        else if (has_ext(a, ".calc")) {
+        else if (has_ext(a, ".clc")) {
             if (in) usage();
             in = a;
         } else if (has_ext(a, ".s") || has_ext(a, ".o") || has_ext(a, ".c")) {
             /* Either an explicit asm output (when 2-arg legacy form)
                or an extra file to forward to gcc. We decide below. */
             if (asm_only && !out) {
-                out = a;   /* legacy: `calcnat -S foo.calc out.s` */
+                out = a;   /* legacy: `calcnat -S foo.clc out.s` */
             } else {
                 if (extra_count >= 32) cl_die("too many extra files");
                 extras[extra_count++] = a;
@@ -93,7 +94,7 @@ int main(int argc, char **argv) {
     }
     if (!in) usage();
 
-    /* Backward-compat: the original `calcnat in.calc out.s` form
+    /* Backward-compat: the original `calcnat in.clc out.s` form
        (a single positional that ends in .s with no flags) means
        "emit assembly to out.s". If we collected exactly one .s extra
        and nothing requested an exe, fold it into asm-only mode. */
@@ -135,10 +136,29 @@ int main(int argc, char **argv) {
     if (wrote < 0 || (size_t)wrote >= sizeof(asm_path)) cl_die("output path too long");
     cl_write_text_file(asm_path, asm_text);
 
+    /* Locate runtime sources, headers, and the vendored SDL2 tree.
+       CALC_HOME is set by cl_init_install_paths() based on argv[0], so
+       these resolve to absolute paths when calcnat is invoked from
+       anywhere outside the repo. Users can override individually via
+       CALC_RUNTIME / CALC_INCLUDE; defaults derive from CALC_HOME. */
+    const char *calc_home = getenv("CALC_HOME");
+    char prefix[640];
+    if (calc_home && *calc_home) snprintf(prefix, sizeof prefix, "%s/", calc_home);
+    else                          prefix[0] = '\0';
+
+    char rt_default[768], inc_default[768], regex_path[768];
+    char gui_src_path[768], sdl_root_buf[768];
+    snprintf(rt_default,    sizeof rt_default,    "%ssrc/runtime_x64.c",       prefix);
+    snprintf(inc_default,   sizeof inc_default,   "%sinclude",                  prefix);
+    snprintf(regex_path,    sizeof regex_path,    "%ssrc/regex.c",              prefix);
+    snprintf(gui_src_path,  sizeof gui_src_path,  "%ssrc/runtime_gui_sdl2.c",   prefix);
+    snprintf(sdl_root_buf,  sizeof sdl_root_buf,
+             "%sthird_party/SDL2-2.30.10/x86_64-w64-mingw32",                   prefix);
+
     const char *rt_dir = getenv("CALC_RUNTIME");
-    if (!rt_dir || !*rt_dir) rt_dir = "src/runtime_x64.c";
+    if (!rt_dir || !*rt_dir) rt_dir = rt_default;
     const char *include_dir = getenv("CALC_INCLUDE");
-    if (!include_dir || !*include_dir) include_dir = "include";
+    if (!include_dir || !*include_dir) include_dir = inc_default;
 
     /* GUI support: if the vendored SDL2 tree exists, we always link
        SDL2 + the GUI runtime module. The dead-code stripper drops the
@@ -148,7 +168,7 @@ int main(int argc, char **argv) {
        building without it). */
     const char *no_gui = getenv("CALC_NO_GUI");
     int gui_enabled = (!no_gui || !*no_gui);
-    const char *sdl_root = "third_party/SDL2-2.30.10/x86_64-w64-mingw32";
+    const char *sdl_root = sdl_root_buf;
     /* Existence check on libSDL2.dll.a — present when setup is done. */
     char sdl_lib_probe[512];
     snprintf(sdl_lib_probe, sizeof sdl_lib_probe,
@@ -160,12 +180,12 @@ int main(int argc, char **argv) {
     char cmd[8192];
     int  off = 0;
     off += snprintf(cmd + off, sizeof(cmd) - off,
-        "gcc -O0 -I%s \"%s\" \"%s\" src/regex.c -lwinhttp",
-        include_dir, asm_path, rt_dir);
+        "gcc -O0 -I\"%s\" \"%s\" \"%s\" \"%s\" -lwinhttp",
+        include_dir, asm_path, rt_dir, regex_path);
     if (gui_enabled) {
         off += snprintf(cmd + off, sizeof(cmd) - off,
-            " src/runtime_gui_sdl2.c -I%s/include -L%s/lib -lmingw32 -lSDL2main -lSDL2 -lcomdlg32",
-            sdl_root, sdl_root);
+            " \"%s\" -I\"%s/include\" -L\"%s/lib\" -lmingw32 -lSDL2main -lSDL2 -lcomdlg32",
+            gui_src_path, sdl_root, sdl_root);
     }
     for (int i = 0; i < extra_count; i++) {
         off += snprintf(cmd + off, sizeof(cmd) - off, " \"%s\"", extras[i]);

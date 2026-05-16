@@ -1,4 +1,4 @@
-// svd.calc — singular value decomposition via the normal equations.
+// svd.clc — singular value decomposition via the normal equations.
 //
 // For A (m x n, m >= n), computes A = U S V^T with U (m x n) having
 // orthonormal columns, S a length-n vector of singular values (sorted
@@ -6,7 +6,7 @@
 //
 //   1. Form A^T A (n x n symmetric, positive-semidefinite).
 //   2. Eigendecompose: A^T A = V diag(S^2) V^T (jacobi_eigen from
-//      lib/nr/eigen.calc).
+//      lib/nr/eigen.clc).
 //   3. S = sqrt of the eigenvalues; sort descending.
 //   4. U = A V S^-1 column by column (skip near-zero singular values).
 //

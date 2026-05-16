@@ -2,7 +2,7 @@
 // RK45, and the orthogonal-polynomial families.
 //
 // Build:
-//   build/calcnat examples/nr_demo2.calc -o build/nr_demo2.exe
+//   bin/clc examples/nr_demo2.clc -o build/nr_demo2.exe
 
 import "nr.lu";
 import "nr.romberg";
